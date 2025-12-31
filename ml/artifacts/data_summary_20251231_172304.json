@@ -1,0 +1,15 @@
+{
+  "n_records": 288,
+  "n_columns": 5,
+  "columns": [
+    "timestamp",
+    "rps",
+    "cpu_usage",
+    "memory_usage",
+    "latency_p95"
+  ],
+  "date_range": {
+    "start": "2025-12-30 22:28:01.371707",
+    "end": "2025-12-31 22:23:01.371707"
+  }
+}

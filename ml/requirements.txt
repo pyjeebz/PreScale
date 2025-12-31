@@ -1,0 +1,22 @@
+# Helios ML - Phase 4 Dependencies
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Cloud Monitoring API
+google-cloud-monitoring>=2.16.0
+
+# ML Models
+prophet>=1.1.4
+xgboost>=2.0.0
+scikit-learn>=1.3.0
+
+# Visualization (optional, for notebooks)
+matplotlib>=3.7.0
+plotly>=5.15.0
+
+# Utilities
+python-dateutil>=2.8.0
+pytz>=2023.3
+pyyaml>=6.0.0
