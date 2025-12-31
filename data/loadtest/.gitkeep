@@ -1,0 +1,6 @@
+# Load test data for ML training
+# Place Locust CSV exports here:
+# - *_stats.csv - Request statistics (RPS, response times)
+# - *_failures.csv - Error details
+# - *_exceptions.csv - Python exceptions
+# - *_stats_history.csv - Time-series data (most useful for ML)

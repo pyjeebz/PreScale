@@ -1,0 +1,7 @@
+Method,Name,Error,Occurrences
+POST,[Searcher] Search,"""CatchResponseError('HTTP 0')""",170
+POST,[Browser] Categories,"""CatchResponseError('HTTP 0')""",68
+POST,[Searcher] Search+Sort,"""CatchResponseError('HTTP 0')""",100
+POST,[Buyer] Products,"""CatchResponseError('HTTP 0')""",32
+POST,[Browser] Products,"""CatchResponseError('HTTP 0')""",155
+POST,[Searcher] Browse,"""CatchResponseError('HTTP 0')""",27
