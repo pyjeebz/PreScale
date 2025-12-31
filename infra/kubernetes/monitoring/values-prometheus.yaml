@@ -1,5 +1,6 @@
 # kube-prometheus-stack values for Helios ML Observability
 # Phase 3: Metrics structured for ML training data export
+# Optimized for GKE Autopilot
 
 prometheus:
   prometheusSpec:
@@ -14,8 +15,8 @@ prometheus:
     # Resource requests for GKE Autopilot
     resources:
       requests:
-        cpu: 200m
-        memory: 512Mi
+        cpu: 500m
+        memory: 1Gi
       limits:
         cpu: 1
         memory: 2Gi
@@ -29,11 +30,6 @@ prometheus:
             requests:
               storage: 20Gi
 
-  # Enable remote write for future ML pipeline integration
-  # prometheusSpec:
-  #   remoteWrite:
-  #     - url: "http://ml-pipeline/api/v1/receive"
-
 grafana:
   enabled: true
   adminPassword: "helios-admin-2025"
@@ -45,8 +41,8 @@ grafana:
   
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 250m
+      memory: 256Mi
     limits:
       cpu: 500m
       memory: 512Mi
@@ -70,21 +66,28 @@ grafana:
       searchNamespace: ALL
       label: grafana_dashboard
       labelValue: "1"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
 
 alertmanager:
   enabled: true
   alertmanagerSpec:
     resources:
       requests:
-        cpu: 50m
-        memory: 64Mi
+        cpu: 100m
+        memory: 128Mi
       limits:
         cpu: 200m
         memory: 256Mi
 
-# Node exporter for compute metrics (CPU, mem per node)
+# DISABLED for GKE Autopilot - uses hostPID/hostNetwork/hostPath
 nodeExporter:
-  enabled: true
+  enabled: false
 
 # kube-state-metrics for K8s object metrics (replicas, restarts, OOM)
 kubeStateMetrics:
@@ -94,21 +97,45 @@ kubeStateMetrics:
 prometheusOperator:
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 250m
+      memory: 512Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      memory: 1Gi
+  
+  # Admission webhooks
+  admissionWebhooks:
+    patch:
+      resources:
+        requests:
+          cpu: 250m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
 
-# Additional scrape configs for custom targets
-additionalScrapeConfigs: []
+# DISABLED - Cannot access kube-system in GKE Autopilot
+kubeControllerManager:
+  enabled: false
 
-# Default rules for alerting
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+coreDns:
+  enabled: false
+
+# Default rules for alerting - disable those requiring kube-system access
 defaultRules:
   create: true
   rules:
     alertmanager: true
-    etcd: false  # Not accessible in GKE Autopilot
+    etcd: false
     configReloaders: true
     general: true
     k8s: true
@@ -116,20 +143,20 @@ defaultRules:
     kubeApiserverBurnrate: true
     kubeApiserverHistogram: true
     kubeApiserverSlos: true
-    kubeControllerManager: false  # Not accessible in GKE Autopilot
+    kubeControllerManager: false
     kubelet: true
-    kubeProxy: false  # Not accessible in GKE Autopilot
+    kubeProxy: false
     kubePrometheusGeneral: true
     kubePrometheusNodeRecording: true
     kubernetesApps: true
     kubernetesResources: true
     kubernetesStorage: true
     kubernetesSystem: true
-    kubeScheduler: false  # Not accessible in GKE Autopilot
+    kubeScheduler: false
     kubeStateMetrics: true
     network: true
     node: true
-    nodeExporterAlerting: true
-    nodeExporterRecording: true
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
     prometheus: true
     prometheusOperator: true

@@ -1,0 +1,31 @@
+# PodMonitoring for GKE Managed Prometheus
+# Scrapes metrics from Locust for ML training data
+
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: locust-metrics
+  namespace: loadtest
+spec:
+  selector:
+    matchLabels:
+      app: locust
+      role: master
+  endpoints:
+  - port: web
+    interval: 15s
+    path: /
+---
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: saleor-api-metrics
+  namespace: saleor
+spec:
+  selector:
+    matchLabels:
+      app: saleor-api
+  endpoints:
+  - port: 8000
+    interval: 15s
+    path: /metrics

@@ -21,3 +21,6 @@ spec:
   - name: master-bind
     port: 5558
     targetPort: 5558
+  - name: prometheus
+    port: 9646
+    targetPort: 9646

@@ -28,6 +28,8 @@ spec:
           name: master
         - containerPort: 5558
           name: master-bind
+        - containerPort: 9646
+          name: prometheus
         envFrom:
         - configMapRef:
             name: locust-config
