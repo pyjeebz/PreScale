@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locust-config
+  namespace: loadtest
+data:
+  # Target Saleor API (internal cluster DNS)
+  LOCUST_HOST: "http://saleor-api.saleor.svc.cluster.local"
+  
+  # Admin credentials for admin persona
+  ADMIN_EMAIL: "admin@example.com"
+  ADMIN_PASSWORD: "admin123456"
+  
+  # Python path for imports
+  PYTHONPATH: "/mnt/locust"

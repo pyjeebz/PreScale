@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: loadtest
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+
+# ConfigMap generator for locust scripts (single file for simplicity)
+configMapGenerator:
+- name: locust-scripts
+  files:
+  - locustfile.py=scripts/locustfile.py
+
+commonLabels:
+  app.kubernetes.io/name: locust
+  app.kubernetes.io/part-of: helios
+  app.kubernetes.io/component: loadtest

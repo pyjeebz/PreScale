@@ -1,0 +1,135 @@
+# kube-prometheus-stack values for Helios ML Observability
+# Phase 3: Metrics structured for ML training data export
+
+prometheus:
+  prometheusSpec:
+    # Retain 7 days for ML training windows
+    retention: 7d
+    retentionSize: "10GB"
+    
+    # Scrape interval - 15s gives good resolution for ML
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    
+    # Resource requests for GKE Autopilot
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 2Gi
+    
+    # Storage for metrics persistence
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+  # Enable remote write for future ML pipeline integration
+  # prometheusSpec:
+  #   remoteWrite:
+  #     - url: "http://ml-pipeline/api/v1/receive"
+
+grafana:
+  enabled: true
+  adminPassword: "helios-admin-2025"
+  
+  # Persistence for dashboards
+  persistence:
+    enabled: true
+    size: 5Gi
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Pre-configured data sources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-kube-prometheus-prometheus:9090
+          access: proxy
+          isDefault: true
+          editable: true
+
+  # Sidecar for dashboard provisioning
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+      labelValue: "1"
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+# Node exporter for compute metrics (CPU, mem per node)
+nodeExporter:
+  enabled: true
+
+# kube-state-metrics for K8s object metrics (replicas, restarts, OOM)
+kubeStateMetrics:
+  enabled: true
+
+# Prometheus Operator
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Additional scrape configs for custom targets
+additionalScrapeConfigs: []
+
+# Default rules for alerting
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false  # Not accessible in GKE Autopilot
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubeControllerManager: false  # Not accessible in GKE Autopilot
+    kubelet: true
+    kubeProxy: false  # Not accessible in GKE Autopilot
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeScheduler: false  # Not accessible in GKE Autopilot
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
