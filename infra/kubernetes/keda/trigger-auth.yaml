@@ -1,0 +1,25 @@
+# KEDA TriggerAuthentication for Prometheus
+# Used when Prometheus requires authentication
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: prometheus-auth
+  namespace: saleor
+spec:
+  # For GKE Managed Prometheus with Workload Identity
+  # secretTargetRef:
+  #   - parameter: bearerToken
+  #     name: prometheus-token
+  #     key: token
+  
+  # For basic auth (if needed)
+  # secretTargetRef:
+  #   - parameter: username
+  #     name: prometheus-credentials
+  #     key: username
+  #   - parameter: password
+  #     name: prometheus-credentials
+  #     key: password
+  
+  # No auth required for in-cluster Prometheus
+  {}

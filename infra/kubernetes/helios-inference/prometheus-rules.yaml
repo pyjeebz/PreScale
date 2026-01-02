@@ -1,0 +1,174 @@
+# Helios Alert Rules for Prometheus Alertmanager
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: helios-inference-alerts
+  namespace: helios
+  labels:
+    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/component: alerting
+spec:
+  groups:
+    - name: helios-inference
+      rules:
+        # Service Health
+        - alert: HeliosInferenceDown
+          expr: |
+            helios_up{namespace="helios"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: helios-inference
+          annotations:
+            summary: "Helios Inference Service is down"
+            description: "The Helios inference service has been down for more than 1 minute."
+            runbook_url: "https://docs.helios.io/runbooks/inference-down"
+
+        - alert: HeliosInferenceNotReady
+          expr: |
+            helios_ready{namespace="helios"} == 0
+          for: 2m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "Helios Inference Service is not ready"
+            description: "The Helios inference service is up but not ready to serve traffic."
+
+        # Model Health
+        - alert: HeliosNoModelsLoaded
+          expr: |
+            helios_models_loaded{namespace="helios"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: helios-inference
+          annotations:
+            summary: "No ML models loaded"
+            description: "Helios inference service has no models loaded. Predictions will fail."
+
+        # Latency
+        - alert: HeliosHighPredictionLatency
+          expr: |
+            histogram_quantile(0.95, 
+              sum(rate(helios_prediction_latency_seconds_bucket{namespace="helios"}[5m])) by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "High prediction latency"
+            description: "P95 prediction latency is {{ $value | humanizeDuration }} (threshold: 500ms)"
+
+        - alert: HeliosVeryHighPredictionLatency
+          expr: |
+            histogram_quantile(0.95, 
+              sum(rate(helios_prediction_latency_seconds_bucket{namespace="helios"}[5m])) by (le)
+            ) > 2
+          for: 2m
+          labels:
+            severity: critical
+            service: helios-inference
+          annotations:
+            summary: "Very high prediction latency"
+            description: "P95 prediction latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+
+        # Error Rate
+        - alert: HeliosHighErrorRate
+          expr: |
+            sum(rate(helios_requests_total{namespace="helios", status=~"5.."}[5m])) 
+            / sum(rate(helios_requests_total{namespace="helios"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "High error rate"
+            description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+        - alert: HeliosVeryHighErrorRate
+          expr: |
+            sum(rate(helios_requests_total{namespace="helios", status=~"5.."}[5m])) 
+            / sum(rate(helios_requests_total{namespace="helios"}[5m])) > 0.20
+          for: 2m
+          labels:
+            severity: critical
+            service: helios-inference
+          annotations:
+            summary: "Very high error rate"
+            description: "Error rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+
+        # Anomaly Detection
+        - alert: HeliosCriticalAnomaliesDetected
+          expr: |
+            increase(helios_anomalies_detected_total{namespace="helios", severity="critical"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            service: helios-inference
+          annotations:
+            summary: "Critical anomalies detected"
+            description: "{{ $value }} critical anomalies detected in the last 5 minutes for metric {{ $labels.metric }}"
+
+        - alert: HeliosHighAnomalyRate
+          expr: |
+            sum(increase(helios_anomalies_detected_total{namespace="helios"}[15m])) > 10
+          for: 0m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "High anomaly detection rate"
+            description: "{{ $value }} anomalies detected in the last 15 minutes"
+
+        # Cache Performance
+        - alert: HeliosLowCacheHitRate
+          expr: |
+            sum(rate(helios_prediction_cache_hits_total{namespace="helios"}[5m])) 
+            / (sum(rate(helios_prediction_cache_hits_total{namespace="helios"}[5m])) 
+               + sum(rate(helios_prediction_cache_misses_total{namespace="helios"}[5m]))) < 0.5
+          for: 10m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "Low cache hit rate"
+            description: "Prediction cache hit rate is {{ $value | humanizePercentage }} (expected > 50%)"
+
+        # Recommendation Alerts
+        - alert: HeliosScaleUpRecommended
+          expr: |
+            increase(helios_recommendations_total{namespace="helios", action="scale_out"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: info
+            service: helios-inference
+          annotations:
+            summary: "Scale-up recommended"
+            description: "Helios recommends scaling out {{ $labels.workload }} workload"
+
+        # Resource Usage
+        - alert: HeliosHighMemoryUsage
+          expr: |
+            container_memory_working_set_bytes{namespace="helios", container="inference"} 
+            / container_spec_memory_limit_bytes{namespace="helios", container="inference"} > 0.85
+          for: 5m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "High memory usage"
+            description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+
+        - alert: HeliosHighCPUUsage
+          expr: |
+            rate(container_cpu_usage_seconds_total{namespace="helios", container="inference"}[5m]) 
+            / container_spec_cpu_quota{namespace="helios", container="inference"} * 100000 > 0.85
+          for: 5m
+          labels:
+            severity: warning
+            service: helios-inference
+          annotations:
+            summary: "High CPU usage"
+            description: "CPU usage is {{ $value | humanizePercentage }} of limit"

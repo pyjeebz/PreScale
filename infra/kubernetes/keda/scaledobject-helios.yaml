@@ -1,0 +1,77 @@
+# KEDA ScaledObject for Helios Inference Service
+# Self-scaling based on request load
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: helios-inference-scaler
+  namespace: helios
+  labels:
+    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: helios-inference
+  
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  pollingInterval: 30
+  cooldownPeriod: 300
+  
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 25
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+  
+  triggers:
+    # Scale based on prediction requests
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: helios_predictions_rate
+        query: |
+          sum(rate(helios_predictions_total[2m])) * 60
+        threshold: "50"
+        activationThreshold: "5"
+    
+    # Scale based on request latency
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: helios_request_latency
+        query: |
+          histogram_quantile(0.95, 
+            sum(rate(helios_request_latency_seconds_bucket[5m])) by (le)
+          )
+        threshold: "0.5"
+        activationThreshold: "0.1"
+    
+    # Scale based on CPU
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: helios_cpu_utilization
+        query: |
+          avg(rate(container_cpu_usage_seconds_total{
+            namespace="helios",
+            pod=~"helios-inference-.*"
+          }[5m])) / 
+          avg(kube_pod_container_resource_requests{
+            namespace="helios",
+            pod=~"helios-inference-.*",
+            resource="cpu"
+          })
+        threshold: "0.7"
+        activationThreshold: "0.3"

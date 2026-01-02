@@ -1,0 +1,108 @@
+# KEDA ScaledObject for Saleor API
+# Scales based on Helios predictions and Prometheus metrics
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: saleor-api-scaler
+  namespace: saleor
+  labels:
+    app.kubernetes.io/name: saleor-api
+    app.kubernetes.io/component: autoscaling
+    app.kubernetes.io/managed-by: helios
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: saleor-api
+  
+  # Scaling constraints
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  
+  # Polling interval (how often KEDA checks metrics)
+  pollingInterval: 30
+  
+  # Cooldown before scaling down
+  cooldownPeriod: 300
+  
+  # Advanced settings
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 25
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+          selectPolicy: Max
+  
+  triggers:
+    # CPU-based scaling from Prometheus
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: saleor_cpu_utilization
+        query: |
+          avg(rate(container_cpu_usage_seconds_total{
+            namespace="saleor",
+            pod=~"saleor-api-.*"
+          }[5m])) / 
+          avg(kube_pod_container_resource_requests{
+            namespace="saleor",
+            pod=~"saleor-api-.*",
+            resource="cpu"
+          })
+        threshold: "0.7"
+        activationThreshold: "0.3"
+    
+    # Request rate scaling
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: saleor_requests_per_second
+        query: |
+          sum(rate(http_requests_total{
+            namespace="saleor",
+            pod=~"saleor-api-.*"
+          }[2m]))
+        threshold: "100"
+        activationThreshold: "10"
+    
+    # Response latency scaling (scale up when slow)
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: saleor_p95_latency
+        query: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{
+              namespace="saleor",
+              pod=~"saleor-api-.*"
+            }[5m])) by (le)
+          )
+        threshold: "0.5"
+        activationThreshold: "0.2"
+    
+    # Helios predicted utilization (proactive scaling)
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring:9090
+        metricName: helios_predicted_utilization
+        query: |
+          max(helios_recommended_replicas{
+            workload="saleor-api",
+            namespace="saleor"
+          }) or vector(2)
+        threshold: "1"
+        activationThreshold: "0"

@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: helios-inference-config
+  namespace: helios
+  labels:
+    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/component: inference
+data:
+  # Server configuration
+  HOST: "0.0.0.0"
+  PORT: "8080"
+  WORKERS: "1"
+  LOG_LEVEL: "info"
+  
+  # Model configuration
+  MODELS_DIR: "/app/models"
+  BASELINE_ENABLED: "true"
+  PROPHET_ENABLED: "true"
+  XGBOOST_ENABLED: "true"
+  CACHE_PREDICTIONS: "true"
+  CACHE_TTL_SECONDS: "300"
+  
+  # Metrics configuration
+  METRICS_ENABLED: "true"
+  METRICS_PREFIX: "helios"
+  
+  # Anomaly detection
+  ANOMALY_THRESHOLD: "2.5"
+  ANOMALY_MIN_POINTS: "12"
+  
+  # Recommendation configuration
+  TARGET_UTILIZATION: "0.7"
+  SCALE_UP_THRESHOLD: "0.85"
+  SCALE_DOWN_THRESHOLD: "0.3"
+  COOLDOWN_MINUTES: "5"
+  MIN_REPLICAS: "1"
+  MAX_REPLICAS: "100"
+  
+  # Environment
+  ENVIRONMENT: "production"
