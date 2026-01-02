@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: helios-cost-intelligence-config
+  namespace: helios
+  labels:
+    app.kubernetes.io/name: helios-cost-intelligence
+    app.kubernetes.io/component: cost-intelligence
+data:
+  HOST: "0.0.0.0"
+  PORT: "8081"
+  WORKERS: "1"
+  LOG_LEVEL: "info"
+  PROMETHEUS_URL: "http://prometheus-server.monitoring.svc.cluster.local"
+  INFERENCE_URL: "http://helios-inference.helios.svc.cluster.local"
+  # Replace YOUR_GCP_PROJECT_ID with your actual GCP project ID
+  GCP_PROJECT_ID: "YOUR_GCP_PROJECT_ID"
+  GCP_REGION: "us-central1"
+  ENVIRONMENT: "production"

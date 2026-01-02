@@ -26,8 +26,9 @@ spec:
       
       containers:
         - name: inference
-          image: gcr.io/gen-lang-client-0702968356/helios-inference:0.1.0
-          imagePullPolicy: IfNotPresent
+          # Replace YOUR_GCP_PROJECT_ID with your actual GCP project ID
+          image: gcr.io/YOUR_GCP_PROJECT_ID/helios-inference:0.2.0
+          imagePullPolicy: Always
           
           ports:
             - name: http

@@ -52,5 +52,6 @@ data:
   # Plugins
   PLUGINS: "saleor.plugins.webhook.plugin.WebhookPlugin"
   
-  project_id: "gen-lang-client-0702968356"
+  # Replace YOUR_GCP_PROJECT_ID with your actual GCP project ID
+  project_id: "YOUR_GCP_PROJECT_ID"
   region: "us-central1"
