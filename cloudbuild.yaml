@@ -1,0 +1,22 @@
+steps:
+  # Build the inference service image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/helios-inference:${_TAG_NAME}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/helios-inference:latest'
+      - '-f'
+      - 'ml/inference/Dockerfile'
+      - '.'
+
+images:
+  - 'gcr.io/$PROJECT_ID/helios-inference:${_TAG_NAME}'
+  - 'gcr.io/$PROJECT_ID/helios-inference:latest'
+
+substitutions:
+  _TAG_NAME: '0.1.0'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
