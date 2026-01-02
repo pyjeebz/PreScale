@@ -1,10 +1,12 @@
 """Test fetching real GKE metrics."""
+import os
 from google.cloud import monitoring_v3
 from datetime import datetime, timedelta
 import pandas as pd
 
 client = monitoring_v3.MetricServiceClient()
-project_name = "projects/gen-lang-client-0702968356"
+project_id = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
+project_name = f"projects/{project_id}"
 
 # Time range
 end_time = datetime.utcnow()

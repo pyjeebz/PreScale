@@ -1,8 +1,10 @@
 """List available metrics from Cloud Monitoring."""
+import os
 from google.cloud import monitoring_v3
 
 client = monitoring_v3.MetricServiceClient()
-project_name = "projects/gen-lang-client-0702968356"
+project_id = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
+project_name = f"projects/{project_id}"
 
 # List GKE container metrics
 print("=== GKE Container Metrics ===")

@@ -8,12 +8,14 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 
+import os
+
 @dataclass
 class GCPConfig:
     """GCP-specific configuration."""
-    project_id: str = "gen-lang-client-0702968356"
-    region: str = "us-central1"
-    gke_cluster: str = "helios-dev-gke"
+    project_id: str = field(default_factory=lambda: os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id"))
+    region: str = field(default_factory=lambda: os.environ.get("GCP_REGION", "us-central1"))
+    gke_cluster: str = field(default_factory=lambda: os.environ.get("GKE_CLUSTER_NAME", "helios-dev-gke"))
 
 
 @dataclass

@@ -1,10 +1,12 @@
 """Fetch REAL metrics from Cloud Monitoring for ML training."""
+import os
 from google.cloud import monitoring_v3
 from datetime import datetime, timedelta
 import pandas as pd
 
 client = monitoring_v3.MetricServiceClient()
-project_name = "projects/gen-lang-client-0702968356"
+project_id = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
+project_name = f"projects/{project_id}"
 
 end_time = datetime.utcnow()
 start_time = end_time - timedelta(hours=6)

@@ -1,0 +1,14 @@
+{
+  "name": "memory_forecaster",
+  "version": "1.0.0",
+  "created_at": "2026-01-02T20:54:57.306794",
+  "framework": "xgboost",
+  "metrics": {
+    "lookback": 12,
+    "metric": "memory_utilization",
+    "train_mse": 0.0003009830623406208,
+    "test_mse": 0.00044064543624517977,
+    "train_samples": 6902,
+    "test_samples": 1726
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "cpu_forecaster",
+  "version": "1.0.0",
+  "created_at": "2026-01-02T20:54:56.672160",
+  "framework": "xgboost",
+  "metrics": {
+    "lookback": 12,
+    "metric": "cpu_utilization",
+    "train_mse": 0.003297938245193764,
+    "test_mse": 0.0050835480784194725,
+    "train_samples": 6902,
+    "test_samples": 1726
+  }
+}
