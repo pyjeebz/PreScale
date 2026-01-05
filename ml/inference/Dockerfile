@@ -1,36 +1,57 @@
 # Helios Inference Service
-FROM python:3.11-slim
+# Multi-stage build for smaller image size
+FROM python:3.11-slim AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Install system dependencies
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
-COPY ml/inference/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim
+
+LABEL org.opencontainers.image.title="Helios Inference Service"
+LABEL org.opencontainers.image.description="ML-powered resource forecasting and anomaly detection"
+LABEL org.opencontainers.image.source="https://github.com/helios-platform/helios"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+WORKDIR /app
+
+# Install runtime dependencies only
+COPY --from=builder /build/wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+# Create non-root user for security
+RUN useradd -m -u 1000 -s /bin/bash helios && \
+    mkdir -p /app/models && \
+    chown -R helios:helios /app
 
 # Copy application code
-COPY ml/inference/ ./ml/inference/
-COPY ml/__init__.py ./ml/
+COPY --chown=helios:helios . ./inference/
+COPY --chown=helios:helios ../models/ ./models/ 2>/dev/null || true
 
-# Create models directory
-RUN mkdir -p /app/models
+# Switch to non-root user
+USER helios
 
 # Set environment variables
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 ENV HOST=0.0.0.0
-ENV PORT=8080
+ENV PORT=8000
 ENV MODELS_DIR=/app/models
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Run the application
-CMD ["python", "-m", "ml.inference.app"]
+CMD ["python", "-m", "uvicorn", "inference.app:app", "--host", "0.0.0.0", "--port", "8000"]

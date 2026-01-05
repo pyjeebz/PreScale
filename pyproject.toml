@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helios-cli"
+version = "0.1.0"
+description = "CLI tool for Helios - Predictive Infrastructure Intelligence Platform"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Helios Platform", email = "maintainers@helios.dev"}
+]
+keywords = [
+    "kubernetes",
+    "machine-learning",
+    "prediction",
+    "monitoring",
+    "anomaly-detection",
+    "autoscaling"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Systems Administration",
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "httpx>=0.24.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+    "tabulate>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+helios = "helios_cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/helios-platform/helios"
+Documentation = "https://helios-platform.github.io/helios"
+Repository = "https://github.com/helios-platform/helios"
+Issues = "https://github.com/helios-platform/helios/issues"
+
+[tool.setuptools.packages.find]
+where = ["cli/src"]
+
+[tool.setuptools.package-dir]
+"" = "cli/src"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true

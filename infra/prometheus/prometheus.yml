@@ -1,0 +1,24 @@
+# Helios Prometheus Configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'helios-local'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Helios Inference Service
+  - job_name: 'helios-inference'
+    static_configs:
+      - targets: ['inference:8000']
+    metrics_path: /metrics
+
+  # Helios Cost Intelligence Service  
+  - job_name: 'helios-cost-intelligence'
+    static_configs:
+      - targets: ['cost-intelligence:8001']
+    metrics_path: /metrics

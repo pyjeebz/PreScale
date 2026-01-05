@@ -1,0 +1,40 @@
+apiVersion: v2
+name: helios
+description: Predictive Infrastructure Intelligence Platform - ML-powered resource forecasting and anomaly detection
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.23.0-0"
+
+keywords:
+  - machine-learning
+  - kubernetes
+  - monitoring
+  - prediction
+  - anomaly-detection
+  - cost-optimization
+  - autoscaling
+  - observability
+
+home: https://github.com/helios-platform/helios
+sources:
+  - https://github.com/helios-platform/helios
+
+maintainers:
+  - name: Helios Platform
+    email: maintainers@helios.dev
+    url: https://github.com/helios-platform
+
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: monitoring-logging
+
+dependencies:
+  - name: prometheus
+    version: "25.x.x"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+  - name: grafana
+    version: "7.x.x"
+    repository: https://grafana.github.io/helm-charts
+    condition: grafana.enabled
