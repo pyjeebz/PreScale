@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: helios-inference
+    env: docker
+    dockerfilePath: ./ml/inference/Dockerfile
+    dockerContext: ./ml
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: MODELS_DIR
+        value: /app/models
