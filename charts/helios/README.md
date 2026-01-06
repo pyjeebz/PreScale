@@ -12,7 +12,7 @@ Predictive Infrastructure Intelligence Platform - ML-powered resource forecastin
 
 ```bash
 # Add the Helios Helm repository
-helm repo add helios https://helios-platform.github.io/helios
+helm repo add helios https://pyjeebz.github.io/helios
 helm repo update
 
 # Install Helios

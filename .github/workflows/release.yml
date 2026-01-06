@@ -167,7 +167,7 @@ jobs:
 
             **Helm:**
             ```bash
-            helm repo add helios https://helios-platform.github.io/helios
+            helm repo add helios https://pyjeebz.github.io/helios
             helm install helios helios/helios --version ${{ steps.version.outputs.VERSION }}
             ```
 

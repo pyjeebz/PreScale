@@ -18,7 +18,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Helios Inference Service"
 LABEL org.opencontainers.image.description="ML-powered resource forecasting and anomaly detection"
-LABEL org.opencontainers.image.source="https://github.com/helios-platform/helios"
+LABEL org.opencontainers.image.source="https://github.com/pyjeebz/helios"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /app

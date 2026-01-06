@@ -38,7 +38,7 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/helios-platform/helios.git
+   git remote add upstream https://github.com/pyjeebz/helios.git
    ```
 
 ## Development Setup
@@ -294,7 +294,7 @@ def predict_cpu(data: pd.DataFrame, horizon: int = 24) -> Dict[str, Any]:
 
 Questions about contributing? Reach out to:
 
-- GitHub: [@helios-platform](https://github.com/helios-platform)
+- GitHub: [@pyjeebz](https://github.com/pyjeebz)
 - Email: [maintainers@helios.dev](mailto:maintainers@helios.dev)
 
 ### Recognition

@@ -16,14 +16,14 @@ keywords:
   - autoscaling
   - observability
 
-home: https://github.com/helios-platform/helios
+home: https://github.com/pyjeebz/helios
 sources:
-  - https://github.com/helios-platform/helios
+  - https://github.com/pyjeebz/helios
 
 maintainers:
   - name: Helios Platform
     email: maintainers@helios.dev
-    url: https://github.com/helios-platform
+    url: https://github.com/pyjeebz
 
 annotations:
   artifacthub.io/license: Apache-2.0

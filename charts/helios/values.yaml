@@ -18,7 +18,7 @@ inference:
   
   image:
     # -- Image repository
-    repository: ghcr.io/helios-platform/helios/inference
+    repository: ghcr.io/pyjeebz/helios/inference
     # -- Image pull policy
     pullPolicy: IfNotPresent
     # -- Image tag (defaults to chart appVersion)
@@ -118,7 +118,7 @@ costIntelligence:
   
   image:
     # -- Image repository
-    repository: ghcr.io/helios-platform/helios/cost-intelligence
+    repository: ghcr.io/pyjeebz/helios/cost-intelligence
     # -- Image pull policy
     pullPolicy: IfNotPresent
     # -- Image tag (defaults to chart appVersion)
