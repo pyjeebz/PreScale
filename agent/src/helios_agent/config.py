@@ -14,7 +14,7 @@ from .sources import SourceConfig
 class HeliosEndpoint:
     """Helios API endpoint configuration."""
     
-    url: str = "http://localhost:8000"
+    url: str = "http://104.155.137.61"
     api_key: Optional[str] = None
     timeout: int = 30
     retry_attempts: int = 3
