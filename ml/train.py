@@ -403,6 +403,54 @@ class HeliosTrainingPipeline:
 
         print(f"✓ Saved metrics to {metrics_path}")
 
+        # Save trained models in format expected by inference service
+        import joblib
+        import pickle
+        
+        # Save baseline model - just the fitted parameters
+        if self.baseline_model is not None and self.baseline_model.is_fitted_:
+            baseline_dir = self.output_dir / "cpu_forecaster" / "1.0.0"
+            baseline_dir.mkdir(parents=True, exist_ok=True)
+            baseline_path = baseline_dir / "model.pkl"
+            # Save just the fitted parameters, not the class instance
+            with open(baseline_path, "wb") as f:
+                pickle.dump({
+                    "type": "baseline",
+                    "moving_average": self.baseline_model.moving_average_,
+                    "trend": self.baseline_model.trend_,
+                    "std": self.baseline_model.std_,
+                    "window": self.baseline_model.window,
+                    "trend_window": self.baseline_model.trend_window,
+                }, f)
+            print(f"✓ Saved baseline parameters to {baseline_path}")
+        
+        # Save Prophet model - as joblib
+        if self.prophet_model is not None and hasattr(self.prophet_model, 'model_') and self.prophet_model.model_ is not None:
+            prophet_path = self.output_dir / "prophet_model.joblib"
+            # Save the underlying Prophet model directly
+            joblib.dump({
+                "type": "prophet",
+                "model": self.prophet_model.model_,
+                "metrics": self.metrics_.get("prophet", {}),
+            }, prophet_path)
+            print(f"✓ Saved Prophet model to {prophet_path}")
+        
+        # Save anomaly detector - just the XGBoost model and scaler
+        if self.anomaly_detector is not None and self.anomaly_detector.is_fitted_:
+            detector_dir = self.output_dir / "anomaly_detector" / "1.0.0"
+            detector_dir.mkdir(parents=True, exist_ok=True)
+            detector_path = detector_dir / "model.pkl"
+            with open(detector_path, "wb") as f:
+                pickle.dump({
+                    "type": "xgboost_anomaly",
+                    "model": self.anomaly_detector.model_,  # The raw XGBRegressor
+                    "scaler": self.anomaly_detector.scaler_,  # StandardScaler
+                    "threshold": self.anomaly_detector.threshold_,
+                    "feature_names": self.anomaly_detector.feature_names_,
+                    "threshold_sigma": self.anomaly_detector.threshold_sigma,
+                }, f)
+            print(f"✓ Saved anomaly detector to {detector_path}")
+
         # Save data summary
         if self.data_ is not None:
             summary_path = self.output_dir / f"data_summary_{timestamp}.json"
@@ -479,13 +527,23 @@ class HeliosTrainingPipeline:
 
 def main():
     """Main entry point for training."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Train Helios ML models")
+    parser.add_argument("--hours", type=int, default=config.default_lookback_hours,
+                       help="Hours of historical data to fetch")
+    parser.add_argument("--namespace", type=str, default="loadtest",
+                       help="Kubernetes namespace to fetch metrics from")
+    parser.add_argument("--target", type=str, default="cpu_utilization",
+                       help="Target metric to forecast (rps, cpu_utilization, etc.)")
+    args = parser.parse_args()
+    
     pipeline = HeliosTrainingPipeline(
         output_dir="artifacts",
-        target_metric="rps",
+        target_metric=args.target,
     )
 
-    # Use config for lookback hours
-    results = pipeline.run(hours=config.default_lookback_hours, namespace="saleor")
+    results = pipeline.run(hours=args.hours, namespace=args.namespace)
 
     return results
 

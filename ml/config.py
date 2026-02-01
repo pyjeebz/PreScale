@@ -13,7 +13,7 @@ class GCPConfig:
     """GCP-specific configuration."""
 
     project_id: str = field(
-        default_factory=lambda: os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
+        default_factory=lambda: os.environ.get("GCP_PROJECT_ID", "gen-lang-client-0702968356")
     )
     region: str = field(default_factory=lambda: os.environ.get("GCP_REGION", "us-central1"))
     gke_cluster: str = field(
@@ -28,8 +28,10 @@ class MetricsConfig:
     # GKE Container metrics (auto-collected)
     container_metrics: list[str] = field(
         default_factory=lambda: [
-            "kubernetes.io/container/cpu/core_usage_time",
+            "kubernetes.io/container/cpu/limit_utilization",
+            "kubernetes.io/container/memory/limit_utilization",
             "kubernetes.io/container/memory/used_bytes",
+            "kubernetes.io/container/cpu/core_usage_time",
             "kubernetes.io/container/restart_count",
         ]
     )
