@@ -43,9 +43,9 @@ dev = [
 helios = "helios_cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/helios"
-Documentation = "https://github.com/yourusername/helios#readme"
-Repository = "https://github.com/yourusername/helios"
+Homepage = "https://github.com/pyjeebz/helios"
+Documentation = "https://github.com/pyjeebz/helios#readme"
+Repository = "https://github.com/pyjeebz/helios"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/helios_cli"]
