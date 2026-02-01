@@ -9,7 +9,7 @@ steps:
       - 'gcr.io/$PROJECT_ID/helios-inference:latest'
       - '-f'
       - 'ml/inference/Dockerfile'
-      - '.'
+      - 'ml'
 
 images:
   - 'gcr.io/$PROJECT_ID/helios-inference:${_TAG_NAME}'

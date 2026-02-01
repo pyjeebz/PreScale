@@ -8,15 +8,33 @@
 
 Helios uses machine learning to forecast infrastructure demand and provide proactive scaling recommendations, reducing reactive incidents and optimizing resource utilization.
 
-## 🚀 Quick Deploy
+## 🚀 Quick Start
 
-**One-click deployment options:**
+### Local Development (No Cloud Required)
+
+```bash
+# Clone and setup
+git clone https://github.com/pyjeebz/helios.git
+cd helios
+
+# Option 1: Docker Compose (recommended)
+docker compose up -d inference
+curl http://localhost:8080/health
+
+# Option 2: Run directly with Python
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r ml/inference/requirements.txt
+cd ml && python -m uvicorn inference.app:app --port 8080
+```
+
+### One-Click Cloud Deployment
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/pyjeebz/helios)
 
-**Docker:**
+**Docker Hub:**
 ```bash
-docker run -d -p 8000:8000 ghcr.io/pyjeebz/helios/inference:latest
+docker run -d -p 8080:8080 ghcr.io/pyjeebz/helios/inference:latest
 ```
 
 **Kubernetes (Helm):**
@@ -25,9 +43,11 @@ helm repo add helios https://pyjeebz.github.io/helios
 helm install helios helios/helios
 ```
 
-**Python SDK:**
+**Python Agent:**
 ```bash
-pip install helios-sdk helios-agent
+pip install helios-agent
+helios-agent init
+helios-agent run
 ```
 
 ---

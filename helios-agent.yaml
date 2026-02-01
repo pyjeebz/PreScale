@@ -1,0 +1,80 @@
+# Helios Agent Configuration
+# Unified metrics collection from any monitoring backend
+
+# Helios API endpoint
+endpoint:
+  url: http://localhost:8080
+  api_key: ${HELIOS_API_KEY}  # Or set via environment
+  timeout: 30
+  retry_attempts: 3
+
+# Metrics sources - add any combination of backends
+sources:
+  # Local system metrics (always available)
+  - name: local-system
+    type: system
+    enabled: true
+    interval: 15
+    options:
+      collect_cpu: true
+      collect_memory: true
+      collect_disk: true
+      collect_network: true
+
+  # Prometheus (if you have a Prometheus server)
+  # - name: prometheus
+  #   type: prometheus
+  #   enabled: false
+  #   endpoint: http://prometheus:9090
+  #   interval: 15
+  #   queries:
+  #     - 'sum(rate(container_cpu_usage_seconds_total{container!=""}[5m])) by (namespace, pod)'
+  #     - 'sum(container_memory_usage_bytes{container!=""}) by (namespace, pod)'
+
+  # Datadog (requires API key)
+  # - name: datadog
+  #   type: datadog
+  #   enabled: false
+  #   api_key: ${DATADOG_API_KEY}
+  #   credentials:
+  #     app_key: ${DATADOG_APP_KEY}
+  #   options:
+  #     site: us1  # us1, us3, us5, eu1, ap1
+  #   metrics:
+  #     - system.cpu.user
+  #     - system.mem.used
+
+  # AWS CloudWatch (requires AWS credentials)
+  # - name: cloudwatch
+  #   type: cloudwatch
+  #   enabled: false
+  #   credentials:
+  #     aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+  #     aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+  #     region: us-east-1
+  #   metrics:
+  #     - AWS/EC2/CPUUtilization
+  #     - AWS/RDS/DatabaseConnections
+
+  # Azure Monitor (requires service principal)
+  # - name: azure-monitor
+  #   type: azure_monitor
+  #   enabled: false
+  #   credentials:
+  #     tenant_id: ${AZURE_TENANT_ID}
+  #     client_id: ${AZURE_CLIENT_ID}
+  #     client_secret: ${AZURE_CLIENT_SECRET}
+  #     subscription_id: ${AZURE_SUBSCRIPTION_ID}
+
+  # Google Cloud Monitoring (requires service account)
+  # - name: gcp-monitoring
+  #   type: gcp_monitoring
+  #   enabled: false
+  #   credentials:
+  #     project_id: ${GCP_PROJECT_ID}
+  #     credentials_file: /path/to/service-account.json
+
+# Agent settings
+batch_size: 100
+flush_interval: 10
+log_level: INFO

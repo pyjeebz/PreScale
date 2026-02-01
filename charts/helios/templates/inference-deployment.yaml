@@ -39,7 +39,7 @@ spec:
           imagePullPolicy: {{ .Values.inference.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: 8080
               protocol: TCP
           {{- with .Values.inference.env }}
           env:
@@ -59,7 +59,7 @@ spec:
           volumeMounts:
             - name: models
               mountPath: /app/models
-              readOnly: true
+              readOnly: false
           {{- end }}
       {{- if .Values.models.persistence.enabled }}
       volumes:

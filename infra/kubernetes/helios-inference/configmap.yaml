@@ -15,7 +15,6 @@ data:
   
   # Model configuration
   MODELS_DIR: "/app/models"
-  # Replace YOUR_GCP_PROJECT_ID with your actual GCP project ID
   MODELS_GCS_BUCKET: "helios-models-YOUR_GCP_PROJECT_ID"
   BASELINE_ENABLED: "true"
   PROPHET_ENABLED: "true"

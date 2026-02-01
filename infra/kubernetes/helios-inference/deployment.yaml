@@ -26,8 +26,7 @@ spec:
       
       containers:
         - name: inference
-          # Replace YOUR_GCP_PROJECT_ID with your actual GCP project ID
-          image: gcr.io/YOUR_GCP_PROJECT_ID/helios-inference:0.2.0
+          image: gcr.io/YOUR_GCP_PROJECT_ID/helios-inference:latest
           imagePullPolicy: Always
           
           ports:
@@ -68,7 +67,7 @@ spec:
           volumeMounts:
             - name: models
               mountPath: /app/models
-              readOnly: true
+              readOnly: false
       
       volumes:
         - name: models
