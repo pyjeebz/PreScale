@@ -50,6 +50,17 @@ class AnomalyConfig:
 
 
 @dataclass
+class AuthConfig:
+    """Authentication configuration."""
+    
+    enabled: bool = False
+    api_key: str = ""  # If set, requests must include this key
+    exempt_paths: list = field(
+        default_factory=lambda: ["/health", "/ready", "/metrics", "/docs", "/redoc", "/openapi.json"]
+    )
+
+
+@dataclass
 class RecommendationConfig:
     """Recommendation engine configuration."""
 
@@ -70,6 +81,7 @@ class InferenceConfig:
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
     anomaly: AnomalyConfig = field(default_factory=AnomalyConfig)
     recommendation: RecommendationConfig = field(default_factory=RecommendationConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
 
     # Environment
     environment: str = "development"
@@ -109,6 +121,10 @@ class InferenceConfig:
                 cooldown_minutes=int(os.getenv("COOLDOWN_MINUTES", "5")),
                 min_replicas=int(os.getenv("MIN_REPLICAS", "1")),
                 max_replicas=int(os.getenv("MAX_REPLICAS", "100")),
+            ),
+            auth=AuthConfig(
+                enabled=os.getenv("AUTH_ENABLED", "false").lower() == "true",
+                api_key=os.getenv("HELIOS_API_KEY", ""),
             ),
             environment=os.getenv("ENVIRONMENT", "development"),
             debug=os.getenv("DEBUG", "false").lower() == "true",

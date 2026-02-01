@@ -126,6 +126,31 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Validate API key if authentication is enabled."""
+    # Skip if auth is disabled
+    if not config.auth.enabled:
+        return await call_next(request)
+    
+    # Skip exempt paths (health, metrics, docs)
+    if request.url.path in config.auth.exempt_paths:
+        return await call_next(request)
+    
+    # Check for API key
+    api_key = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not api_key:
+        api_key = request.headers.get("X-API-Key", "")
+    
+    if api_key != config.auth.api_key:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid or missing API key"}
+        )
+    
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     """Record request metrics."""
     start_time = time.time()
