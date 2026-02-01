@@ -1,8 +1,8 @@
 # Helios Examples
 
-This directory contains demo environments and examples for testing and demonstrating Helios capabilities.
+Demo environments and examples for testing Helios capabilities.
 
-> **Note**: These are NOT part of the core Helios product. They are for internal testing and customer demos only.
+> **Note**: These are for testing and demos only, not part of the core Helios product.
 
 ## Contents
 
@@ -10,55 +10,90 @@ This directory contains demo environments and examples for testing and demonstra
 
 A complete test environment with:
 
-- **kubernetes/saleor/** - Demo e-commerce application (Saleor)
-- **kubernetes/locust/** - Load testing infrastructure
-- **loadtest/** - Locust test scripts and configurations
-- **data/** - Sample data generated from load tests
+| Component | Description |
+|-----------|-------------|
+| `kubernetes/` | K8s manifests for demo apps |
+| `loadtest/` | Locust load testing scripts |
+| `data/` | Sample metrics data |
 
-## Usage
+## Quick Start
 
-### Deploy Demo Environment
+### Deploy Load Test Environment
 
 ```bash
-# Deploy Saleor demo app
-kubectl apply -k examples/demo-environment/kubernetes/saleor/overlays/dev/
+# Create namespace
+kubectl create namespace loadtest
 
-# Deploy Locust for load testing
-kubectl apply -k examples/demo-environment/kubernetes/locust/
+# Deploy Locust load testing
+kubectl apply -f demo-environment/kubernetes/locust/
+
+# Wait for pods
+kubectl wait --for=condition=ready pod -l app=locust-master -n loadtest --timeout=120s
 ```
 
-### Run Load Tests
+### Access Locust UI
 
 ```bash
-# Port-forward Locust UI
-kubectl port-forward svc/locust-master 8089:8089 -n locust
+# Port-forward (or use LoadBalancer)
+kubectl port-forward svc/locust-master 8089:8089 -n loadtest
 
 # Open http://localhost:8089
 ```
 
-## Purpose
+### Run Load Test
 
-| Component | Purpose |
-|-----------|---------|
-| **Saleor** | Generates realistic e-commerce traffic patterns |
-| **Locust** | Creates controlled load for testing predictions |
-| **Data** | Training data for ML model development |
+1. Open Locust UI at http://localhost:8089
+2. Set target host (e.g., `http://your-app-service`)
+3. Configure users: 50 users, spawn rate 5/s
+4. Click "Start swarming"
+
+## Using with Helios
+
+### Collect Metrics from Load Test
+
+```yaml
+# helios-agent.yaml
+sources:
+  - type: gcp-monitoring
+    enabled: true
+    config:
+      project_id: your-project
+      filters:
+        namespace: loadtest
+```
+
+### Train Models on Load Test Data
+
+```bash
+cd ml
+python train.py --namespace loadtest --hours 24
+```
+
+### Test Predictions
+
+```bash
+# After training
+helios predict cpu --deployment locust-worker --namespace loadtest
+helios detect --deployment locust-worker --namespace loadtest
+```
+
+## Sample Data
+
+The `data/` directory contains sample metrics for offline testing:
+
+```bash
+# Use sample data for training without cloud access
+python train.py --data-file examples/demo-environment/data/sample_metrics.json
+```
 
 ## What Ships to Customers
 
 Customers receive only the **core Helios product**:
 
-```
-helios/
-├── ml/                      # ✅ Core ML pipeline
-│   ├── inference/           # ✅ Prediction API
-│   ├── cost_intelligence/   # ✅ Cost analysis
-│   └── models/              # ✅ ML models
-│
-└── infra/kubernetes/
-    ├── helios-inference/    # ✅ Deploy to customers
-    ├── helios-cost/         # ✅ Deploy to customers
-    └── keda/                # ✅ Scaling integration
-```
+- ✅ Helios Agent
+- ✅ Helios CLI
+- ✅ Inference Service
+- ✅ Helm Charts
+- ✅ Documentation
 
-The `examples/` directory stays internal for development and demos.
+These demo environments are for internal development and testing only.
