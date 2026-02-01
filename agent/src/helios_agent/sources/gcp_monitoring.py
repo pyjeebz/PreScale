@@ -136,10 +136,16 @@ class GCPMonitoringSource(MetricsSource):
                 end_time=end_pb,
             )
             
+            # Choose aligner based on metric type
+            # Cumulative metrics (counters) need ALIGN_RATE, gauge metrics use ALIGN_MEAN
+            aligner = Aggregation.Aligner.ALIGN_RATE
+            if any(gauge in metric_type for gauge in ['utilization', 'memory/used', 'limit_utilization']):
+                aligner = Aggregation.Aligner.ALIGN_MEAN
+            
             # Build aggregation
             aggregation = Aggregation(
                 alignment_period={"seconds": alignment_period},
-                per_series_aligner=Aggregation.Aligner.ALIGN_MEAN,
+                per_series_aligner=aligner,
             )
             
             results = self._client.list_time_series(
@@ -168,10 +174,17 @@ class GCPMonitoringSource(MetricsSource):
                     
                     normalized = self._normalize_metric_name(metric_type)
                     
+                    # Handle timestamp - proto-plus returns DatetimeWithNanoseconds which is a datetime subclass
+                    ts_value = point.interval.end_time
+                    if hasattr(ts_value, 'ToDatetime'):
+                        ts_value = ts_value.ToDatetime().replace(tzinfo=timezone.utc)
+                    elif not ts_value.tzinfo:
+                        ts_value = ts_value.replace(tzinfo=timezone.utc)
+                    
                     metrics.append(MetricSample(
                         name=normalized,
                         value=value,
-                        timestamp=point.interval.end_time.ToDatetime().replace(tzinfo=timezone.utc),
+                        timestamp=ts_value,
                         metric_type=MetricType.GAUGE,
                         labels=labels,
                         source=self.name,
@@ -184,12 +197,32 @@ class GCPMonitoringSource(MetricsSource):
     
     def _extract_value(self, typed_value) -> float:
         """Extract numeric value from GCP TypedValue."""
-        if typed_value.HasField("double_value"):
-            return typed_value.double_value
-        elif typed_value.HasField("int64_value"):
-            return float(typed_value.int64_value)
-        elif typed_value.HasField("bool_value"):
-            return 1.0 if typed_value.bool_value else 0.0
+        # The google-cloud-monitoring proto-plus wrapper uses simple attribute access
+        # Try each value type in order of likelihood
+        try:
+            if typed_value.double_value:
+                return typed_value.double_value
+        except (AttributeError, TypeError):
+            pass
+        
+        try:
+            if typed_value.int64_value:
+                return float(typed_value.int64_value)
+        except (AttributeError, TypeError):
+            pass
+        
+        try:
+            if typed_value.bool_value is not None:
+                return 1.0 if typed_value.bool_value else 0.0
+        except (AttributeError, TypeError):
+            pass
+        
+        try:
+            if typed_value.distribution_value:
+                return typed_value.distribution_value.mean
+        except (AttributeError, TypeError):
+            pass
+        
         return 0.0
     
     def _normalize_metric_name(self, metric_type: str) -> str:
