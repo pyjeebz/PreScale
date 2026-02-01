@@ -32,7 +32,7 @@ cd ml && python -m uvicorn inference.app:app --port 8080
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/pyjeebz/helios)
 
-**Docker Hub:**
+**Docker:**
 ```bash
 docker run -d -p 8080:8080 ghcr.io/pyjeebz/helios/inference:latest
 ```
@@ -41,13 +41,6 @@ docker run -d -p 8080:8080 ghcr.io/pyjeebz/helios/inference:latest
 ```bash
 helm repo add helios https://pyjeebz.github.io/helios
 helm install helios helios/helios
-```
-
-**Python Agent:**
-```bash
-pip install helios-agent
-helios-agent init
-helios-agent run
 ```
 
 ---
@@ -63,8 +56,8 @@ Helios analyzes real-time metrics from your infrastructure, predicts future reso
 | **Traffic Forecasting** | Predict CPU, memory, and request rates up to 1 hour ahead |
 | **Anomaly Detection** | Real-time detection of unusual patterns using XGBoost |
 | **Scaling Recommendations** | Actionable advice for replica counts and resource limits |
-| **Multi-Cloud Support** | Works on GKE, EKS, AKS, or any Kubernetes cluster |
-| **Prometheus Native** | Exposes metrics in Prometheus format for easy integration |
+| **Multi-Cloud Support** | GCP Cloud Monitoring, AWS CloudWatch, Azure Monitor, Prometheus |
+| **CLI Tools** | `helios` CLI for predictions, anomaly detection, and recommendations |
 
 ---
 
@@ -72,26 +65,27 @@ Helios analyzes real-time metrics from your infrastructure, predicts future reso
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         HELIOS PLATFORM                                      │
+│                              HELIOS PLATFORM                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────────┐    │
-│  │ Metrics Adapter  │───▶│ ML Pipeline     │───▶│ Inference Service   │    │
-│  │ (pluggable)      │    │ (training)      │    │ (FastAPI)           │    │
-│  │ • GCP            │    │                 │    │ /predict            │    │
-│  │ • AWS            │    │ • Baseline      │    │ /detect             │    │
-│  │ • Azure          │    │ • Prophet       │    │ /recommend          │    │
-│  │ • Prometheus     │    │ • XGBoost       │    │ /metrics            │    │
-│  └──────────────────┘    └─────────────────┘    └──────────┬──────────┘    │
-│                                                            │               │
-│         ┌──────────────────────────────────────────────────┼───────────┐   │
-│         │                                                  │           │   │
-│         ▼                                                  ▼           ▼   │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  ┌───────────┐    │
-│  │ Prometheus  │    │ Alertmanager│    │ KEDA        │  │ Grafana   │    │
-│  │ (scraping)  │    │ (alerts)    │    │ (autoscale) │  │ (dashboard│    │
-│  └─────────────┘    └─────────────┘    └─────────────┘  └───────────┘    │
-│                                                                             │
+│                                                                              │
+│  ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────────┐     │
+│  │   Helios Agent   │───▶│   ML Pipeline   │───▶│  Inference Service  │     │
+│  │   (pluggable)    │    │   (training)    │    │     (FastAPI)       │     │
+│  │                  │    │                 │    │                     │     │
+│  │ • GCP Monitoring │    │ • Baseline      │    │ POST /predict       │     │
+│  │ • AWS CloudWatch │    │ • Prophet       │    │ POST /detect        │     │
+│  │ • Azure Monitor  │    │ • XGBoost       │    │ POST /recommend     │     │
+│  │ • Prometheus     │    │                 │    │ GET  /metrics       │     │
+│  └──────────────────┘    └─────────────────┘    └──────────┬──────────┘     │
+│                                                             │                │
+│           ┌─────────────────────────────────────────────────┼────────────┐   │
+│           │                                                 │            │   │
+│           ▼                                                 ▼            ▼   │
+│    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  ┌───────────┐     │
+│    │     GCS     │    │    KEDA     │    │ Helios CLI  │  │  Grafana  │     │
+│    │   (models)  │    │ (autoscale) │    │  (commands) │  │(dashboard)│     │
+│    └─────────────┘    └─────────────┘    └─────────────┘  └───────────┘     │
+│                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -105,334 +99,166 @@ helios/
 │   ├── src/helios_agent/
 │   │   ├── agent.py             # Main agent orchestrator
 │   │   ├── cli.py               # Command-line interface
-│   │   ├── config.py            # Configuration loader
-│   │   ├── client.py            # Helios API client
 │   │   └── sources/             # Pluggable metric sources
-│   │       ├── base.py          # MetricsSource interface
-│   │       ├── registry.py      # Source registration
-│   │       ├── system.py        # Local system metrics
 │   │       ├── prometheus.py    # Prometheus backend
-│   │       ├── datadog.py       # Datadog backend
 │   │       ├── cloudwatch.py    # AWS CloudWatch
 │   │       ├── azure_monitor.py # Azure Monitor
 │   │       └── gcp_monitoring.py# GCP Cloud Monitoring
 │   └── pyproject.toml
 │
+├── cli/                         # Helios CLI
+│   ├── src/helios_cli/
+│   │   └── commands/            # predict, detect, recommend
+│   └── pyproject.toml
+│
 ├── ml/                          # Machine Learning
 │   ├── config.py                # Configuration
 │   ├── train.py                 # Training pipeline
-│   ├── pipeline/                # Data processing
-│   │   ├── data_fetcher.py      # Cloud metrics fetcher
-│   │   └── feature_engineering.py
 │   ├── models/                  # ML models
 │   │   ├── baseline.py          # Moving Average + Trend
 │   │   ├── prophet_model.py     # Prophet forecasting
 │   │   └── xgboost_anomaly.py   # XGBoost anomaly detection
-│   └── inference/               # Inference service (Phase 5)
+│   └── inference/               # Inference service
 │       ├── app.py               # FastAPI application
-│       └── ...
+│       ├── model_manager.py     # Model loading & serving
+│       └── Dockerfile
 │
 ├── infra/                       # Infrastructure
-│   ├── terraform/               # IaC for GCP/AWS/Azure
-│   │   └── gcp/
-│   │       ├── main.tf
-│   │       └── modules/
-│   │           ├── gke/         # Kubernetes cluster
-│   │           ├── cloudsql/    # PostgreSQL database
-│   │           ├── redis/       # Memorystore cache
-│   │           └── ...
+│   ├── terraform/gcp/           # GCP Terraform modules
 │   └── kubernetes/              # K8s manifests
-│       ├── saleor/              # Demo application
-│       ├── locust/              # Load testing
-│       ├── monitoring/          # Prometheus + Grafana
-│       └── helios-inference/    # ML inference service
+│       ├── helios-inference/    # Inference deployment
+│       └── monitoring/          # Prometheus + Grafana
 │
-├── loadtest/                    # Load testing
-│   └── locustfiles/             # Locust scenarios
-│       ├── locustfile.py        # Main test file
-│       └── personas/            # User personas
-│
+├── charts/helios/               # Helm chart
 └── docs/                        # Documentation
-    └── architecture/
-        └── ARCHITECTURE.md
-```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- Kubernetes cluster (GKE, EKS, AKS, or local)
-- kubectl configured
-- Terraform (for infrastructure provisioning)
-- Google Cloud SDK (for GCP deployment)
-
-### 1. Clone and Setup
-
-```bash
-git clone https://github.com/your-org/helios.git
-cd helios
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -r ml/requirements.txt
-```
-
-### 2. Configure Your Project
-
-Use the setup script to configure Helios with your GCP project:
-
-```bash
-# Linux/Mac
-./scripts/setup.sh YOUR_GCP_PROJECT_ID
-
-# Windows PowerShell
-.\scripts\setup.ps1 -ProjectId YOUR_GCP_PROJECT_ID
-```
-
-This will:
-- Create a `.env` file with your project configuration
-- Update Kubernetes manifests with your project ID
-- Set up all required environment variables
-
-Alternatively, configure manually:
-
-```bash
-# Copy the example env file
-cp .env.example .env
-
-# Edit .env with your values
-# GCP_PROJECT_ID=your-project-id
-# GCP_REGION=us-central1
-```
-
-### 3. Authenticate with Cloud Provider
-
-```bash
-# For GCP
-gcloud config set project YOUR_GCP_PROJECT_ID
-gcloud auth application-default login
-
-# For AWS
-export AWS_PROFILE=your-profile
-
-# For Azure
-az login
-```
-
-### 3. Train Models
-
-```bash
-cd ml
-python train.py
-```
-
-### 4. Deploy Infrastructure
-
-```bash
-cd infra/terraform/gcp
-terraform init
-terraform apply
-```
-
-### 5. Deploy Inference Service
-
-```bash
-kubectl apply -k infra/kubernetes/helios-inference/
 ```
 
 ---
 
 ## 🤖 Helios Agent
 
-The Helios Agent is a unified metrics collection daemon that can pull metrics from multiple backends and forward them to the Helios platform.
+The Helios Agent collects metrics from multiple backends and forwards them to the inference service.
 
 ### Installation
 
 ```bash
-# Base installation (system metrics + Prometheus)
+# Base installation
 pip install helios-agent
 
-# With specific backends
-pip install helios-agent[datadog]      # + Datadog support
-pip install helios-agent[aws]          # + AWS CloudWatch
-pip install helios-agent[azure]        # + Azure Monitor
-pip install helios-agent[gcp]          # + GCP Cloud Monitoring
-pip install helios-agent[all]          # All backends
-```
-
-### Supported Metrics Sources
-
-| Source | Description | Requirements |
-|--------|-------------|--------------|
-| `system` | Local CPU, memory, disk, network via psutil | Built-in |
-| `prometheus` | Query any Prometheus server | Built-in |
-| `datadog` | Pull metrics from Datadog API | `pip install helios-agent[datadog]` |
-| `cloudwatch` | AWS CloudWatch metrics | `pip install helios-agent[aws]` |
-| `azure_monitor` | Azure Monitor metrics | `pip install helios-agent[azure]` |
-| `gcp_monitoring` | Google Cloud Monitoring | `pip install helios-agent[gcp]` |
-
-### Quick Start
-
-```bash
-# Generate a configuration file
-helios-agent init
-
-# List available metric sources
-helios-agent sources
-
-# Test configured sources
-helios-agent test
-
-# Run the agent (continuous collection)
-helios-agent run
-
-# Check agent status
-helios-agent status
+# With cloud backends
+pip install helios-agent[gcp]      # + GCP Cloud Monitoring
+pip install helios-agent[aws]      # + AWS CloudWatch
+pip install helios-agent[azure]    # + Azure Monitor
+pip install helios-agent[all]      # All backends
 ```
 
 ### Configuration
 
-Create a `helios-agent.yaml` file:
+Create `helios-agent.yaml`:
 
 ```yaml
 agent:
-  collection_interval: 60      # seconds
-  batch_size: 100
+  collection_interval: 60
   log_level: INFO
 
 sources:
-  # Local system metrics (always recommended)
-  - type: system
+  # GCP Cloud Monitoring
+  - type: gcp-monitoring
     enabled: true
     config:
-      collect_cpu: true
-      collect_memory: true
-      collect_disk: true
-      collect_network: true
+      project_id: your-gcp-project-id
+      metrics:
+        - kubernetes.io/container/cpu/limit_utilization
+        - kubernetes.io/container/memory/limit_utilization
+      filters:
+        namespace: your-namespace
 
-  # Prometheus server
+  # Prometheus
   - type: prometheus
     enabled: true
     config:
       url: http://prometheus:9090
       queries:
-        - name: container_cpu
+        - name: cpu_usage
           query: rate(container_cpu_usage_seconds_total[5m])
-        - name: container_memory
-          query: container_memory_usage_bytes
-
-  # AWS CloudWatch
-  - type: cloudwatch
-    enabled: false
-    config:
-      region: us-east-1
-      namespace: AWS/EC2
-      metrics:
-        - CPUUtilization
-        - NetworkIn
-        - NetworkOut
-
-  # Datadog
-  - type: datadog
-    enabled: false
-    config:
-      api_key: ${DATADOG_API_KEY}
-      app_key: ${DATADOG_APP_KEY}
-      queries:
-        - avg:system.cpu.user{*}
 
 helios:
-  endpoint: http://localhost:8080
-  api_key: ${HELIOS_API_KEY}
+  endpoint: http://helios-inference:8080
 ```
 
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `HELIOS_CONFIG_FILE` | Path to config file | `./helios-agent.yaml` |
-| `HELIOS_ENDPOINT` | Helios API endpoint | `http://localhost:8080` |
-| `HELIOS_API_KEY` | API key for authentication | - |
-| `DATADOG_API_KEY` | Datadog API key | - |
-| `DATADOG_APP_KEY` | Datadog application key | - |
-| `AWS_REGION` | AWS region for CloudWatch | - |
-
-### CLI Commands
+### Usage
 
 ```bash
-# Initialize configuration
-helios-agent init [--output FILE]
+# Initialize config
+helios-agent init
 
-# Run agent with custom config
-helios-agent run --config /path/to/config.yaml
+# Run agent (continuous)
+helios-agent run --config helios-agent.yaml
 
-# List registered source plugins
-helios-agent sources
-
-# Test all configured sources
-helios-agent test
-
-# Show agent status
-helios-agent status
-
-# Run single collection (for testing)
+# Single collection (testing)
 helios-agent run --once
-```
-
-### Creating Custom Sources
-
-You can create custom metric sources by implementing the `MetricsSource` interface:
-
-```python
-from helios_agent.sources import MetricsSource, register_source, MetricSample
-
-@register_source("custom")
-class CustomSource(MetricsSource):
-    """Custom metrics source."""
-    
-    async def initialize(self) -> None:
-        # Connect to your data source
-        pass
-    
-    async def collect(self) -> CollectionResult:
-        # Fetch and return metrics
-        samples = [
-            MetricSample(
-                name="custom_metric",
-                value=42.0,
-                labels={"env": "prod"}
-            )
-        ]
-        return CollectionResult(samples=samples)
-    
-    async def health_check(self) -> bool:
-        return True
-    
-    async def close(self) -> None:
-        # Cleanup
-        pass
 ```
 
 ---
 
-## 📊 ML Models
+## 🖥️ Helios CLI
 
-### Model Performance (167 data points, 24-hour training)
+Command-line interface for predictions, anomaly detection, and scaling recommendations.
 
-| Model | MAE | MAPE | Notes |
-|-------|-----|------|-------|
-| **Baseline (MA+Trend)** | 2.5M | 2.6% | Simple, fast, reliable |
-| **Prophet** | 25M | 21.1% | Better with more data, seasonality |
-| **XGBoost Anomaly** | - | 0.69% rate | 1 anomaly detected |
+### Installation
 
-### Feature Engineering
+```bash
+pip install helios-cli
+```
 
-- **Lag features**: 1, 3, 6, 12 periods
-- **Rolling statistics**: mean, std, min, max (windows: 3, 6, 12)
-- **Time features**: hour, day_of_week, is_weekend, sin/cos encoding
-- **Percent changes**: 1, 3 periods
+### Commands
+
+```bash
+# Predict CPU utilization for a deployment
+helios predict cpu --deployment my-app --namespace default
+
+# Detect anomalies
+helios detect --deployment my-app --namespace default
+
+# Get scaling recommendations
+helios recommend --deployment my-app --namespace default --replicas 2
+```
+
+### Configuration
+
+```bash
+# Set inference endpoint
+export HELIOS_ENDPOINT="http://helios-inference:8080"
+
+# Or use config file
+helios config set endpoint http://helios-inference:8080
+```
+
+---
+
+## 🧠 ML Training
+
+Train models on your infrastructure metrics:
+
+```bash
+cd ml
+
+# Train on GCP Cloud Monitoring data
+python train.py --namespace loadtest --hours 24 --target cpu_utilization
+
+# Models saved to artifacts/
+# - cpu_forecaster/     (Baseline model)
+# - prophet_model.joblib (Prophet model)
+# - anomaly_detector/   (XGBoost model)
+```
+
+### Model Performance
+
+| Model | Type | Use Case |
+|-------|------|----------|
+| **Baseline** | Moving Average + Trend | Fast, reliable forecasting |
+| **Prophet** | Time-series decomposition | Seasonality detection |
+| **XGBoost** | Gradient boosting | Anomaly detection |
 
 ---
 
@@ -442,22 +268,21 @@ class CustomSource(MetricsSource):
 |----------|--------|-------------|
 | `/health` | GET | Service health check |
 | `/models` | GET | List loaded models |
-| `/predict` | POST | Forecast future metrics |
-| `/detect` | POST | Anomaly detection scoring |
-| `/recommend` | POST | Scaling recommendations |
+| `/api/v1/predict` | POST | Forecast future metrics |
+| `/api/v1/detect` | POST | Anomaly detection |
+| `/api/v1/recommend` | POST | Scaling recommendations |
+| `/api/v1/ingest` | POST | Ingest metrics from agent |
 | `/metrics` | GET | Prometheus metrics |
 
 ### Example: Get Predictions
 
 ```bash
-curl -X POST http://helios-inference:8080/predict \
+curl -X POST http://localhost:8080/api/v1/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "metrics": {
-      "cpu_utilization": 0.45,
-      "memory_utilization": 0.62,
-      "db_connections": 15
-    },
+    "deployment": "my-app",
+    "namespace": "default",
+    "metric": "cpu",
     "periods": 12
   }'
 ```
@@ -465,90 +290,99 @@ curl -X POST http://helios-inference:8080/predict \
 ### Example: Detect Anomalies
 
 ```bash
-curl -X POST http://helios-inference:8080/detect \
+curl -X POST http://localhost:8080/api/v1/detect \
   -H "Content-Type: application/json" \
   -d '{
-    "metrics": {
-      "cpu_utilization": 0.95,
-      "memory_utilization": 0.88,
-      "db_connections": 150
-    }
+    "deployment": "my-app",
+    "namespace": "default"
+  }'
+```
+
+### Example: Get Recommendations
+
+```bash
+curl -X POST http://localhost:8080/api/v1/recommend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deployment": "my-app",
+    "namespace": "default",
+    "current_replicas": 2
   }'
 ```
 
 ---
 
-## 🔧 Configuration
+## ☸️ Kubernetes Deployment
 
-### Environment Variables
+### Using Helm
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GCP_PROJECT_ID` | GCP project (for Cloud Monitoring) | - |
-| `METRICS_LOOKBACK_HOURS` | Hours of historical data | 24 |
-| `AGGREGATION_INTERVAL` | Metric aggregation (minutes) | 5 |
-| `ANOMALY_THRESHOLD_SIGMA` | Standard deviations for anomaly | 2.5 |
+```bash
+helm repo add helios https://pyjeebz.github.io/helios
+helm install helios helios/helios \
+  --set inference.image.tag=latest \
+  --set gcs.bucket=your-model-bucket
+```
 
-### Scaling Thresholds
+### Using kubectl
 
-```yaml
-scaling:
-  cpu_scale_up_threshold: 0.80
-  cpu_scale_down_threshold: 0.20
-  memory_warning_threshold: 0.85
-  min_replicas: 1
-  max_replicas: 10
+```bash
+# Deploy inference service
+kubectl apply -f infra/kubernetes/helios-inference/
+
+# Verify deployment
+kubectl get pods -n helios
+kubectl logs -n helios deploy/helios-inference
+```
+
+### GCS Model Storage
+
+Models are stored in GCS and loaded on pod startup:
+
+```bash
+# Create bucket
+gsutil mb gs://your-helios-models
+
+# Upload trained models
+gsutil cp -r ml/artifacts/* gs://your-helios-models/
 ```
 
 ---
 
 ## 📈 Roadmap
 
-### Completed
+### ✅ Completed
 
-- [x] **Phase 1**: Infrastructure setup (Terraform + GKE)
-- [x] **Phase 2**: Demo application (Saleor e-commerce)
-- [x] **Phase 3**: Observability (Prometheus + Grafana)
-- [x] **Phase 4**: ML pipeline (Baseline, Prophet, XGBoost)
+- [x] Helios Agent with pluggable backends (GCP, AWS, Azure, Prometheus)
+- [x] ML Pipeline (Baseline, Prophet, XGBoost models)
+- [x] Inference Service (FastAPI + GCS model loading)
+- [x] CLI Tools (predict, detect, recommend)
+- [x] Kubernetes Deployment (Helm + manifests)
 
-### In Progress
+### 🚧 In Progress
 
-- [ ] **Phase 5**: Inference service & auto-scaling integration
-  - [ ] FastAPI inference service
-  - [ ] Real-time scoring loop
-  - [ ] KEDA predictive autoscaling
-  - [ ] Grafana dashboards
-  - [ ] Alertmanager integration
+- [ ] Web Dashboard (React/Next.js)
+- [ ] KEDA Integration (predictive autoscaling)
+- [ ] Automated Model Retraining (CronJob)
 
-### Future
+### 🔮 Future
 
-- [ ] **Phase 6**: Multi-cloud adapters (AWS, Azure)
-- [ ] **Phase 7**: Deep learning models (LSTM, Transformer)
-- [ ] **Phase 8**: Kubernetes operator
+- [ ] Multi-cluster support
+- [ ] Deep learning models (LSTM, Transformer)
+- [ ] Kubernetes Operator
 
 ---
 
 ## 🧪 Testing
 
-### Run Unit Tests
-
 ```bash
-cd ml
-pytest tests/
-```
+# Run ML tests
+cd ml && pytest tests/
 
-### Run Load Tests
+# Test agent
+cd agent && pytest
 
-```bash
-# Deploy Locust to cluster
-kubectl apply -k infra/kubernetes/locust/base
-
-# Port-forward to UI
-kubectl port-forward -n loadtest svc/locust-master 8089:8089
-
-# Start test via API
-curl -X POST http://localhost:8089/swarm \
-  -d "user_count=100&spawn_rate=10&host=http://saleor-api.saleor.svc"
+# Test CLI
+cd cli && pytest
 ```
 
 ---
@@ -560,6 +394,8 @@ Apache 2.0 - See [LICENSE](LICENSE) for details.
 ---
 
 ## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing`)
