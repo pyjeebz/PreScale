@@ -38,6 +38,7 @@ def main():
 @main.command()
 @click.option("--config", "-c", "config_path", help="Path to config file")
 @click.option("--endpoint", "-e", envvar="HELIOS_ENDPOINT", help="Helios API endpoint")
+@click.option("--deployment", "-d", envvar="HELIOS_DEPLOYMENT", help="Deployment ID to send metrics to")
 @click.option("--api-key", envvar="HELIOS_API_KEY", help="Helios API key")
 @click.option("--interval", default=15, help="Collection interval in seconds")
 @click.option("--log-level", default="INFO", help="Log level")
@@ -45,6 +46,7 @@ def main():
 def run(
     config_path: Optional[str],
     endpoint: Optional[str],
+    deployment: Optional[str],
     api_key: Optional[str],
     interval: int,
     log_level: str,
@@ -61,6 +63,10 @@ def run(
         config.endpoint.url = endpoint
     if api_key:
         config.endpoint.api_key = api_key
+    if deployment:
+        # Add deployment label to all sources
+        for source in config.sources:
+            source.labels["deployment"] = deployment
     if interval:
         for source in config.sources:
             source.interval = interval
