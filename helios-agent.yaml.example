@@ -1,181 +1,89 @@
-# =============================================================================
 # Helios Agent Configuration
-# =============================================================================
-# Copy this file to helios-agent.yaml and customize for your environment.
-# Documentation: https://github.com/pyjeebz/helios/tree/main/agent
+# Unified metrics collection from any monitoring backend
 
-# -----------------------------------------------------------------------------
-# Agent Settings
-# -----------------------------------------------------------------------------
-agent:
-  # How often to collect metrics (in seconds)
-  collection_interval: 60
-  
-  # Maximum metrics per batch sent to Helios
-  batch_size: 100
-  
-  # Logging level: DEBUG, INFO, WARNING, ERROR
-  log_level: INFO
-
-# -----------------------------------------------------------------------------
-# Metric Sources
-# -----------------------------------------------------------------------------
-# Enable the sources relevant to your infrastructure.
-# Each source requires specific dependencies - see installation notes.
-
-sources:
-  # ---------------------------------------------------------------------------
-  # System Metrics (Built-in, no extra dependencies)
-  # ---------------------------------------------------------------------------
-  # Collects local system metrics using psutil
-  - type: system
-    enabled: true
-    config:
-      collect_cpu: true
-      collect_memory: true
-      collect_disk: true
-      collect_network: true
-
-  # ---------------------------------------------------------------------------
-  # Prometheus (Built-in)
-  # ---------------------------------------------------------------------------
-  # Query metrics from a Prometheus server
-  # Install: pip install helios-platform-agent
-  - type: prometheus
-    enabled: false
-    config:
-      url: http://prometheus:9090
-      # Custom PromQL queries
-      queries:
-        - name: container_cpu
-          query: rate(container_cpu_usage_seconds_total{namespace="default"}[5m])
-        - name: container_memory
-          query: container_memory_usage_bytes{namespace="default"}
-        - name: http_requests
-          query: rate(http_requests_total[5m])
-
-  # ---------------------------------------------------------------------------
-  # GCP Cloud Monitoring
-  # ---------------------------------------------------------------------------
-  # Collect metrics from Google Cloud Monitoring
-  # Install: pip install helios-platform-agent[gcp]
-  # Auth: gcloud auth application-default login
-  - type: gcp-monitoring
-    enabled: false
-    config:
-      # Your GCP project ID
-      project_id: your-gcp-project-id
-      
-      # Metrics to collect (GCP metric types)
-      metrics:
-        - kubernetes.io/container/cpu/limit_utilization
-        - kubernetes.io/container/memory/limit_utilization
-        - kubernetes.io/container/cpu/request_utilization
-        - kubernetes.io/container/memory/request_utilization
-      
-      # Filter by Kubernetes namespace (optional)
-      filters:
-        namespace: default
-      
-      # How far back to look for metrics (in minutes)
-      lookback_minutes: 10
-
-  # ---------------------------------------------------------------------------
-  # AWS CloudWatch
-  # ---------------------------------------------------------------------------
-  # Collect metrics from AWS CloudWatch
-  # Install: pip install helios-platform-agent[aws]
-  # Auth: AWS credentials via environment or ~/.aws/credentials
-  - type: cloudwatch
-    enabled: false
-    config:
-      region: us-east-1
-      namespace: AWS/EC2
-      metrics:
-        - CPUUtilization
-        - NetworkIn
-        - NetworkOut
-        - DiskReadOps
-        - DiskWriteOps
-      dimensions:
-        - Name: InstanceId
-          Value: i-1234567890abcdef0
-
-  # ---------------------------------------------------------------------------
-  # Azure Monitor
-  # ---------------------------------------------------------------------------
-  # Collect metrics from Azure Monitor
-  # Install: pip install helios-platform-agent[azure]
-  # Auth: az login
-  - type: azure-monitor
-    enabled: false
-    config:
-      subscription_id: your-subscription-id
-      resource_group: your-resource-group
-      resource_type: Microsoft.ContainerService/managedClusters
-      resource_name: your-aks-cluster
-      metrics:
-        - node_cpu_usage_percentage
-        - node_memory_rss_percentage
-
-  # ---------------------------------------------------------------------------
-  # Datadog
-  # ---------------------------------------------------------------------------
-  # Pull metrics from Datadog API
-  # Install: pip install helios-platform-agent[datadog]
-  - type: datadog
-    enabled: false
-    config:
-      # Use environment variables for security:
-      # DATADOG_API_KEY and DATADOG_APP_KEY
-      api_key: ${DATADOG_API_KEY}
-      app_key: ${DATADOG_APP_KEY}
-      site: datadoghq.com  # or datadoghq.eu
-      queries:
-        - avg:system.cpu.user{*}
-        - avg:system.mem.used{*}
-        - sum:kubernetes.pods.running{*}
-
-# -----------------------------------------------------------------------------
-# Helios Inference Service
-# -----------------------------------------------------------------------------
-helios:
-  # URL of the Helios inference service
-  endpoint: http://localhost:8080
-  
-  # API key for authentication (optional)
-  # Can also be set via HELIOS_API_KEY environment variable
-  api_key: ${HELIOS_API_KEY}
-  
-  # Request timeout in seconds
+# Helios API endpoint
+endpoint:
+  url: http://localhost:8080
+  api_key: ${HELIOS_API_KEY}  # Or set via environment
   timeout: 30
-  
-  # Retry failed requests
-  retries: 3
+  retry_attempts: 3
 
-# -----------------------------------------------------------------------------
-# Environment Variable Reference
-# -----------------------------------------------------------------------------
-# The following environment variables can be used:
-#
-# HELIOS_ENDPOINT      - Override helios.endpoint
-# HELIOS_API_KEY       - API key for Helios service
-# HELIOS_CONFIG_FILE   - Path to this config file
-#
-# GCP:
-# GOOGLE_APPLICATION_CREDENTIALS - Path to service account JSON
-#
-# AWS:
-# AWS_ACCESS_KEY_ID     - AWS access key
-# AWS_SECRET_ACCESS_KEY - AWS secret key
-# AWS_REGION            - AWS region
-#
-# Azure:
-# AZURE_SUBSCRIPTION_ID - Azure subscription ID
-# AZURE_TENANT_ID       - Azure tenant ID
-# AZURE_CLIENT_ID       - Azure client ID
-# AZURE_CLIENT_SECRET   - Azure client secret
-#
-# Datadog:
-# DATADOG_API_KEY       - Datadog API key
-# DATADOG_APP_KEY       - Datadog application key
+# Metrics sources - add any combination of backends
+sources:
+  # Local system metrics (always available)
+  #- name: local-system
+   # type: system
+    #enabled: true
+    #interval: 15
+    #options:
+      #collect_cpu: true
+      #collect_memory: true
+      #collect_disk: true
+      #collect_network: true
+
+  # Prometheus (if you have a Prometheus server)
+  # - name: prometheus
+  #   type: prometheus
+  #   enabled: false
+  #   endpoint: http://prometheus:9090
+  #   interval: 15
+  #   queries:
+  #     - 'sum(rate(container_cpu_usage_seconds_total{container!=""}[5m])) by (namespace, pod)'
+  #     - 'sum(container_memory_usage_bytes{container!=""}) by (namespace, pod)'
+
+  # Datadog (requires API key)
+  # - name: datadog
+  #   type: datadog
+  #   enabled: false
+  #   api_key: ${DATADOG_API_KEY}
+  #   credentials:
+  #     app_key: ${DATADOG_APP_KEY}
+  #   options:
+  #     site: us1  # us1, us3, us5, eu1, ap1
+  #   metrics:
+  #     - system.cpu.user
+  #     - system.mem.used
+
+  # AWS CloudWatch (requires AWS credentials)
+  # - name: cloudwatch
+  #   type: cloudwatch
+  #   enabled: false
+  #   credentials:
+  #     aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+  #     aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+  #     region: us-east-1
+  #   metrics:
+  #     - AWS/EC2/CPUUtilization
+  #     - AWS/RDS/DatabaseConnections
+
+  # Azure Monitor (requires service principal)
+  # - name: azure-monitor
+  #   type: azure_monitor
+  #   enabled: false
+  #   credentials:
+  #     tenant_id: ${AZURE_TENANT_ID}
+  #     client_id: ${AZURE_CLIENT_ID}
+  #     client_secret: ${AZURE_CLIENT_SECRET}
+  #     subscription_id: ${AZURE_SUBSCRIPTION_ID}
+
+  # Google Cloud Monitoring (requires service account)
+  - name: gcp-monitoring
+    type: gcp_monitoring
+    enabled: true
+    credentials:
+      project_id: ${GCP_PROJECT_ID}  # Set via environment variable
+      # Uses ADC (Application Default Credentials) - no file needed if gcloud auth is set
+    interval: 30
+    metrics:
+      # GKE container metrics (gauges work best)
+      - kubernetes.io/container/cpu/limit_utilization
+      - kubernetes.io/container/memory/limit_utilization
+      - kubernetes.io/container/memory/used_bytes
+      # GKE node metrics
+      - kubernetes.io/node/cpu/allocatable_utilization
+      - kubernetes.io/node/memory/allocatable_utilization
+
+# Agent settings
+batch_size: 100
+flush_interval: 10
+log_level: INFO

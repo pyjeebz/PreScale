@@ -116,3 +116,5 @@ patch.json
 locust_stats.html
 openapi_response.json
 prometheus-local.yaml
+helios-agent.yaml
+!helios-agent.yaml.example
