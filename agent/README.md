@@ -88,6 +88,7 @@ helios:
 helios-agent init              # Generate config file
 helios-agent run               # Start collecting metrics
 helios-agent run --once        # Single collection (testing)
+helios-agent run --deployment my-deployment  # Associate with deployment
 helios-agent sources           # List available sources
 helios-agent test              # Test source connections
 helios-agent status            # Show agent status

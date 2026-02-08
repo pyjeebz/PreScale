@@ -79,12 +79,13 @@ helm install helios helios/helios
 
 ```
 helios/
-├── agent/         # Metrics collection agent (pluggable sources)
-├── cli/           # CLI tools for predictions/anomalies/recommendations
-├── ml/            # ML models, training, inference service (FastAPI)
-├── infra/         # Kubernetes, Terraform, Docker, Helm
-├── charts/helios/ # Helm chart
-├── docs/          # Documentation
+├── agent/              # Metrics collection agent (pluggable sources)
+├── cli/                # CLI tools for predictions/anomalies/recommendations
+├── ml/                 # ML models, training, inference service (FastAPI)
+│   └── inference/web/  # Vue.js web dashboard
+├── infra/              # Kubernetes, Terraform, Docker, Helm
+├── charts/helios/      # Helm chart
+├── docs/               # Documentation
 ```
 
 ---
@@ -137,10 +138,30 @@ helios:
 
 ## 🖥️ Web Dashboard
 
-- Real-time metrics charts (CPU, memory, disk, network)
-- Agent map (locations, status)
-- Predictions and anomaly timeline
-- Recommendations for scaling
+The Vue.js dashboard provides AI-powered insights for your infrastructure:
+
+| Feature | Description |
+|---------|-------------|
+| **Multi-Deployment Management** | Create and switch between deployments (prod, staging, dev) |
+| **Agent Installation** | Copy-paste commands with live connection status |
+| **AI Predictions** | Forecast CPU, memory, and resource usage |
+| **Anomaly Detection** | Real-time detection of unusual patterns |
+| **Recommendations** | Proactive scaling advice with confidence scores |
+
+### Running the Dashboard
+
+```bash
+cd ml/inference/web
+npm install
+npm run dev        # Development: http://localhost:3000
+npm run build      # Production build to ../static
+```
+
+### User Flow
+
+1. **Create a deployment** (`/deployments`) - e.g., `ecommerce-prod`
+2. **Install the agent** (`/install`) - copy commands, run on your server
+3. **View AI insights** - predictions, anomalies, and recommendations appear automatically
 
 ---
 
@@ -177,15 +198,17 @@ helios:
 ## 📈 Roadmap
 
 ### ✅ Completed
-- Agent with pluggable backends
+- Agent with pluggable backends (GCP, Prometheus, System)
 - ML pipeline (Baseline, Prophet, XGBoost)
 - Inference service (FastAPI)
-- CLI tools
+- CLI tools (predict, detect, recommend)
 - Kubernetes/Helm deployment
+- Web dashboard (Vue.js) with multi-deployment support
+- Agent installation flow
+- AI-focused insights (predictions, anomalies, recommendations)
 
 ### 🚧 In Progress
-- Web dashboard (Vue/React)
-- ML integration with real metrics
+- Agent management controls (pause/resume, collection interval)
 - Automated model retraining
 - Pluggable storage backend
 
@@ -194,6 +217,7 @@ helios:
 - Deep learning models (LSTM, Transformer)
 - Alerting integrations (Slack, PagerDuty)
 - User authentication/RBAC
+- Landing page
 
 ---
 
