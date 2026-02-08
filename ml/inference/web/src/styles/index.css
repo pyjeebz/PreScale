@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --helios-50: #f5f3ff;
+    --helios-100: #ede9fe;
+    --helios-200: #ddd6fe;
+    --helios-300: #c4b5fd;
+    --helios-400: #a78bfa;
+    --helios-500: #8b5cf6;
+    --helios-600: #7c3aed;
+    --helios-700: #6d28d9;
+    --helios-800: #5b21b6;
+    --helios-900: #4c1d95;
+}
+
+body {
+    @apply antialiased;
+}
+
+.card {
+    @apply bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm;
+}
+
+.input {
+    @apply w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-helios-500 focus:border-transparent transition-colors;
+}
+
+.btn-primary {
+    @apply px-4 py-2 bg-helios-600 hover:bg-helios-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+    @apply px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-lg border border-slate-300 dark:border-slate-600 transition-colors;
+}
+
+/* Custom Helios color utilities */
+.text-helios-600 {
+    color: var(--helios-600);
+}
+
+.bg-helios-50 {
+    background-color: var(--helios-50);
+}
+
+.bg-helios-600 {
+    background-color: var(--helios-600);
+}
+
+.hover\:bg-helios-700:hover {
+    background-color: var(--helios-700);
+}
+
+.ring-helios-500 {
+    --tw-ring-color: var(--helios-500);
+}
+
+.focus\:ring-helios-500:focus {
+    --tw-ring-color: var(--helios-500);
+}
+
+.dark .dark\:bg-helios-900\/20 {
+    background-color: rgb(76 29 149 / 0.2);
+}
+
+.dark .dark\:text-helios-400 {
+    color: var(--helios-400);
+}
+
+.border-t-helios-600 {
+    border-top-color: var(--helios-600);
+}
