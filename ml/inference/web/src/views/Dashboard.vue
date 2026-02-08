@@ -1,124 +1,63 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import {
   ServerStackIcon,
   ExclamationTriangleIcon,
-  ExclamationCircleIcon,
-  ChartBarIcon
+  LightBulbIcon,
+  ChartBarIcon,
+  ArrowRightIcon,
+  CheckCircleIcon
 } from '@heroicons/vue/24/outline'
-import StatsCard from '@/components/common/StatsCard.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
-import MetricChart from '@/components/charts/MetricChart.vue'
-import AgentMap from '@/components/charts/AgentMap.vue'
 import { useDeploymentsStore } from '@/stores/deployments'
 import { useAgentsStore } from '@/stores/agents'
 import { CubeIcon } from '@heroicons/vue/24/outline'
-import api from '@/services/api'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { mlApi, type Recommendation } from '@/services/api'
 
 const deploymentsStore = useDeploymentsStore()
 const agentsStore = useAgentsStore()
 
-// Real metrics data
-const cpuData = ref<number[]>([])
-const memoryData = ref<number[]>([])
-const timeLabels = ref<string[]>([])
-const latestCpu = ref<number | null>(null)
-const latestMemory = ref<number | null>(null)
-let refreshInterval: number | null = null
+// State
+const recommendations = ref<Recommendation[]>([])
+const anomalyCount = ref(0)
+const loadingRecs = ref(false)
 
-// Fetch metrics from API
-const fetchMetrics = async () => {
-  // Fetch all metrics without deployment filtering
+// Fetch recommendations (lightweight)
+async function fetchRecommendations() {
+  if (!deploymentsStore.currentDeployment) return
+  loadingRecs.value = true
   try {
-    // Fetch CPU metrics
-    const cpuResponse = await api.get('/metrics/cpu_utilization', {
-      params: { hours: 1, limit: 50 }
+    const response = await mlApi.recommend({
+      workload: deploymentsStore.currentDeployment.name,
+      namespace: 'default',
+      current_state: {
+        replicas: 2,
+        cpu_request: '100m',
+        memory_request: '256Mi'
+      }
     })
-    if (cpuResponse.data.data?.length) {
-      // Convert from decimal (0.5) to percentage (50)
-      cpuData.value = cpuResponse.data.data.map((d: any) => d.value * 100)
-      timeLabels.value = cpuResponse.data.data.map((d: any) => {
-        const time = new Date(d.timestamp)
-        return time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      })
-      latestCpu.value = cpuResponse.data.latest?.value ? cpuResponse.data.latest.value * 100 : null
-    }
-    
-    // Fetch Memory metrics
-    const memResponse = await api.get('/metrics/memory_utilization', {
-      params: { hours: 1, limit: 50 }
-    })
-    if (memResponse.data.data?.length) {
-      // Convert from decimal to percentage
-      memoryData.value = memResponse.data.data.map((d: any) => d.value * 100)
-      latestMemory.value = memResponse.data.latest?.value ? memResponse.data.latest.value * 100 : null
-    }
-  } catch (error) {
-    console.error('Failed to fetch metrics:', error)
+    recommendations.value = response.recommendations || []
+  } catch (e) {
+    console.error('Failed to fetch recommendations:', e)
+  } finally {
+    loadingRecs.value = false
   }
 }
 
-// Map agents for AgentMap component
-const mapAgents = computed(() => 
-  agentsStore.currentDeploymentAgents.map(agent => ({
-    id: agent.id,
-    hostname: agent.hostname,
-    status: agent.status as 'online' | 'warning' | 'offline',
-    region: agent.region || 'us-east-1',
-    location: agent.location
-  }))
-)
-
-const stats = computed(() => [
-  {
-    title: 'Agents Online',
-    value: agentsStore.onlineAgents.length,
-    subtitle: `${agentsStore.currentDeploymentAgents.length} total`,
-    icon: ServerStackIcon,
-    color: 'green' as const
-  },
-  {
-    title: 'CPU Usage',
-    value: latestCpu.value !== null ? `${latestCpu.value.toFixed(1)}%` : '—',
-    subtitle: latestCpu.value !== null ? 'Current utilization' : 'Waiting for data',
-    icon: ChartBarIcon,
-    color: (latestCpu.value ?? 0) > 80 ? 'red' as const : 'blue' as const
-  },
-  {
-    title: 'Memory Usage',
-    value: latestMemory.value !== null ? `${latestMemory.value.toFixed(1)}%` : '—',
-    subtitle: latestMemory.value !== null ? 'Current utilization' : 'Waiting for data',
-    icon: ExclamationCircleIcon,
-    color: (latestMemory.value ?? 0) > 90 ? 'red' as const : 'green' as const
-  },
-  {
-    title: 'Warnings',
-    value: agentsStore.warningAgents.length,
-    subtitle: agentsStore.warningAgents.length > 0 ? 'Needs attention' : 'All healthy',
-    icon: ExclamationTriangleIcon,
-    color: agentsStore.warningAgents.length > 0 ? 'yellow' as const : 'slate' as const
-  }
-])
-
 onMounted(async () => {
   await deploymentsStore.fetchDeployments()
-  // Always fetch metrics, regardless of deployment selection
-  await fetchMetrics()
   if (deploymentsStore.currentDeploymentId) {
     await agentsStore.fetchAgents()
+    await fetchRecommendations()
   }
-  // Auto-refresh metrics every 10 seconds
-  refreshInterval = window.setInterval(async () => {
-    await fetchMetrics()
-    if (deploymentsStore.currentDeploymentId) {
-      await agentsStore.fetchAgents()
-    }
-  }, 10000)
 })
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
+// Watch for deployment changes
+watch(() => deploymentsStore.currentDeploymentId, async (newId) => {
+  if (newId) {
+    await agentsStore.fetchAgents()
+    await fetchRecommendations()
   }
 })
 </script>
@@ -129,7 +68,7 @@ onUnmounted(() => {
     <div>
       <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Dashboard</h1>
       <p class="text-slate-500 dark:text-slate-400">
-        Overview of your infrastructure health and predictions
+        AI-powered insights for your infrastructure
       </p>
     </div>
     
@@ -137,69 +76,165 @@ onUnmounted(() => {
     <EmptyState
       v-if="!deploymentsStore.currentDeployment"
       title="No deployments yet"
-      description="Create your first deployment to start monitoring your infrastructure."
+      description="Create your first deployment to start getting AI insights."
       action-label="Create Deployment"
       :icon="CubeIcon"
       @action="$router.push('/deployments')"
     />
     
     <template v-else>
-      <!-- Stats Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard
-          v-for="stat in stats"
-          :key="stat.title"
-          :title="stat.title"
-          :value="stat.value"
-          :subtitle="stat.subtitle"
-          :icon="stat.icon"
-          :color="stat.color"
-        />
-      </div>
-      
-      <!-- Charts Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- CPU Chart -->
-        <MetricChart
-          title="CPU Utilization"
-          :data="cpuData"
-          :labels="timeLabels"
-          unit="%"
-          color="#f97316"
-          :filled="true"
-        />
+      <!-- Quick Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Agents Status -->
+        <div class="card p-5 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <ServerStackIcon class="w-6 h-6 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">
+              {{ agentsStore.onlineAgents.length }}
+            </p>
+            <p class="text-sm text-slate-500">Agents Online</p>
+          </div>
+        </div>
         
-        <!-- Memory Chart -->
-        <MetricChart
-          title="Memory Utilization"
-          :data="memoryData"
-          :labels="timeLabels"
-          unit="%"
-          color="#3b82f6"
-          :filled="true"
-        />
-      </div>
-      
-      <!-- Agent Locations & Recommendations -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Agent Locations Map -->
-        <AgentMap
-          title="Agent Locations"
-          :agents="mapAgents"
-        />
+        <!-- Anomalies -->
+        <div class="card p-5 flex items-center gap-4">
+          <div :class="[
+            'w-12 h-12 rounded-xl flex items-center justify-center',
+            anomalyCount > 0 
+              ? 'bg-red-100 dark:bg-red-900/30' 
+              : 'bg-slate-100 dark:bg-slate-800'
+          ]">
+            <ExclamationTriangleIcon :class="[
+              'w-6 h-6',
+              anomalyCount > 0 
+                ? 'text-red-600 dark:text-red-400' 
+                : 'text-slate-400'
+            ]" />
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">
+              {{ anomalyCount }}
+            </p>
+            <p class="text-sm text-slate-500">Active Anomalies</p>
+          </div>
+        </div>
         
         <!-- Recommendations -->
-        <div class="card p-6">
-          <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Recommendations</h3>
-          <div class="space-y-4">
-            <div class="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-              <p class="text-slate-500 dark:text-slate-400 text-center py-8">
-                No recommendations at this time.
-                <br />
-                <span class="text-sm">Predictions will generate recommendations when issues are forecasted.</span>
-              </p>
+        <div class="card p-5 flex items-center gap-4">
+          <div :class="[
+            'w-12 h-12 rounded-xl flex items-center justify-center',
+            recommendations.length > 0 
+              ? 'bg-amber-100 dark:bg-amber-900/30' 
+              : 'bg-slate-100 dark:bg-slate-800'
+          ]">
+            <LightBulbIcon :class="[
+              'w-6 h-6',
+              recommendations.length > 0 
+                ? 'text-amber-600 dark:text-amber-400' 
+                : 'text-slate-400'
+            ]" />
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">
+              {{ recommendations.length }}
+            </p>
+            <p class="text-sm text-slate-500">Recommendations</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Quick Actions -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Predictions Card -->
+        <RouterLink 
+          to="/predictions" 
+          class="card p-6 hover:border-helios-500 dark:hover:border-helios-400 transition-all group"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <ChartBarIcon class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <ArrowRightIcon class="w-5 h-5 text-slate-400 group-hover:text-helios-500 transition-colors" />
+          </div>
+          <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Predictions</h3>
+          <p class="text-sm text-slate-500">Forecast CPU, memory, and resource usage</p>
+        </RouterLink>
+        
+        <!-- Anomalies Card -->
+        <RouterLink 
+          to="/anomalies" 
+          class="card p-6 hover:border-helios-500 dark:hover:border-helios-400 transition-all group"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+              <ExclamationTriangleIcon class="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <ArrowRightIcon class="w-5 h-5 text-slate-400 group-hover:text-helios-500 transition-colors" />
+          </div>
+          <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Anomalies</h3>
+          <p class="text-sm text-slate-500">Detect unusual patterns in your metrics</p>
+        </RouterLink>
+        
+        <!-- Agents Card -->
+        <RouterLink 
+          to="/agents" 
+          class="card p-6 hover:border-helios-500 dark:hover:border-helios-400 transition-all group"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <ServerStackIcon class="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <ArrowRightIcon class="w-5 h-5 text-slate-400 group-hover:text-helios-500 transition-colors" />
+          </div>
+          <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Agents</h3>
+          <p class="text-sm text-slate-500">Manage data collectors across your infrastructure</p>
+        </RouterLink>
+      </div>
+      
+      <!-- Recommendations Section -->
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-slate-900 dark:text-white">
+            AI Recommendations
+          </h3>
+          <button 
+            @click="fetchRecommendations" 
+            :disabled="loadingRecs"
+            class="text-sm text-helios-600 hover:text-helios-700 disabled:opacity-50"
+          >
+            {{ loadingRecs ? 'Loading...' : 'Refresh' }}
+          </button>
+        </div>
+        
+        <div v-if="recommendations.length > 0" class="space-y-3">
+          <div
+            v-for="(rec, idx) in recommendations"
+            :key="idx"
+            class="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800"
+          >
+            <div class="flex items-start gap-3">
+              <LightBulbIcon class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div class="flex-1">
+                <p class="font-medium text-amber-900 dark:text-amber-100">
+                  {{ rec.workload }}
+                </p>
+                <div v-for="(action, aidx) in rec.actions" :key="aidx" class="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                  <p>{{ action.reason }}</p>
+                  <p class="text-xs mt-1 text-amber-600">
+                    {{ (action.confidence * 100).toFixed(0) }}% confidence
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+        
+        <div v-else class="flex flex-col items-center py-8 text-center">
+          <CheckCircleIcon class="w-12 h-12 text-green-500 mb-3" />
+          <p class="font-medium text-slate-900 dark:text-white">All systems optimal</p>
+          <p class="text-sm text-slate-500 mt-1">No recommendations at this time</p>
         </div>
       </div>
     </template>
