@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { ChartBarIcon } from '@heroicons/vue/24/outline'
+import { ref, computed, onUnmounted } from 'vue'
+import { ChartBarIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import PredictionChart from '@/components/charts/PredictionChart.vue'
+import api, { mlApi, type PredictionResponse } from '@/services/api'
 
 const selectedMetric = ref('cpu_utilization')
 const selectedAgent = ref('all')
 const selectedHorizon = ref('24')
 const showPrediction = ref(false)
+const loading = ref(false)
+const error = ref<string | null>(null)
+const predictionResponse = ref<PredictionResponse | null>(null)
+let refreshInterval: number | null = null
 
 const metrics = [
   { value: 'cpu_utilization', label: 'CPU Utilization' },
@@ -25,62 +30,93 @@ const horizons = [
   { value: '168', label: '7 days' }
 ]
 
-// Demo prediction data
-const generateHistoricalData = () => {
-  const data: number[] = []
-  let value = 40 + Math.random() * 20
-  for (let i = 0; i < 24; i++) {
-    value += (Math.random() - 0.5) * 10
-    value = Math.max(20, Math.min(80, value))
-    data.push(value)
-  }
-  return data
-}
-
-const generateForecastData = (lastValue: number, steps: number) => {
-  const data: number[] = []
-  let value = lastValue
-  const trend = Math.random() > 0.5 ? 1 : -1
-  for (let i = 0; i < steps; i++) {
-    value += trend * (Math.random() * 3) + (Math.random() - 0.5) * 5
-    value = Math.max(10, Math.min(95, value))
-    data.push(value)
-  }
-  return data
-}
-
 const historicalData = ref<number[]>([])
 const forecastData = ref<number[]>([])
 const upperBound = ref<number[]>([])
 const lowerBound = ref<number[]>([])
 
-const generatePrediction = () => {
-  const historical = generateHistoricalData()
-  const horizonHours = parseInt(selectedHorizon.value)
-  const forecast = generateForecastData(historical[historical.length - 1], horizonHours)
+// Fetch historical data from metrics API
+const fetchHistoricalData = async () => {
+  try {
+    const response = await api.get(`/metrics/${selectedMetric.value}`, {
+      params: { hours: 24, limit: 24 }
+    })
+    if (response.data.data?.length) {
+      const isPercentMetric = selectedMetric.value.includes('utilization')
+      return response.data.data.map((d: any) => isPercentMetric ? d.value * 100 : d.value)
+    }
+    return []
+  } catch (e) {
+    console.warn('No historical data available, using placeholder')
+    return Array(24).fill(0).map(() => 40 + Math.random() * 20)
+  }
+}
+
+// Call real ML prediction API
+const generatePrediction = async () => {
+  loading.value = true
+  error.value = null
   
-  historicalData.value = historical
-  forecastData.value = forecast
-  upperBound.value = forecast.map(v => Math.min(100, v + 10 + Math.random() * 5))
-  lowerBound.value = forecast.map(v => Math.max(0, v - 10 - Math.random() * 5))
-  showPrediction.value = true
+  try {
+    const historical = await fetchHistoricalData()
+    historicalData.value = historical
+    
+    const horizonHours = parseInt(selectedHorizon.value)
+    const periods = horizonHours * 12
+    
+    const response = await mlApi.predict({
+      metric: selectedMetric.value,
+      periods: periods,
+      model: 'baseline',
+      include_confidence: true
+    })
+    
+    predictionResponse.value = response
+    
+    const isPercentMetric = selectedMetric.value.includes('utilization')
+    forecastData.value = response.predictions.map(p => 
+      isPercentMetric ? p.value * 100 : p.value
+    )
+    upperBound.value = response.predictions.map(p => 
+      p.upper_bound != null ? (isPercentMetric ? p.upper_bound * 100 : p.upper_bound) : forecastData.value[0] + 10
+    )
+    lowerBound.value = response.predictions.map(p => 
+      p.lower_bound != null ? (isPercentMetric ? p.lower_bound * 100 : p.lower_bound) : forecastData.value[0] - 10
+    )
+    
+    showPrediction.value = true
+    
+    // Setup auto-refresh every 30 seconds
+    if (refreshInterval) clearInterval(refreshInterval)
+    refreshInterval = window.setInterval(generatePrediction, 30000)
+    
+  } catch (e: any) {
+    console.error('Prediction failed:', e)
+    error.value = e.response?.data?.detail || e.message || 'Prediction failed'
+    showPrediction.value = false
+  } finally {
+    loading.value = false
+  }
 }
 
 const labels = computed(() => {
   const now = new Date()
   const allLabels: string[] = []
   
-  // Historical labels (past 24 hours)
   for (let i = 23; i >= 0; i--) {
     const time = new Date(now.getTime() - i * 3600000)
     allLabels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
   }
   
-  // Forecast labels
   const horizonHours = parseInt(selectedHorizon.value)
-  for (let i = 1; i <= horizonHours; i++) {
-    const time = new Date(now.getTime() + i * 3600000)
-    allLabels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
+  const intervals = horizonHours * 12
+  for (let i = 1; i <= intervals; i++) {
+    const time = new Date(now.getTime() + i * 300000)
+    if (i % 12 === 0) {
+      allLabels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
+    } else {
+      allLabels.push('')
+    }
   }
   
   return allLabels
@@ -91,12 +127,13 @@ const prediction = computed(() => {
   
   const peak = Math.max(...forecastData.value)
   const peakIndex = forecastData.value.indexOf(peak)
-  const peakTime = new Date(Date.now() + (peakIndex + 1) * 3600000)
+  const peakTime = new Date(Date.now() + (peakIndex + 1) * 300000)
+  const confidence = predictionResponse.value?.metadata?.confidence || 0.85
   
   return {
     peakValue: peak,
     peakTime: peakTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-    confidence: 0.85 + Math.random() * 0.1,
+    confidence: confidence,
     horizon: horizons.find(h => h.value === selectedHorizon.value)?.label || ''
   }
 })
@@ -104,6 +141,10 @@ const prediction = computed(() => {
 const currentValue = computed(() => {
   if (historicalData.value.length === 0) return null
   return historicalData.value[historicalData.value.length - 1]
+})
+
+onUnmounted(() => {
+  if (refreshInterval) clearInterval(refreshInterval)
 })
 </script>
 
@@ -115,6 +156,11 @@ const currentValue = computed(() => {
       <p class="text-slate-500 dark:text-slate-400">
         Forecast future resource utilization using ML models
       </p>
+    </div>
+    
+    <!-- Error Alert -->
+    <div v-if="error" class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+      <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
     </div>
     
     <!-- Prediction Form -->
@@ -146,8 +192,9 @@ const currentValue = computed(() => {
         </div>
         
         <div class="flex items-end">
-          <button @click="generatePrediction" class="btn-primary w-full">
-            Generate Prediction
+          <button @click="generatePrediction" :disabled="loading" class="btn-primary w-full flex items-center justify-center gap-2">
+            <ArrowPathIcon v-if="loading" class="w-4 h-4 animate-spin" />
+            {{ loading ? 'Generating...' : 'Generate Prediction' }}
           </button>
         </div>
       </div>
