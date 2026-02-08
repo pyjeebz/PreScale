@@ -116,11 +116,11 @@ Collects metrics from:
 ### Installation
 
 ```bash
-pip install helios-platform-agent
-pip install helios-platform-agent[gcp]      # GCP
-pip install helios-platform-agent[aws]      # AWS
-pip install helios-platform-agent[azure]    # Azure
-pip install helios-platform-agent[all]      # All backends
+pip install helios-agent
+pip install helios-agent[gcp]      # GCP
+pip install helios-agent[aws]      # AWS
+pip install helios-agent[azure]    # Azure
+pip install helios-agent[all]      # All backends
 ```
 
 ### Configuration
