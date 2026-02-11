@@ -219,11 +219,11 @@ npm run build      # Production build to ../static
 - Web dashboard (Vue.js) with multi-deployment support
 - Agent installation flow
 - AI-focused insights (predictions, anomalies, recommendations)
+- **Automated model retraining** (GCP/AWS integration)
+- **Agent management controls** (pause/resume, collection interval)
 
 ### 🚧 In Progress
-- Agent management controls (pause/resume, collection interval)
-- Automated model retraining
-- Pluggable storage backend
+- Pluggable storage backend (SQLite supported, others planned)
 
 ### 🔮 Future
 - Multi-cluster support
