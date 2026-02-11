@@ -1,0 +1,16 @@
+endpoint:
+  url: "http://localhost:8001"
+
+sources:
+  - name: gcp-cluster
+    type: gcp_monitoring
+    enabled: true
+    interval: 30
+    credentials:
+      project_id: "gen-lang-client-0702968356"
+    metrics:
+      - "kubernetes.io/node/cpu/allocatable_utilization"
+      - "kubernetes.io/node/memory/allocatable_utilization"
+    labels:
+      deployment: "8b6e5836"
+      environment: "production"
