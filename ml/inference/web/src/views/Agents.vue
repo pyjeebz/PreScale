@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { ServerStackIcon, PlusIcon } from '@heroicons/vue/24/outline'
+import { ServerStackIcon, PlusIcon, PauseIcon, PlayIcon } from '@heroicons/vue/24/outline'
 import { useAgentsStore } from '@/stores/agents'
 import { useDeploymentsStore } from '@/stores/deployments'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -60,6 +60,15 @@ function formatLastSeen(date: string) {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
+}
+
+async function togglePause(agentId: string, currentlyPaused: boolean) {
+  await agentsStore.updateAgentConfig(agentId, { paused: !currentlyPaused })
+}
+
+async function changeInterval(agentId: string, event: Event) {
+  const value = parseInt((event.target as HTMLSelectElement).value)
+  await agentsStore.updateAgentConfig(agentId, { collection_interval: value })
 }
 </script>
 
@@ -149,6 +158,9 @@ function formatLastSeen(date: string) {
               <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Location
               </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Interval
+              </th>
               <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Actions
               </th>
@@ -172,9 +184,11 @@ function formatLastSeen(date: string) {
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <Badge :variant="getStatusBadge(agent.status)">
-                  {{ agent.status }}
-                </Badge>
+                <div class="flex items-center gap-2">
+                  <Badge :variant="agent.paused ? 'default' : getStatusBadge(agent.status)">
+                    {{ agent.paused ? 'paused' : agent.status }}
+                  </Badge>
+                </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                 {{ agent.platform }}
@@ -188,13 +202,43 @@ function formatLastSeen(date: string) {
               <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                 {{ agent.location || agent.region || '—' }}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right">
-                <button
-                  @click="agentsStore.deleteAgent(agent.id)"
-                  class="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+              <td class="px-6 py-4 whitespace-nowrap">
+                <select
+                  :value="agent.collection_interval || 15"
+                  @change="changeInterval(agent.id, $event)"
+                  class="text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 focus:ring-2 focus:ring-cyan-500"
                 >
-                  Remove
-                </button>
+                  <option :value="5">5s</option>
+                  <option :value="10">10s</option>
+                  <option :value="15">15s</option>
+                  <option :value="30">30s</option>
+                  <option :value="60">60s</option>
+                  <option :value="120">2m</option>
+                  <option :value="300">5m</option>
+                </select>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <button
+                    @click="togglePause(agent.id, agent.paused)"
+                    :class="[
+                      'inline-flex items-center gap-1 text-sm px-2 py-1 rounded-md transition-colors',
+                      agent.paused
+                        ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
+                        : 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30'
+                    ]"
+                  >
+                    <PlayIcon v-if="agent.paused" class="w-4 h-4" />
+                    <PauseIcon v-else class="w-4 h-4" />
+                    {{ agent.paused ? 'Resume' : 'Pause' }}
+                  </button>
+                  <button
+                    @click="agentsStore.deleteAgent(agent.id)"
+                    class="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 px-2 py-1"
+                  >
+                    Remove
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
