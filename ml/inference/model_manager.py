@@ -274,6 +274,33 @@ class ModelManager:
             "models": {name: info.model_dump() for name, info in self._model_info.items()},
         }
 
+    def reload_models(self) -> dict[str, bool]:
+        """Reload all models from disk (hot-swap after retraining).
+
+        Clears prediction cache and reloads fresh model files.
+
+        Returns:
+            Dict mapping model name to load success status
+        """
+        # Clear prediction cache if predictor is available
+        try:
+            from .predictor import predictor_service
+            predictor_service.clear_cache()
+        except Exception:
+            pass
+
+        # Clear current models
+        old_count = len(self._models)
+        self._models.clear()
+        self._model_info.clear()
+
+        # Reload
+        results = self.load_models()
+        new_count = sum(results.values())
+        logger.info(f"Models reloaded: {old_count} -> {new_count}")
+
+        return results
+
 
 class PortableBaseline:
     """Baseline model loaded from portable saved parameters."""
