@@ -7,13 +7,15 @@ import {
   LightBulbIcon,
   ChartBarIcon,
   ArrowRightIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ArrowPathIcon,
+  CpuChipIcon
 } from '@heroicons/vue/24/outline'
 import { useDeploymentsStore } from '@/stores/deployments'
 import { useAgentsStore } from '@/stores/agents'
 import { CubeIcon } from '@heroicons/vue/24/outline'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { mlApi, type Recommendation } from '@/services/api'
+import { mlApi, type Recommendation, type RetrainStatus } from '@/services/api'
 
 const deploymentsStore = useDeploymentsStore()
 const agentsStore = useAgentsStore()
@@ -22,6 +24,9 @@ const agentsStore = useAgentsStore()
 const recommendations = ref<Recommendation[]>([])
 const anomalyCount = ref(0)
 const loadingRecs = ref(false)
+const retrainStatus = ref<RetrainStatus | null>(null)
+const retraining = ref(false)
+const retrainHours = ref(24)
 
 // Fetch recommendations (lightweight)
 async function fetchRecommendations() {
@@ -45,8 +50,31 @@ async function fetchRecommendations() {
   }
 }
 
+// Fetch retrain status
+async function fetchRetrainStatus() {
+  try {
+    retrainStatus.value = await mlApi.getRetrainStatus()
+  } catch (e) {
+    console.error('Failed to fetch retrain status:', e)
+  }
+}
+
+// Trigger manual retrain
+async function triggerRetrain() {
+  retraining.value = true
+  try {
+    await mlApi.triggerRetrain(retrainHours.value)
+    await fetchRetrainStatus()
+  } catch (e) {
+    console.error('Retrain failed:', e)
+  } finally {
+    retraining.value = false
+  }
+}
+
 onMounted(async () => {
   await deploymentsStore.fetchDeployments()
+  fetchRetrainStatus()
   if (deploymentsStore.currentDeploymentId) {
     await agentsStore.fetchAgents()
     await fetchRecommendations()
@@ -193,6 +221,86 @@ watch(() => deploymentsStore.currentDeploymentId, async (newId) => {
         </RouterLink>
       </div>
       
+      <!-- Model Training Status -->
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+              <CpuChipIcon class="w-5 h-5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <h3 class="text-lg font-medium text-slate-900 dark:text-white">Model Training</h3>
+              <p class="text-xs text-slate-500" v-if="retrainStatus">
+                Source: <span class="font-medium uppercase">{{ retrainStatus.data_source }}</span>
+                · Every {{ retrainStatus.interval_hours }}h
+              </p>
+            </div>
+          </div>
+          <span 
+            v-if="retrainStatus" 
+            :class="[
+              'px-2 py-1 text-xs rounded-full font-medium',
+              retrainStatus.running 
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+            ]"
+          >
+            {{ retrainStatus.running ? 'Scheduler Active' : 'Scheduler Off' }}
+          </span>
+        </div>
+
+        <!-- Last Run Info -->
+        <div v-if="retrainStatus?.last_run" class="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-slate-500">Last Run</span>
+            <span :class="[
+              'font-medium',
+              retrainStatus.last_run.status === 'completed' ? 'text-green-600' :
+              retrainStatus.last_run.status === 'failed' ? 'text-red-600' :
+              retrainStatus.last_run.status === 'skipped' ? 'text-amber-600' : 'text-slate-600'
+            ]">
+              {{ retrainStatus.last_run.status }}
+            </span>
+          </div>
+          <div v-if="retrainStatus.last_run.data_points" class="flex items-center justify-between text-sm mt-1">
+            <span class="text-slate-500">Data Points</span>
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ retrainStatus.last_run.data_points.toLocaleString() }}</span>
+          </div>
+          <div v-if="retrainStatus.last_run.deployed" class="flex items-center justify-between text-sm mt-1">
+            <span class="text-slate-500">Model Deployed</span>
+            <CheckCircleIcon class="w-4 h-4 text-green-500" />
+          </div>
+          <div v-if="retrainStatus.last_run.error" class="mt-2 text-xs text-red-500">
+            {{ retrainStatus.last_run.error }}
+          </div>
+        </div>
+        <div v-else class="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-center text-sm text-slate-500">
+          No training runs yet
+        </div>
+
+        <!-- Retrain Controls -->
+        <div class="flex items-center gap-3">
+          <select 
+            v-model="retrainHours" 
+            class="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+          >
+            <option :value="6">Last 6 hours</option>
+            <option :value="12">Last 12 hours</option>
+            <option :value="24">Last 24 hours</option>
+            <option :value="48">Last 48 hours</option>
+            <option :value="168">Last 7 days</option>
+          </select>
+          <button 
+            @click="triggerRetrain"
+            :disabled="retraining"
+            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-lg disabled:opacity-50 transition-colors"
+          >
+            <ArrowPathIcon class="w-4 h-4" :class="{ 'animate-spin': retraining }" />
+            {{ retraining ? 'Training...' : 'Retrain Now' }}
+          </button>
+        </div>
+      </div>
+
       <!-- Recommendations Section -->
       <div class="card p-6">
         <div class="flex items-center justify-between mb-4">
