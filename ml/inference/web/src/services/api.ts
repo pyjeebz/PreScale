@@ -140,6 +140,10 @@ export const mlApi = {
 
     getRetrainHistory: (limit = 10): Promise<{ history: TrainingRunInfo[] }> =>
         api.get(`/retrain/history?limit=${limit}`).then(res => res.data),
+
+    // Deployments
+    deleteDeployment: (id: string): Promise<void> =>
+        api.delete(`/deployments/${id}`).then(res => res.data),
 }
 
 export default api
