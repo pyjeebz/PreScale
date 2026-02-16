@@ -13,10 +13,11 @@ import {
   MoonIcon,
   PlusIcon,
   CommandLineIcon,
-  Square3Stack3DIcon
+  Square3Stack3DIcon,
+  TrashIcon
 } from '@heroicons/vue/24/outline'
 import { useThemeStore } from '@/stores/theme'
-import { useDeploymentsStore } from '@/stores/deployments'
+import { useDeploymentsStore, type Deployment } from '@/stores/deployments'
 
 const route = useRoute()
 const router = useRouter()
@@ -51,6 +52,21 @@ function getEnvironmentBadge(env: string) {
 function selectDeployment(id: string) {
   deploymentsStore.setCurrentDeployment(id)
   deploymentDropdownOpen.value = false
+}
+
+async function confirmDelete(deployment: Deployment) {
+  if (confirm(`Are you sure you want to delete ${deployment.name}? This cannot be undone.`)) {
+    try {
+      await deploymentsStore.deleteDeployment(deployment.id)
+      // If we deleted the current deployment, navigation might need reset, 
+      // but store handles ID reset. We might want to go to dashboard.
+      if (deploymentsStore.deployments.length === 0) {
+        router.push('/install')
+      }
+    } catch (e) {
+      alert('Failed to delete deployment')
+    }
+  }
 }
 
 function goToInstall() {
@@ -149,24 +165,36 @@ onMounted(() => {
             </svg>
           </button>
 
-          <!-- Dropdown -->
+      <!-- Dropdown -->
           <div
             v-if="deploymentDropdownOpen"
-            class="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50"
+            class="absolute right-0 mt-1 w-64 bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50"
           >
-            <button
+            <div
               v-for="dep in deploymentsStore.deployments"
               :key="dep.id"
-              @click="selectDeployment(dep.id)"
-              :class="[
-                'w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-slate-800',
-                deploymentsStore.currentDeploymentId === dep.id ? 'bg-helios-50 dark:bg-helios-900/20' : ''
-              ]"
+              class="flex items-center justify-between px-2 hover:bg-slate-50 dark:hover:bg-slate-800 group"
+              :class="deploymentsStore.currentDeploymentId === dep.id ? 'bg-helios-50 dark:bg-helios-900/20' : ''"
             >
-              <span :class="['w-2 h-2 rounded-full', getEnvironmentBadge(dep.environment).class]"></span>
-              <span class="text-slate-700 dark:text-slate-300">{{ dep.name }}</span>
-            </button>
+              <button
+                @click="selectDeployment(dep.id)"
+                class="flex-1 flex items-center gap-2 py-2 px-1 text-sm text-left truncate"
+              >
+                <span :class="['w-2 h-2 rounded-full flex-shrink-0', getEnvironmentBadge(dep.environment).class]"></span>
+                <span class="text-slate-700 dark:text-slate-300 truncate">{{ dep.name }}</span>
+              </button>
+              
+              <button
+                @click.stop="confirmDelete(dep)"
+                class="p-1.5 text-slate-400 hover:text-red-500 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Delete Deployment"
+              >
+                <TrashIcon class="w-4 h-4" />
+              </button>
+            </div>
+            
             <div class="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            
             <button
               @click="goToInstall"
               class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-slate-800 text-helios-600 dark:text-helios-400"
