@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/services/api'
+import api, { mlApi } from '@/services/api'
 
 export interface Deployment {
     id: string
@@ -56,6 +56,19 @@ export const useDeploymentsStore = defineStore('deployments', () => {
         }
     }
 
+    async function deleteDeployment(id: string) {
+        try {
+            await mlApi.deleteDeployment(id)
+            deployments.value = deployments.value.filter(d => d.id !== id)
+            if (currentDeploymentId.value === id) {
+                currentDeploymentId.value = deployments.value.length > 0 ? deployments.value[0].id : null
+            }
+        } catch (e: any) {
+            error.value = e.message || 'Failed to delete deployment'
+            throw e
+        }
+    }
+
     function setCurrentDeployment(id: string) {
         currentDeploymentId.value = id
     }
@@ -68,6 +81,7 @@ export const useDeploymentsStore = defineStore('deployments', () => {
         error,
         fetchDeployments,
         createDeployment,
+        deleteDeployment,
         setCurrentDeployment
     }
 })
