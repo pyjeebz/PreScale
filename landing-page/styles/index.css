@@ -1,0 +1,76 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ─── Theme Variables ─── */
+
+:root,
+:root.dark {
+  --bg-primary: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-card: rgba(255, 255, 255, 0.02);
+  --bg-card-hover: rgba(255, 255, 255, 0.04);
+  --bg-accent: rgba(255, 255, 255, 0.03);
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  --text-primary: #ffffff;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --text-faint: #525252;
+
+  --code-bg: rgba(255, 255, 255, 0.02);
+
+  --noise-opacity: 0.03;
+  --holo-opacity: 0.2;
+  --nav-bg: rgba(10, 10, 10, 0.8);
+}
+
+:root.light {
+  --bg-primary: #fafafa;
+  --bg-elevated: #f3f3f3;
+  --bg-card: rgba(0, 0, 0, 0.02);
+  --bg-card-hover: rgba(0, 0, 0, 0.04);
+  --bg-accent: rgba(0, 0, 0, 0.03);
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --border-subtle: rgba(0, 0, 0, 0.04);
+
+  --text-primary: #0a0a0a;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+  --text-faint: #a3a3a3;
+
+  --code-bg: rgba(0, 0, 0, 0.03);
+
+  --noise-opacity: 0.015;
+  --holo-opacity: 0.12;
+  --nav-bg: rgba(250, 250, 250, 0.85);
+}
+
+/* Smooth transitions on theme change */
+html {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+* {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+}
+
+/* Disable transition on page load */
+html.no-transition * {
+  transition: none !important;
+}
