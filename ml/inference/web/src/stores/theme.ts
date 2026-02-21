@@ -2,15 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useThemeStore = defineStore('theme', () => {
-  const isDark = ref(false)
+  const isDark = ref(true)
 
   function init() {
-    // Check localStorage first, then system preference
     const stored = localStorage.getItem('helios-theme')
     if (stored) {
       isDark.value = stored === 'dark'
     } else {
-      isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+      isDark.value = true // Default to dark (Bento Grid aesthetic)
     }
     applyTheme()
   }
@@ -28,10 +27,13 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   function applyTheme() {
+    const root = document.documentElement
     if (isDark.value) {
-      document.documentElement.classList.add('dark')
+      root.classList.add('dark')
+      root.classList.remove('light')
     } else {
-      document.documentElement.classList.remove('dark')
+      root.classList.add('light')
+      root.classList.remove('dark')
     }
   }
 

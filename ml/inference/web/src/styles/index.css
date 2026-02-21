@@ -2,72 +2,315 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-    --helios-50: #f5f3ff;
-    --helios-100: #ede9fe;
-    --helios-200: #ddd6fe;
-    --helios-300: #c4b5fd;
-    --helios-400: #a78bfa;
-    --helios-500: #8b5cf6;
-    --helios-600: #7c3aed;
-    --helios-700: #6d28d9;
-    --helios-800: #5b21b6;
-    --helios-900: #4c1d95;
+/* ─── Theme Variables ─── */
+
+:root,
+:root.dark {
+    --bg-primary: #0a0a0a;
+    --bg-elevated: #111111;
+    --bg-card: rgba(255, 255, 255, 0.03);
+    --bg-card-hover: rgba(255, 255, 255, 0.05);
+    --bg-code: #0d0d0d;
+    --bg-input: #111111;
+
+    --border-primary: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+    --border-active: rgba(99, 102, 241, 0.5);
+
+    --text-primary: #ffffff;
+    --text-secondary: #a3a3a3;
+    --text-tertiary: #737373;
+
+    --accent-gradient: linear-gradient(135deg, #6366f1, #8b5cf6, #d946ef);
+    --accent-500: #6366f1;
+    --accent-400: #818cf8;
+
+    --status-green: #22c55e;
+    --status-red: #ef4444;
+    --status-amber: #f59e0b;
+    --status-blue: #3b82f6;
 }
+
+:root.light {
+    --bg-primary: #fafafa;
+    --bg-elevated: #ffffff;
+    --bg-card: rgba(0, 0, 0, 0.02);
+    --bg-card-hover: rgba(0, 0, 0, 0.04);
+    --bg-code: #1e1e2e;
+    --bg-input: #ffffff;
+
+    --border-primary: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.15);
+    --border-active: rgba(99, 102, 241, 0.5);
+
+    --text-primary: #0a0a0a;
+    --text-secondary: #525252;
+    --text-tertiary: #a3a3a3;
+
+    --accent-gradient: linear-gradient(135deg, #4f46e5, #7c3aed, #c026d3);
+    --accent-500: #4f46e5;
+    --accent-400: #6366f1;
+
+    --status-green: #16a34a;
+    --status-red: #dc2626;
+    --status-amber: #d97706;
+    --status-blue: #2563eb;
+}
+
+/* ─── Base ─── */
 
 body {
     @apply antialiased;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* ─── Card ─── */
 
 .card {
-    @apply bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm;
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.75rem;
+    transition: border-color 0.2s ease, background 0.2s ease;
 }
+
+.card:hover {
+    border-color: var(--border-hover);
+}
+
+/* ─── Bento Card (enhanced hover glow) ─── */
+
+.bento-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.75rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.bento-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--accent-gradient);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.bento-card:hover::before {
+    opacity: 1;
+}
+
+.bento-card:hover {
+    background: var(--bg-card-hover);
+}
+
+/* ─── Inputs ─── */
 
 .input {
-    @apply w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-helios-500 focus:border-transparent transition-colors;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--accent-500);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* ─── Buttons ─── */
+
 .btn-primary {
-    @apply px-4 py-2 bg-helios-600 hover:bg-helios-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--accent-500);
+    color: #ffffff;
+    font-weight: 500;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .btn-secondary {
-    @apply px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-lg border border-slate-300 dark:border-slate-600 transition-colors;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-primary);
+    transition: all 0.2s ease;
+    cursor: pointer;
 }
 
-/* Custom Helios color utilities */
+.btn-secondary:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
+/* ─── Tables ─── */
+
+.table-header {
+    background: var(--bg-elevated);
+}
+
+.table-header th {
+    padding: 0.75rem 1.5rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+}
+
+.table-row {
+    border-bottom: 1px solid var(--border-primary);
+    transition: background 0.15s ease;
+}
+
+.table-row:hover {
+    background: var(--bg-card-hover);
+}
+
+.table-row td {
+    padding: 1rem 1.5rem;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* ─── Status Indicator ─── */
+
+.status-pulse {
+    position: relative;
+}
+
+.status-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    }
+}
+
+/* ─── Scrollbar ─── */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+}
+
+/* ─── Custom colors for Tailwind (manual overrides) ─── */
+
 .text-helios-600 {
-    color: var(--helios-600);
+    color: var(--accent-500);
+}
+
+.text-helios-400 {
+    color: var(--accent-400);
 }
 
 .bg-helios-50 {
-    background-color: var(--helios-50);
+    background-color: rgba(99, 102, 241, 0.1);
 }
 
 .bg-helios-600 {
-    background-color: var(--helios-600);
+    background-color: var(--accent-500);
 }
 
 .hover\:bg-helios-700:hover {
-    background-color: var(--helios-700);
+    background-color: #4338ca;
 }
 
 .ring-helios-500 {
-    --tw-ring-color: var(--helios-500);
+    --tw-ring-color: var(--accent-500);
 }
 
 .focus\:ring-helios-500:focus {
-    --tw-ring-color: var(--helios-500);
+    --tw-ring-color: var(--accent-500);
 }
 
 .dark .dark\:bg-helios-900\/20 {
-    background-color: rgb(76 29 149 / 0.2);
+    background-color: rgba(49, 46, 129, 0.2);
 }
 
 .dark .dark\:text-helios-400 {
-    color: var(--helios-400);
+    color: var(--accent-400);
 }
 
 .border-t-helios-600 {
-    border-top-color: var(--helios-600);
+    border-top-color: var(--accent-500);
+}
+
+.bg-helios-100 {
+    background-color: rgba(99, 102, 241, 0.15);
+}
+
+.dark\:bg-helios-900\/30 {
+    background-color: rgba(49, 46, 129, 0.3);
+}
+
+.text-helios-700 {
+    color: #4338ca;
 }

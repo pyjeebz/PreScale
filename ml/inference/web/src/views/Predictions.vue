@@ -2,27 +2,33 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { ChartBarIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import PredictionChart from '@/components/charts/PredictionChart.vue'
-import api, { mlApi, type PredictionResponse } from '@/services/api'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { useAgentsStore } from '@/stores/agents'
+import { useDeploymentsStore } from '@/stores/deployments'
+import { mlApi } from '@/services/api'
 
-const selectedMetric = ref('cpu_utilization')
-const selectedAgent = ref('all')
+const agentsStore = useAgentsStore()
+const deploymentsStore = useDeploymentsStore()
+
+const selectedAgent = ref('')
+const selectedMetric = ref('cpu_percent')
 const selectedHorizon = ref('24')
-const showPrediction = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
-const predictionResponse = ref<PredictionResponse | null>(null)
+const showPrediction = ref(false)
+const prediction = ref<any>(null)
 let refreshInterval: number | null = null
 
 const metrics = [
-  { value: 'cpu_utilization', label: 'CPU Utilization' },
-  { value: 'memory_utilization', label: 'Memory Utilization' },
-  { value: 'memory_bytes', label: 'Memory Bytes' },
-  { value: 'db_cpu', label: 'Database CPU' },
-  { value: 'db_memory', label: 'Database Memory' },
-  { value: 'db_connections', label: 'Database Connections' }
+  { value: 'cpu_percent', label: 'CPU Usage (%)' },
+  { value: 'memory_percent', label: 'Memory Usage (%)' },
+  { value: 'disk_percent', label: 'Disk Usage (%)' },
+  { value: 'network_bytes_sent', label: 'Network Sent' },
+  { value: 'network_bytes_recv', label: 'Network Received' }
 ]
 
 const horizons = [
+  { value: '1', label: '1 hour' },
   { value: '6', label: '6 hours' },
   { value: '12', label: '12 hours' },
   { value: '24', label: '24 hours' },
@@ -36,64 +42,51 @@ const upperBound = ref<number[]>([])
 const lowerBound = ref<number[]>([])
 
 // Fetch historical data from metrics API
-const fetchHistoricalData = async () => {
+async function fetchHistoricalData() {
+  if (!selectedAgent.value) return
   try {
-    const response = await api.get(`/metrics/${selectedMetric.value}`, {
-      params: { hours: 24, limit: 24 }
-    })
-    if (response.data.data?.length) {
-      const isPercentMetric = selectedMetric.value.includes('utilization')
-      return response.data.data.map((d: any) => isPercentMetric ? d.value * 100 : d.value)
+    const response = await mlApi.getMetrics(selectedAgent.value, selectedMetric.value)
+    if (response && response.values) {
+      historicalData.value = response.values
     }
-    return []
   } catch (e) {
-    console.warn('No historical data available, using placeholder')
-    return Array(24).fill(0).map(() => 40 + Math.random() * 20)
+    console.error('Failed to fetch historical data:', e)
+    historicalData.value = []
   }
 }
 
 // Call real ML prediction API
-const generatePrediction = async () => {
+async function generatePrediction() {
+  if (!selectedAgent.value) {
+    error.value = 'Please select an agent'
+    return
+  }
+  
   loading.value = true
   error.value = null
+  showPrediction.value = false
   
   try {
-    const historical = await fetchHistoricalData()
-    historicalData.value = historical
-    
-    const horizonHours = parseInt(selectedHorizon.value)
-    const periods = horizonHours * 12
+    await fetchHistoricalData()
     
     const response = await mlApi.predict({
       metric: selectedMetric.value,
-      periods: periods,
-      model: 'baseline',
-      include_confidence: true
+      horizon_hours: parseInt(selectedHorizon.value),
+      agent_id: selectedAgent.value
     })
     
-    predictionResponse.value = response
-    
-    const isPercentMetric = selectedMetric.value.includes('utilization')
-    forecastData.value = response.predictions.map(p => 
-      isPercentMetric ? p.value * 100 : p.value
-    )
-    upperBound.value = response.predictions.map(p => 
-      p.upper_bound != null ? (isPercentMetric ? p.upper_bound * 100 : p.upper_bound) : forecastData.value[0] + 10
-    )
-    lowerBound.value = response.predictions.map(p => 
-      p.lower_bound != null ? (isPercentMetric ? p.lower_bound * 100 : p.lower_bound) : forecastData.value[0] - 10
-    )
-    
+    prediction.value = response
+    forecastData.value = response.forecast || []
+    upperBound.value = response.upper_bound || []
+    lowerBound.value = response.lower_bound || []
     showPrediction.value = true
     
-    // Setup auto-refresh every 30 seconds
-    if (refreshInterval) clearInterval(refreshInterval)
-    refreshInterval = window.setInterval(generatePrediction, 30000)
-    
+    if (!refreshInterval) {
+      refreshInterval = window.setInterval(generatePrediction, 300000) as number
+    }
   } catch (e: any) {
+    error.value = e.message || 'Failed to generate prediction'
     console.error('Prediction failed:', e)
-    error.value = e.response?.data?.detail || e.message || 'Prediction failed'
-    showPrediction.value = false
   } finally {
     loading.value = false
   }
@@ -105,35 +98,24 @@ const labels = computed(() => {
   
   for (let i = 23; i >= 0; i--) {
     const time = new Date(now.getTime() - i * 3600000)
-    allLabels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
+    allLabels.push(time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
   }
   
-  const horizonHours = parseInt(selectedHorizon.value)
-  const intervals = horizonHours * 12
-  for (let i = 1; i <= intervals; i++) {
-    const time = new Date(now.getTime() + i * 300000)
-    if (i % 12 === 0) {
-      allLabels.push(time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
-    } else {
-      allLabels.push('')
-    }
+  const h = parseInt(selectedHorizon.value)
+  for (let i = 1; i <= h; i++) {
+    const time = new Date(now.getTime() + i * 3600000)
+    allLabels.push(time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
   }
   
   return allLabels
 })
 
-const prediction = computed(() => {
-  if (!showPrediction.value || forecastData.value.length === 0) return null
-  
-  const peak = Math.max(...forecastData.value)
-  const peakIndex = forecastData.value.indexOf(peak)
-  const peakTime = new Date(Date.now() + (peakIndex + 1) * 300000)
-  const confidence = predictionResponse.value?.metadata?.confidence || 0.85
-  
+const predictionSummary = computed(() => {
+  if (!prediction.value) return null
   return {
-    peakValue: peak,
-    peakTime: peakTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-    confidence: confidence,
+    peak: prediction.value.peak_value?.toFixed(1) || '—',
+    average: prediction.value.avg_value?.toFixed(1) || '—',
+    model: prediction.value.model || 'ensemble',
     horizon: horizons.find(h => h.value === selectedHorizon.value)?.label || ''
   }
 })
@@ -152,47 +134,51 @@ onUnmounted(() => {
   <div class="space-y-6">
     <!-- Page Header -->
     <div>
-      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Predictions</h1>
-      <p class="text-slate-500 dark:text-slate-400">
-        Forecast future resource utilization using ML models
+      <h1 class="text-2xl font-semibold" style="color: var(--text-primary);">Predictions</h1>
+      <p style="color: var(--text-tertiary);">
+        ML-powered forecasting for your infrastructure metrics
       </p>
     </div>
     
-    <!-- Error Alert -->
-    <div v-if="error" class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-      <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <!-- Error -->
+    <div v-if="error" class="p-4 rounded-lg" style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15);">
+      <p class="text-sm" style="color: var(--status-red);">{{ error }}</p>
     </div>
     
     <!-- Prediction Form -->
-    <div class="card p-6">
+    <div class="bento-card p-6">
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Agent</label>
+          <label class="block text-sm font-medium mb-1" style="color: var(--text-secondary);">Agent</label>
           <select v-model="selectedAgent" class="input">
-            <option value="all">All Agents</option>
+            <option value="">Select agent...</option>
+            <option 
+              v-for="agent in agentsStore.currentDeploymentAgents" 
+              :key="agent.id" 
+              :value="agent.id"
+            >
+              {{ agent.hostname }}
+            </option>
           </select>
         </div>
-        
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Metric</label>
+          <label class="block text-sm font-medium mb-1" style="color: var(--text-secondary);">Metric</label>
           <select v-model="selectedMetric" class="input">
-            <option v-for="metric in metrics" :key="metric.value" :value="metric.value">
-              {{ metric.label }}
-            </option>
+            <option v-for="m in metrics" :key="m.value" :value="m.value">{{ m.label }}</option>
           </select>
         </div>
-        
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Horizon</label>
+          <label class="block text-sm font-medium mb-1" style="color: var(--text-secondary);">Horizon</label>
           <select v-model="selectedHorizon" class="input">
-            <option v-for="horizon in horizons" :key="horizon.value" :value="horizon.value">
-              {{ horizon.label }}
-            </option>
+            <option v-for="h in horizons" :key="h.value" :value="h.value">{{ h.label }}</option>
           </select>
         </div>
-        
         <div class="flex items-end">
-          <button @click="generatePrediction" :disabled="loading" class="btn-primary w-full flex items-center justify-center gap-2">
+          <button 
+            @click="generatePrediction"
+            :disabled="loading"
+            class="btn-primary w-full flex items-center justify-center gap-2"
+          >
             <ArrowPathIcon v-if="loading" class="w-4 h-4 animate-spin" />
             {{ loading ? 'Generating...' : 'Generate Prediction' }}
           </button>
@@ -204,72 +190,64 @@ onUnmounted(() => {
     <PredictionChart
       v-if="showPrediction"
       :title="metrics.find(m => m.value === selectedMetric)?.label + ' Forecast'"
-      :subtitle="`${selectedHorizon}-hour forecast with 95% confidence interval`"
-      :historical-data="historicalData"
-      :forecast-data="forecastData"
+      :labels="labels"
+      :historical="historicalData"
+      :forecast="forecastData"
       :upper-bound="upperBound"
       :lower-bound="lowerBound"
-      :labels="labels"
-      :prediction="prediction"
     />
     
     <!-- Empty State -->
-    <div v-else class="card p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-medium text-slate-900 dark:text-white">
-          {{ metrics.find(m => m.value === selectedMetric)?.label }} Forecast
-        </h3>
+    <div v-if="!showPrediction" class="bento-card p-12 text-center">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-xl flex items-center justify-center" style="background: rgba(99, 102, 241, 0.1);">
+        <ChartBarIcon class="w-8 h-8" style="color: var(--accent-400);" />
       </div>
-      
-      <div class="h-80 flex flex-col items-center justify-center text-slate-400">
-        <ChartBarIcon class="w-12 h-12 mb-4" />
-        <p>Select parameters and click "Generate Prediction"</p>
-        <p class="text-sm mt-1">Historical data + ML forecast will appear here</p>
-      </div>
+      <p style="color: var(--text-secondary);">Select parameters and click "Generate Prediction"</p>
+      <p class="text-sm mt-1" style="color: var(--text-tertiary);">Historical data + ML forecast will appear here</p>
     </div>
     
     <!-- Prediction Summary -->
-    <div v-if="showPrediction && prediction" class="card p-6">
-      <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Prediction Summary</h3>
+    <div v-if="showPrediction && prediction" class="bento-card p-6">
+      <h3 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Prediction Summary</h3>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Current Value</p>
-          <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ currentValue?.toFixed(1) }}%</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Current</p>
+          <p class="text-2xl font-semibold" style="color: var(--accent-400);">{{ currentValue?.toFixed(1) || '—' }}%</p>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Predicted Peak</p>
-          <p class="text-2xl font-semibold text-helios-600">{{ prediction.peakValue?.toFixed(1) }}%</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Peak Forecast</p>
+          <p class="text-2xl font-semibold" style="color: var(--status-amber);">{{ predictionSummary?.peak || '—' }}%</p>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Peak Time</p>
-          <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ prediction.peakTime }}</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Model</p>
+          <p class="text-2xl font-semibold" style="color: var(--text-primary);">{{ predictionSummary?.model || '—' }}</p>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Confidence</p>
-          <p class="text-2xl font-semibold text-green-600">{{ (prediction.confidence * 100).toFixed(0) }}%</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Confidence</p>
+          <p class="text-2xl font-semibold" style="color: var(--status-green);">{{ (prediction.confidence * 100).toFixed(0) }}%</p>
         </div>
       </div>
     </div>
     
     <!-- Empty Prediction Summary -->
-    <div v-else class="card p-6">
-      <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Prediction Summary</h3>
+    <div v-else class="bento-card p-6">
+      <h3 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Prediction Summary</h3>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Current Value</p>
-          <p class="text-2xl font-semibold text-slate-900 dark:text-white">—</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Current</p>
+          <p class="text-2xl font-semibold" style="color: var(--text-primary);">—</p>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Predicted Peak</p>
-          <p class="text-2xl font-semibold text-slate-900 dark:text-white">—</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Peak Forecast</p>
+          <p class="text-2xl font-semibold" style="color: var(--text-primary);">—</p>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Peak Time</p>
-          <p class="text-2xl font-semibold text-slate-900 dark:text-white">—</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Model</p>
+          <p class="text-2xl font-semibold" style="color: var(--text-primary);">—</p>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Confidence</p>
-          <p class="text-2xl font-semibold text-slate-900 dark:text-white">—</p>
+          <p class="text-sm" style="color: var(--text-tertiary);">Confidence</p>
+          <p class="text-2xl font-semibold" style="color: var(--text-primary);">—</p>
         </div>
       </div>
     </div>

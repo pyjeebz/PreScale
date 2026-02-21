@@ -14,14 +14,15 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="card p-12 text-center">
+  <div class="bento-card p-12 text-center">
     <component
       v-if="icon"
       :is="icon"
-      class="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500 mb-4"
+      class="w-12 h-12 mx-auto mb-4"
+      style="color: var(--text-tertiary);"
     />
-    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">{{ title }}</h3>
-    <p class="text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">{{ description }}</p>
+    <h3 class="text-lg font-medium mb-2" style="color: var(--text-primary);">{{ title }}</h3>
+    <p class="mb-6 max-w-sm mx-auto" style="color: var(--text-tertiary);">{{ description }}</p>
     <button
       v-if="actionLabel"
       @click="emit('action')"

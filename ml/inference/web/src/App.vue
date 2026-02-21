@@ -8,7 +8,6 @@ import {
   ServerStackIcon,
   ChartBarIcon,
   ExclamationTriangleIcon,
-  Cog6ToothIcon,
   SunIcon,
   MoonIcon,
   PlusIcon,
@@ -58,8 +57,6 @@ async function confirmDelete(deployment: Deployment) {
   if (confirm(`Are you sure you want to delete ${deployment.name}? This cannot be undone.`)) {
     try {
       await deploymentsStore.deleteDeployment(deployment.id)
-      // If we deleted the current deployment, navigation might need reset, 
-      // but store handles ID reset. We might want to go to dashboard.
       if (deploymentsStore.deployments.length === 0) {
         router.push('/install')
       }
@@ -80,27 +77,29 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-950">
+  <div class="min-h-screen" style="background: var(--bg-primary); transition: background 0.3s ease;">
     <!-- Mobile sidebar overlay -->
     <div
       v-if="sidebarOpen"
-      class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+      class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
       @click="sidebarOpen = false"
     />
 
     <!-- Sidebar -->
     <aside
       :class="[
-        'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-transform lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       ]"
+      style="background: var(--bg-primary); border-right: 1px solid var(--border-primary);"
     >
       <!-- Logo -->
-      <div class="h-16 flex items-center gap-3 px-6 border-b border-slate-200 dark:border-slate-800">
-        <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-blue-500 rounded-lg flex items-center justify-center">
+      <div class="h-16 flex items-center gap-3 px-6" style="border-bottom: 1px solid var(--border-primary);">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--accent-gradient);">
           <span class="text-white font-bold text-sm">H</span>
         </div>
-        <span class="text-lg font-semibold text-slate-900 dark:text-white">Helios</span>
+        <span class="text-lg font-semibold" style="color: var(--text-primary);">Helios</span>
+        <span class="ml-auto text-xs font-mono px-1.5 py-0.5 rounded" style="color: var(--text-tertiary); background: var(--bg-card); border: 1px solid var(--border-primary);">v0.2.0</span>
       </div>
 
       <!-- Navigation -->
@@ -110,12 +109,14 @@ onMounted(() => {
           :key="item.name"
           :to="item.href"
           :class="[
-            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-            isActive(item.href)
-              ? 'bg-helios-50 dark:bg-helios-900/20 text-helios-600 dark:text-helios-400'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer',
           ]"
+          :style="isActive(item.href) 
+            ? 'background: rgba(99, 102, 241, 0.1); color: var(--accent-400);' 
+            : 'color: var(--text-tertiary);'"
           @click="sidebarOpen = false"
+          @mouseenter="($event.target as HTMLElement).style.color = isActive(item.href) ? 'var(--accent-400)' : 'var(--text-secondary)'"
+          @mouseleave="($event.target as HTMLElement).style.color = isActive(item.href) ? 'var(--accent-400)' : 'var(--text-tertiary)'"
         >
           <component :is="item.icon" class="w-5 h-5" />
           {{ item.name }}
@@ -124,8 +125,10 @@ onMounted(() => {
         <!-- Install Agent link -->
         <RouterLink
           to="/install"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-          :class="{ 'bg-helios-50 dark:bg-helios-900/20 text-helios-600 dark:text-helios-400': route.path === '/install' }"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
+          :style="route.path === '/install' 
+            ? 'background: rgba(99, 102, 241, 0.1); color: var(--accent-400);' 
+            : 'color: var(--text-tertiary);'"
           @click="sidebarOpen = false"
         >
           <CommandLineIcon class="w-5 h-5" />
@@ -137,10 +140,14 @@ onMounted(() => {
     <!-- Main content -->
     <div class="lg:pl-64">
       <!-- Top bar -->
-      <header class="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 lg:px-6">
+      <header 
+        class="h-16 flex items-center justify-between px-4 lg:px-6"
+        style="background: var(--bg-primary); border-bottom: 1px solid var(--border-primary);"
+      >
         <button
           @click="sidebarOpen = true"
-          class="lg:hidden p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          class="lg:hidden p-2 rounded-lg transition-colors cursor-pointer"
+          style="color: var(--text-tertiary);"
         >
           <Bars3Icon class="w-6 h-6" />
         </button>
@@ -151,53 +158,60 @@ onMounted(() => {
         <div class="relative mr-4" v-if="deploymentsStore.deployments.length > 0">
           <button
             @click="deploymentDropdownOpen = !deploymentDropdownOpen"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer"
+            style="border: 1px solid var(--border-primary); color: var(--text-secondary);"
           >
             <span
               v-if="deploymentsStore.currentDeployment"
               :class="['w-2 h-2 rounded-full', getEnvironmentBadge(deploymentsStore.currentDeployment.environment).class]"
             ></span>
-            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <span class="text-sm font-medium">
               {{ deploymentsStore.currentDeployment?.name || 'Select Deployment' }}
             </span>
-            <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-4 h-4" style="color: var(--text-tertiary);" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
-      <!-- Dropdown -->
+          <!-- Dropdown -->
           <div
             v-if="deploymentDropdownOpen"
-            class="absolute right-0 mt-1 w-64 bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50"
+            class="absolute right-0 mt-1 w-64 rounded-lg shadow-2xl py-1 z-50"
+            style="background: var(--bg-elevated); border: 1px solid var(--border-primary);"
           >
             <div
               v-for="dep in deploymentsStore.deployments"
               :key="dep.id"
-              class="flex items-center justify-between px-2 hover:bg-slate-50 dark:hover:bg-slate-800 group"
-              :class="deploymentsStore.currentDeploymentId === dep.id ? 'bg-helios-50 dark:bg-helios-900/20' : ''"
+              class="flex items-center justify-between px-2 group transition-colors"
+              :style="deploymentsStore.currentDeploymentId === dep.id 
+                ? 'background: rgba(99, 102, 241, 0.1);' 
+                : ''"
             >
               <button
                 @click="selectDeployment(dep.id)"
-                class="flex-1 flex items-center gap-2 py-2 px-1 text-sm text-left truncate"
+                class="flex-1 flex items-center gap-2 py-2 px-1 text-sm text-left truncate cursor-pointer"
+                style="color: var(--text-secondary);"
               >
                 <span :class="['w-2 h-2 rounded-full flex-shrink-0', getEnvironmentBadge(dep.environment).class]"></span>
-                <span class="text-slate-700 dark:text-slate-300 truncate">{{ dep.name }}</span>
+                <span class="truncate">{{ dep.name }}</span>
               </button>
               
               <button
                 @click.stop="confirmDelete(dep)"
-                class="p-1.5 text-slate-400 hover:text-red-500 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                class="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500 cursor-pointer"
+                style="color: var(--text-tertiary);"
                 title="Delete Deployment"
               >
                 <TrashIcon class="w-4 h-4" />
               </button>
             </div>
             
-            <div class="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            <div style="border-top: 1px solid var(--border-primary); margin: 0.25rem 0;"></div>
             
             <button
               @click="goToInstall"
-              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-slate-800 text-helios-600 dark:text-helios-400"
+              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors cursor-pointer"
+              style="color: var(--accent-400);"
             >
               <PlusIcon class="w-4 h-4" />
               Add Deployment
@@ -208,7 +222,8 @@ onMounted(() => {
         <!-- Theme toggle -->
         <button
           @click="themeStore.toggle()"
-          class="p-2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          class="p-2 rounded-lg transition-all duration-200 cursor-pointer"
+          style="color: var(--text-tertiary);"
         >
           <SunIcon v-if="themeStore.isDark" class="w-5 h-5" />
           <MoonIcon v-else class="w-5 h-5" />
@@ -225,4 +240,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-

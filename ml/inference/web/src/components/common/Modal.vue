@@ -11,6 +11,13 @@ defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+const sizeClasses: Record<string, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+}
 </script>
 
 <template>
@@ -25,7 +32,7 @@ const emit = defineEmits<{
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div class="fixed inset-0 bg-black/25 dark:bg-black/50" />
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" />
       </TransitionChild>
 
       <div class="fixed inset-0 overflow-y-auto">
@@ -40,23 +47,17 @@ const emit = defineEmits<{
             leave-to="opacity-0 scale-95"
           >
             <DialogPanel
-              :class="[
-                'w-full transform overflow-hidden rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl transition-all',
-                {
-                  'max-w-sm': size === 'sm',
-                  'max-w-md': size === 'md' || !size,
-                  'max-w-lg': size === 'lg',
-                  'max-w-xl': size === 'xl'
-                }
-              ]"
+              :class="['w-full transform overflow-hidden rounded-xl p-6 shadow-xl transition-all', sizeClasses[size || 'md']]"
+              style="background: var(--bg-elevated); border: 1px solid var(--border-primary);"
             >
               <div class="flex items-center justify-between mb-4">
-                <DialogTitle class="text-lg font-semibold text-slate-900 dark:text-white">
+                <DialogTitle class="text-lg font-semibold" style="color: var(--text-primary);">
                   {{ title }}
                 </DialogTitle>
                 <button
                   @click="emit('close')"
-                  class="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
+                  class="transition-colors"
+                  style="color: var(--text-tertiary);"
                 >
                   <XMarkIcon class="w-5 h-5" />
                 </button>

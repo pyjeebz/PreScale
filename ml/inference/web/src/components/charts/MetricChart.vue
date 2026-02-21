@@ -39,9 +39,9 @@ const chartData = computed(() => ({
     {
       label: props.title,
       data: props.data,
-      borderColor: props.color || '#8b5cf6',
+      borderColor: props.color || '#6366f1',
       backgroundColor: props.filled 
-        ? (props.color || '#8b5cf6') + '20' 
+        ? (props.color || '#6366f1') + '15' 
         : 'transparent',
       fill: props.filled || false,
       tension: 0.4,
@@ -55,10 +55,13 @@ const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: {
-      display: false
-    },
+    legend: { display: false },
     tooltip: {
+      backgroundColor: '#111111',
+      borderColor: 'rgba(255, 255, 255, 0.06)',
+      borderWidth: 1,
+      titleColor: '#ffffff',
+      bodyColor: '#a3a3a3',
       callbacks: {
         label: (ctx: any) => `${ctx.parsed.y.toFixed(1)}${props.unit || ''}`
       }
@@ -66,30 +69,25 @@ const chartOptions = computed(() => ({
   },
   scales: {
     x: {
-      grid: {
-        display: false
-      },
-      ticks: {
-        maxTicksLimit: 8,
-        color: '#94a3b8'
-      }
+      grid: { display: false },
+      ticks: { maxTicksLimit: 8, color: '#525252' },
+      border: { color: 'rgba(255, 255, 255, 0.06)' }
     },
     y: {
-      grid: {
-        color: '#e2e8f0'
-      },
+      grid: { color: 'rgba(255, 255, 255, 0.04)' },
       ticks: {
         callback: (val: number) => `${val}${props.unit || ''}`,
-        color: '#94a3b8'
-      }
+        color: '#525252'
+      },
+      border: { color: 'rgba(255, 255, 255, 0.06)' }
     }
   }
 }))
 </script>
 
 <template>
-  <div class="card p-6">
-    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">{{ title }}</h3>
+  <div class="bento-card p-6">
+    <h3 class="text-lg font-medium mb-4" style="color: var(--text-primary);">{{ title }}</h3>
     <div class="h-64">
       <Line :data="chartData" :options="chartOptions" />
     </div>
