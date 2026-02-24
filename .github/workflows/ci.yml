@@ -107,7 +107,7 @@ jobs:
       - name: Run agent tests
         run: |
           cd agent
-          pytest tests/ -v --cov=src/helios_agent --cov-report=xml
+          pytest tests/ -v --cov=src/prescale_agent --cov-report=xml
         continue-on-error: true
 
       - name: Upload coverage
@@ -145,7 +145,7 @@ jobs:
       - name: Run CLI tests
         run: |
           cd cli
-          pytest tests/ -v --cov=src/helios_cli --cov-report=xml
+          pytest tests/ -v --cov=src/prescale_cli --cov-report=xml
         continue-on-error: true
 
       - name: Upload coverage
@@ -255,7 +255,7 @@ jobs:
       - name: Lint Helm charts
         run: |
           if [ -d "charts" ]; then
-            helm lint charts/helios
+            helm lint charts/prescale
           else
             echo "Charts directory not found, skipping"
           fi

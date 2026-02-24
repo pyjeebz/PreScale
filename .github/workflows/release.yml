@@ -86,20 +86,20 @@ jobs:
 
       - name: Download chart dependencies
         run: |
-          if [ -d "charts/helios" ]; then
-            helm dependency update charts/helios
+          if [ -d "charts/prescale" ]; then
+            helm dependency update charts/prescale
           fi
 
       - name: Package Helm chart
         run: |
-          if [ -d "charts/helios" ]; then
-            helm package charts/helios --version ${{ steps.version.outputs.VERSION }} --app-version ${{ steps.version.outputs.VERSION }}
+          if [ -d "charts/prescale" ]; then
+            helm package charts/prescale --version ${{ steps.version.outputs.VERSION }} --app-version ${{ steps.version.outputs.VERSION }}
           fi
 
       - name: Upload Helm chart as release asset
         uses: softprops/action-gh-release@v1
         with:
-          files: helios-*.tgz
+          files: prescale-*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -113,9 +113,9 @@ jobs:
     strategy:
       matrix:
         package:
-          - name: helios-platform-agent
+          - name: prescale-platform-agent
             path: agent
-          - name: helios-cli
+          - name: prescale-cli
             path: cli
     steps:
       - uses: actions/checkout@v4
@@ -172,16 +172,16 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Helios v${{ steps.version.outputs.VERSION }}
+          name: Prescale v${{ steps.version.outputs.VERSION }}
           body: |
-            ## 🚀 Helios v${{ steps.version.outputs.VERSION }}
+            ## 🚀 Prescale v${{ steps.version.outputs.VERSION }}
 
             ### Installation
 
             **Helm:**
             ```bash
-            helm repo add helios https://pyjeebz.github.io/helios
-            helm install helios helios/helios --version ${{ steps.version.outputs.VERSION }}
+            helm repo add prescale https://pyjeebz.github.io/prescale
+            helm install prescale prescale/prescale --version ${{ steps.version.outputs.VERSION }}
             ```
 
             **Docker:**
@@ -192,7 +192,7 @@ jobs:
 
             **CLI:**
             ```bash
-            pip install helios-cli==${{ steps.version.outputs.VERSION }}
+            pip install prescale-cli==${{ steps.version.outputs.VERSION }}
             ```
 
             ### Changes

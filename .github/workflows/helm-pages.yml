@@ -29,20 +29,20 @@ jobs:
 
       - name: Download chart dependencies
         run: |
-          if [ -d "charts/helios" ]; then
-            helm dependency update charts/helios
+          if [ -d "charts/prescale" ]; then
+            helm dependency update charts/prescale
           fi
 
       - name: Package Helm charts
         run: |
           mkdir -p .helm-repo
-          if [ -d "charts/helios" ]; then
-            helm package charts/helios -d .helm-repo
+          if [ -d "charts/prescale" ]; then
+            helm package charts/prescale -d .helm-repo
           fi
 
       - name: Generate Helm repo index
         run: |
-          helm repo index .helm-repo --url https://pyjeebz.github.io/helios
+          helm repo index .helm-repo --url https://pyjeebz.github.io/prescale
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
