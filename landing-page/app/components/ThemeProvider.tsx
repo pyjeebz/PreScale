@@ -19,7 +19,7 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setTheme] = useState<Theme>(() => {
         if (typeof window !== "undefined") {
-            return (localStorage.getItem("helios-theme") as Theme) || "dark";
+            return (localStorage.getItem("prescale-theme") as Theme) || "dark";
         }
         return "dark";
     });
@@ -33,7 +33,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             root.classList.add("dark");
             root.classList.remove("light");
         }
-        localStorage.setItem("helios-theme", theme);
+        localStorage.setItem("prescale-theme", theme);
     }, [theme]);
 
     const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));

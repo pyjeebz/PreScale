@@ -6,20 +6,20 @@ import { Copy, Check, Terminal } from "lucide-react";
 const tabs = [
   {
     name: "Docker",
-    code: `docker pull ghcr.io/pyjeebz/helios/inference:latest
+    code: `docker pull ghcr.io/pyjeebz/prescale/inference:latest
 docker run -d -p 8080:8080 \\
-  ghcr.io/pyjeebz/helios/inference:latest`,
+  ghcr.io/pyjeebz/prescale/inference:latest`,
   },
   {
     name: "Helm",
-    code: `helm repo add helios https://pyjeebz.github.io/helios
-helm install helios helios/helios \\
-  --namespace helios --create-namespace`,
+    code: `helm repo add prescale https://pyjeebz.github.io/prescale
+helm install prescale prescale/prescale \\
+  --namespace prescale --create-namespace`,
   },
   {
     name: "Local",
-    code: `git clone https://github.com/pyjeebz/helios.git
-cd helios
+    code: `git clone https://github.com/pyjeebz/prescale.git
+cd prescale
 
 # Backend
 pip install -r ml/inference/requirements.txt
@@ -31,10 +31,10 @@ cd ml/inference/web && npm install && npm run dev`,
 ];
 
 const agentInstalls = [
-  { name: "Base", cmd: "pip install helios-agent" },
-  { name: "GCP", cmd: "pip install helios-agent[gcp]" },
-  { name: "AWS", cmd: "pip install helios-agent[aws]" },
-  { name: "All", cmd: "pip install helios-agent[all]" },
+  { name: "Base", cmd: "pip install prescale-agent" },
+  { name: "GCP", cmd: "pip install prescale-agent[gcp]" },
+  { name: "AWS", cmd: "pip install prescale-agent[aws]" },
+  { name: "All", cmd: "pip install prescale-agent[all]" },
 ];
 
 export function Installation() {

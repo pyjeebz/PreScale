@@ -60,7 +60,7 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
         >
-          Helios uses machine learning to forecast traffic, detect anomalies, and
+          Prescale uses machine learning to forecast traffic, detect anomalies, and
           optimize resource scaling — before your users notice a thing.
         </motion.p>
 
@@ -73,8 +73,8 @@ export function Hero() {
           <Button
             size="lg"
             className={`px-6 py-5 text-sm font-medium group rounded-lg ${theme === "dark"
-                ? "bg-white text-black hover:bg-neutral-200"
-                : "bg-[#0a0a0a] text-white hover:bg-neutral-800"
+              ? "bg-white text-black hover:bg-neutral-200"
+              : "bg-[#0a0a0a] text-white hover:bg-neutral-800"
               }`}
             onClick={() => document.getElementById('installation')?.scrollIntoView({ behavior: 'smooth' })}
           >
@@ -86,7 +86,7 @@ export function Hero() {
             variant="outline"
             className="px-6 py-5 text-sm font-medium rounded-lg"
             style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-accent)", color: "var(--text-secondary)" }}
-            onClick={() => window.open('https://github.com/pyjeebz/helios', '_blank')}
+            onClick={() => window.open('https://github.com/pyjeebz/prescale', '_blank')}
           >
             <Github className="mr-2 h-4 w-4" />
             Star on GitHub
@@ -106,9 +106,9 @@ export function Hero() {
               <span className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>Terminal</span>
             </div>
             <div className="px-4 py-4 font-mono text-sm text-left">
-              <div style={{ color: "var(--text-muted)" }}>$ pip install helios-agent</div>
-              <div className="text-emerald-400 mt-1">✓ Installed helios-agent v0.2.0</div>
-              <div style={{ color: "var(--text-muted)" }} className="mt-3">$ helios predict cpu -d api -n prod</div>
+              <div style={{ color: "var(--text-muted)" }}>$ pip install prescale-agent</div>
+              <div className="text-emerald-400 mt-1">✓ Installed prescale-agent v0.2.0</div>
+              <div style={{ color: "var(--text-muted)" }} className="mt-3">$ prescale predict cpu -d api -n prod</div>
               <div className="mt-1" style={{ color: "var(--text-secondary)" }}>
                 <span className="text-indigo-400">Forecasting</span> → CPU 67% → 82% in 30min
               </div>

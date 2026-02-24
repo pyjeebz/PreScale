@@ -15,22 +15,22 @@ sources:
     config:
       project_id: my-project
 
-helios:
-  endpoint: http://helios:8080`;
+prescale:
+  endpoint: http://prescale:8080`;
 
 const apiExample = `import requests
 
 # Forecast CPU usage
-r = requests.post("http://helios:8080/predict",
+r = requests.post("http://prescale:8080/predict",
   json={"metric": "cpu", "periods": 12})
 print(r.json()["predictions"])
 
 # Detect anomalies
-r = requests.post("http://helios:8080/detect",
+r = requests.post("http://prescale:8080/detect",
   json={"deployment": "api-prod"})
 
 # Get scaling advice
-r = requests.post("http://helios:8080/recommend",
+r = requests.post("http://prescale:8080/recommend",
   json={"deployment": "api-prod"})
 print(r.json()["action"])  # → "scale_out"`;
 

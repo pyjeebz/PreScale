@@ -24,8 +24,8 @@ export function Navigation() {
   return (
     <motion.nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-          ? "backdrop-blur-xl border-b"
-          : "bg-transparent"
+        ? "backdrop-blur-xl border-b"
+        : "bg-transparent"
         }`}
       style={scrolled ? { backgroundColor: "var(--nav-bg)", borderColor: "var(--border)" } : {}}
       initial={{ y: -80 }}
@@ -37,9 +37,9 @@ export function Navigation() {
           {/* Logo */}
           <motion.a href="#" className="flex items-center gap-2" whileHover={{ opacity: 0.8 }}>
             <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">H</span>
+              <span className="text-white font-bold text-xs">P</span>
             </div>
-            <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Helios</span>
+            <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Prescale</span>
           </motion.a>
 
           {/* Desktop links */}
@@ -73,7 +73,7 @@ export function Navigation() {
               size="sm"
               className="hover:bg-[var(--bg-card-hover)] text-xs h-8 px-3"
               style={{ color: "var(--text-secondary)" }}
-              onClick={() => window.open('https://github.com/pyjeebz/helios', '_blank')}
+              onClick={() => window.open('https://github.com/pyjeebz/prescale', '_blank')}
             >
               <Github className="mr-1.5 h-3.5 w-3.5" />
               GitHub
@@ -81,8 +81,8 @@ export function Navigation() {
             <Button
               size="sm"
               className={`text-xs h-8 px-4 rounded-lg font-medium ${theme === "dark"
-                  ? "bg-white text-black hover:bg-neutral-200"
-                  : "bg-[#0a0a0a] text-white hover:bg-neutral-800"
+                ? "bg-white text-black hover:bg-neutral-200"
+                : "bg-[#0a0a0a] text-white hover:bg-neutral-800"
                 }`}
               onClick={() => document.getElementById('installation')?.scrollIntoView({ behavior: 'smooth' })}
             >
@@ -136,7 +136,7 @@ export function Navigation() {
                 size="sm"
                 className="flex-1 text-xs"
                 style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
-                onClick={() => window.open('https://github.com/pyjeebz/helios', '_blank')}
+                onClick={() => window.open('https://github.com/pyjeebz/prescale', '_blank')}
               >
                 <Github className="mr-1.5 h-3.5 w-3.5" />
                 GitHub
@@ -144,8 +144,8 @@ export function Navigation() {
               <Button
                 size="sm"
                 className={`flex-1 text-xs ${theme === "dark"
-                    ? "bg-white text-black"
-                    : "bg-[#0a0a0a] text-white"
+                  ? "bg-white text-black"
+                  : "bg-[#0a0a0a] text-white"
                   }`}
                 onClick={() => {
                   setMobileMenuOpen(false);

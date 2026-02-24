@@ -9,9 +9,9 @@ export function Footer() {
           <div className="max-w-xs">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                <span className="text-white font-bold text-xs">H</span>
+                <span className="text-white font-bold text-xs">P</span>
               </div>
-              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Helios</span>
+              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Prescale</span>
             </div>
             <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
               Open-source predictive infrastructure intelligence.
@@ -25,9 +25,9 @@ export function Footer() {
               <div className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Resources</div>
               <ul className="space-y-2">
                 {[
-                  { label: "Documentation", href: "https://github.com/pyjeebz/helios/tree/main/docs" },
-                  { label: "API Reference", href: "https://github.com/pyjeebz/helios/tree/main/docs" },
-                  { label: "Architecture", href: "https://github.com/pyjeebz/helios/blob/main/docs/architecture/ARCHITECTURE.md" },
+                  { label: "Documentation", href: "https://github.com/pyjeebz/prescale/tree/main/docs" },
+                  { label: "API Reference", href: "https://github.com/pyjeebz/prescale/tree/main/docs" },
+                  { label: "Architecture", href: "https://github.com/pyjeebz/prescale/blob/main/docs/architecture/ARCHITECTURE.md" },
                 ].map((link) => (
                   <li key={link.label}>
                     <a
@@ -47,9 +47,9 @@ export function Footer() {
               <div className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Community</div>
               <ul className="space-y-2">
                 {[
-                  { label: "GitHub", href: "https://github.com/pyjeebz/helios" },
-                  { label: "Discussions", href: "https://github.com/pyjeebz/helios/discussions" },
-                  { label: "Contributing", href: "https://github.com/pyjeebz/helios/blob/main/CONTRIBUTING.md" },
+                  { label: "GitHub", href: "https://github.com/pyjeebz/prescale" },
+                  { label: "Discussions", href: "https://github.com/pyjeebz/prescale/discussions" },
+                  { label: "Contributing", href: "https://github.com/pyjeebz/prescale/blob/main/CONTRIBUTING.md" },
                 ].map((link) => (
                   <li key={link.label}>
                     <a
@@ -70,10 +70,10 @@ export function Footer() {
 
         <div className="flex items-center justify-between mt-12 pt-6" style={{ borderTop: "1px solid var(--border-subtle)" }}>
           <span className="text-[11px]" style={{ color: "var(--text-faint)" }}>
-            © {new Date().getFullYear()} Helios Contributors
+            © {new Date().getFullYear()} Prescale Contributors
           </span>
           <a
-            href="https://github.com/pyjeebz/helios"
+            href="https://github.com/pyjeebz/prescale"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-opacity hover:opacity-80"

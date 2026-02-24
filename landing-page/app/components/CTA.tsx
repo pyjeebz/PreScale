@@ -30,14 +30,14 @@ export function CTA() {
               Stop reacting. Start predicting.
             </h2>
             <p className="text-lg max-w-md mx-auto mb-8" style={{ color: "var(--text-secondary)" }}>
-              Helios gives your team visibility into what's coming next — before it becomes an incident.
+              Prescale gives your team visibility into what's coming next — before it becomes an incident.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
                 size="lg"
                 className={`px-6 py-5 text-sm font-medium group rounded-lg ${theme === "dark"
-                    ? "bg-white text-black hover:bg-neutral-200"
-                    : "bg-[#0a0a0a] text-white hover:bg-neutral-800"
+                  ? "bg-white text-black hover:bg-neutral-200"
+                  : "bg-[#0a0a0a] text-white hover:bg-neutral-800"
                   }`}
                 onClick={() => document.getElementById('installation')?.scrollIntoView({ behavior: 'smooth' })}
               >
@@ -53,7 +53,7 @@ export function CTA() {
                   backgroundColor: "var(--bg-accent)",
                   color: "var(--text-secondary)",
                 }}
-                onClick={() => window.open('https://github.com/pyjeebz/helios', '_blank')}
+                onClick={() => window.open('https://github.com/pyjeebz/prescale', '_blank')}
               >
                 <Star className="mr-2 h-4 w-4" />
                 Star on GitHub
