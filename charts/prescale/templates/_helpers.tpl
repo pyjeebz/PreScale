@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "helios.name" -}}
+{{- define "prescale.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "helios.fullname" -}}
+{{- define "prescale.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "helios.chart" -}}
+{{- define "prescale.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "helios.labels" -}}
-helm.sh/chart: {{ include "helios.chart" . }}
-{{ include "helios.selectorLabels" . }}
+{{- define "prescale.labels" -}}
+helm.sh/chart: {{ include "prescale.chart" . }}
+{{ include "prescale.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,17 +43,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "helios.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "helios.name" . }}
+{{- define "prescale.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "prescale.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "helios.serviceAccountName" -}}
+{{- define "prescale.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "helios.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "prescale.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -62,21 +62,21 @@ Create the name of the service account to use
 {{/*
 Inference service fullname
 */}}
-{{- define "helios.inference.fullname" -}}
-{{- printf "%s-inference" (include "helios.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- define "prescale.inference.fullname" -}}
+{{- printf "%s-inference" (include "prescale.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Cost Intelligence service fullname
 */}}
-{{- define "helios.costIntelligence.fullname" -}}
-{{- printf "%s-cost-intelligence" (include "helios.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- define "prescale.costIntelligence.fullname" -}}
+{{- printf "%s-cost-intelligence" (include "prescale.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Inference image
 */}}
-{{- define "helios.inference.image" -}}
+{{- define "prescale.inference.image" -}}
 {{- $tag := default .Chart.AppVersion .Values.inference.image.tag }}
 {{- printf "%s:%s" .Values.inference.image.repository $tag }}
 {{- end }}
@@ -84,7 +84,7 @@ Inference image
 {{/*
 Cost Intelligence image
 */}}
-{{- define "helios.costIntelligence.image" -}}
+{{- define "prescale.costIntelligence.image" -}}
 {{- $tag := default .Chart.AppVersion .Values.costIntelligence.image.tag }}
 {{- printf "%s:%s" .Values.costIntelligence.image.repository $tag }}
 {{- end }}
