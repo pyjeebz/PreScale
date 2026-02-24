@@ -4,4 +4,4 @@ metadata:
   name: loadtest
   labels:
     app.kubernetes.io/name: loadtest
-    app.kubernetes.io/part-of: helios
+    app.kubernetes.io/part-of: prescale

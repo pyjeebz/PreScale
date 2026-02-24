@@ -1,8 +1,8 @@
-# Helios Examples
+# Prescale Examples
 
-Demo environments and examples for testing Helios capabilities.
+Demo environments and examples for testing Prescale capabilities.
 
-> **Note**: These are for testing and demos only, not part of the core Helios product.
+> **Note**: These are for testing and demos only, not part of the core Prescale product.
 
 ## Contents
 
@@ -47,12 +47,12 @@ kubectl port-forward svc/locust-master 8089:8089 -n loadtest
 3. Configure users: 50 users, spawn rate 5/s
 4. Click "Start swarming"
 
-## Using with Helios
+## Using with Prescale
 
 ### Collect Metrics from Load Test
 
 ```yaml
-# helios-agent.yaml
+# prescale-agent.yaml
 sources:
   - type: gcp-monitoring
     enabled: true
@@ -73,8 +73,8 @@ python train.py --namespace loadtest --hours 24
 
 ```bash
 # After training
-helios predict cpu --deployment locust-worker --namespace loadtest
-helios detect --deployment locust-worker --namespace loadtest
+prescale predict cpu --deployment locust-worker --namespace loadtest
+prescale detect --deployment locust-worker --namespace loadtest
 ```
 
 ## Sample Data
@@ -88,10 +88,10 @@ python train.py --data-file examples/demo-environment/data/sample_metrics.json
 
 ## What Ships to Customers
 
-Customers receive only the **core Helios product**:
+Customers receive only the **core Prescale product**:
 
-- ✅ Helios Agent
-- ✅ Helios CLI
+- ✅ Prescale Agent
+- ✅ Prescale CLI
 - ✅ Inference Service
 - ✅ Helm Charts
 - ✅ Documentation

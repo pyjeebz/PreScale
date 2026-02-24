@@ -17,5 +17,5 @@ configMapGenerator:
 
 commonLabels:
   app.kubernetes.io/name: locust
-  app.kubernetes.io/part-of: helios
+  app.kubernetes.io/part-of: prescale
   app.kubernetes.io/component: loadtest

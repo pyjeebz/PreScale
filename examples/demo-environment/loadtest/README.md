@@ -1,6 +1,6 @@
-# Helios Load Testing with Locust
+# Prescale Load Testing with Locust
 
-Load testing suite for generating realistic e-commerce traffic patterns that Helios can learn from.
+Load testing suite for generating realistic e-commerce traffic patterns that Prescale can learn from.
 
 ## Quick Start
 
@@ -169,7 +169,7 @@ kubectl scale deployment locust-worker -n loadtest --replicas=5
 
 Each worker can simulate ~500-1000 users depending on resources.
 
-## Integration with Helios
+## Integration with Prescale
 
 The generated traffic produces:
 1. **QPS metrics** - Requests per second by endpoint
@@ -177,7 +177,7 @@ The generated traffic produces:
 3. **Error rates** - Failed request percentages
 4. **Throughput patterns** - Time-series data for ML training
 
-These metrics feed into Helios for:
+These metrics feed into Prescale for:
 - Trend detection and forecasting
 - Anomaly detection
 - Capacity planning predictions
