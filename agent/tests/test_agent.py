@@ -1,7 +1,7 @@
 """
-Helios Agent Tests
+Prescale Agent Tests
 
-Unit tests for the Helios agent, sources, and client.
+Unit tests for the Prescale agent, sources, and client.
 """
 
 import asyncio
@@ -16,13 +16,13 @@ class TestMetricSample:
 
     def test_import(self):
         """Test that MetricSample can be imported."""
-        from helios_agent.sources.base import MetricSample, MetricType
+        from prescale_agent.sources.base import MetricSample, MetricType
         assert MetricSample is not None
         assert MetricType is not None
 
     def test_create_sample(self):
         """Test creating a metric sample."""
-        from helios_agent.sources.base import MetricSample, MetricType
+        from prescale_agent.sources.base import MetricSample, MetricType
         
         sample = MetricSample(
             name="cpu_usage",
@@ -40,7 +40,7 @@ class TestMetricSample:
 
     def test_to_dict(self):
         """Test converting sample to dictionary."""
-        from helios_agent.sources.base import MetricSample, MetricType
+        from prescale_agent.sources.base import MetricSample, MetricType
         
         ts = datetime.now(timezone.utc)
         sample = MetricSample(
@@ -66,12 +66,12 @@ class TestSourceConfig:
 
     def test_import(self):
         """Test that SourceConfig can be imported."""
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.base import SourceConfig
         assert SourceConfig is not None
 
     def test_create_config(self):
         """Test creating source configuration."""
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(
             name="prometheus-main",
@@ -87,7 +87,7 @@ class TestSourceConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(name="test", type="system")
         
@@ -102,12 +102,12 @@ class TestSourceRegistry:
 
     def test_import(self):
         """Test that SourceRegistry can be imported."""
-        from helios_agent.sources.registry import SourceRegistry
+        from prescale_agent.sources.registry import SourceRegistry
         assert SourceRegistry is not None
 
     def test_list_types(self):
         """Test listing registered source types."""
-        from helios_agent.sources.registry import SourceRegistry
+        from prescale_agent.sources.registry import SourceRegistry
         
         types = SourceRegistry.list_types()
         
@@ -117,8 +117,8 @@ class TestSourceRegistry:
 
     def test_create_system_source(self):
         """Test creating a system source."""
-        from helios_agent.sources.registry import SourceRegistry
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.registry import SourceRegistry
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(name="test-system", type="system")
         source = SourceRegistry.create(config)
@@ -129,8 +129,8 @@ class TestSourceRegistry:
 
     def test_create_unknown_source(self):
         """Test creating an unknown source type returns None."""
-        from helios_agent.sources.registry import SourceRegistry
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.registry import SourceRegistry
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(name="test-unknown", type="nonexistent")
         source = SourceRegistry.create(config)
@@ -143,19 +143,19 @@ class TestSystemSource:
 
     def test_import(self):
         """Test that SystemSource can be imported."""
-        from helios_agent.sources.system import SystemSource
+        from prescale_agent.sources.system import SystemSource
         assert SystemSource is not None
 
     def test_source_type(self):
         """Test system source type."""
-        from helios_agent.sources.system import SystemSource
+        from prescale_agent.sources.system import SystemSource
         assert SystemSource.source_type == "system"
 
     @pytest.mark.asyncio
     async def test_initialize(self):
         """Test system source initialization."""
-        from helios_agent.sources.system import SystemSource
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.system import SystemSource
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(name="system-test", type="system")
         source = SystemSource(config)
@@ -168,8 +168,8 @@ class TestSystemSource:
     @pytest.mark.asyncio
     async def test_health_check(self):
         """Test system source health check."""
-        from helios_agent.sources.system import SystemSource
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.system import SystemSource
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(name="system-test", type="system")
         source = SystemSource(config)
@@ -181,8 +181,8 @@ class TestSystemSource:
     @pytest.mark.asyncio
     async def test_collect(self):
         """Test system metrics collection."""
-        from helios_agent.sources.system import SystemSource
-        from helios_agent.sources.base import SourceConfig, CollectionResult
+        from prescale_agent.sources.system import SystemSource
+        from prescale_agent.sources.base import SourceConfig, CollectionResult
         
         config = SourceConfig(
             name="system-test",
@@ -207,8 +207,8 @@ class TestSystemSource:
     @pytest.mark.asyncio
     async def test_collect_cpu_only(self):
         """Test collecting only CPU metrics."""
-        from helios_agent.sources.system import SystemSource
-        from helios_agent.sources.base import SourceConfig
+        from prescale_agent.sources.system import SystemSource
+        from prescale_agent.sources.base import SourceConfig
         
         config = SourceConfig(
             name="cpu-only",
@@ -239,12 +239,12 @@ class TestAgentConfig:
 
     def test_import(self):
         """Test that AgentConfig can be imported."""
-        from helios_agent.config import AgentConfig
+        from prescale_agent.config import AgentConfig
         assert AgentConfig is not None
 
     def test_load_from_dict(self):
         """Test loading config from dictionary."""
-        from helios_agent.config import AgentConfig
+        from prescale_agent.config import AgentConfig
         
         config_dict = {
             "endpoint": {
@@ -271,19 +271,19 @@ class TestAgentConfig:
         assert len(config.sources) == 1
 
 
-class TestHeliosClient:
-    """Tests for HeliosClient."""
+class TestPrescaleClient:
+    """Tests for PrescaleClient."""
 
     def test_import(self):
-        """Test that HeliosClient can be imported."""
-        from helios_agent.client import HeliosClient
-        assert HeliosClient is not None
+        """Test that PrescaleClient can be imported."""
+        from prescale_agent.client import PrescaleClient
+        assert PrescaleClient is not None
 
     def test_initialization(self):
         """Test client initialization."""
-        from helios_agent.client import HeliosClient
+        from prescale_agent.client import PrescaleClient
         
-        client = HeliosClient(
+        client = PrescaleClient(
             endpoint="http://localhost:8080",
             api_key="test-key",
             timeout=30
@@ -296,10 +296,10 @@ class TestHeliosClient:
     @pytest.mark.asyncio
     async def test_send_metrics_success(self):
         """Test sending metrics successfully."""
-        from helios_agent.client import HeliosClient
-        from helios_agent.sources.base import MetricSample, MetricType
+        from prescale_agent.client import PrescaleClient
+        from prescale_agent.sources.base import MetricSample, MetricType
         
-        client = HeliosClient(endpoint="http://localhost:8080")
+        client = PrescaleClient(endpoint="http://localhost:8080")
         
         metrics = [
             MetricSample(
@@ -335,13 +335,13 @@ class TestAgent:
 
     def test_import(self):
         """Test that Agent can be imported."""
-        from helios_agent.agent import Agent
+        from prescale_agent.agent import Agent
         assert Agent is not None
 
     def test_initialization(self):
         """Test agent initialization."""
-        from helios_agent.agent import Agent
-        from helios_agent.config import AgentConfig
+        from prescale_agent.agent import Agent
+        from prescale_agent.config import AgentConfig
         
         config_dict = {
             "endpoint": {"url": "http://localhost:8080"},
@@ -358,8 +358,8 @@ class TestAgent:
     @pytest.mark.asyncio
     async def test_setup_no_sources(self):
         """Test agent setup with no sources."""
-        from helios_agent.agent import Agent
-        from helios_agent.config import AgentConfig
+        from prescale_agent.agent import Agent
+        from prescale_agent.config import AgentConfig
         
         config_dict = {
             "endpoint": {"url": "http://localhost:8080"},
@@ -376,8 +376,8 @@ class TestAgent:
     @pytest.mark.asyncio
     async def test_setup_with_system_source(self):
         """Test agent setup with system source."""
-        from helios_agent.agent import Agent
-        from helios_agent.config import AgentConfig
+        from prescale_agent.agent import Agent
+        from prescale_agent.config import AgentConfig
         
         config_dict = {
             "endpoint": {"url": "http://localhost:8080"},
@@ -403,7 +403,7 @@ class TestCLI:
 
     def test_import(self):
         """Test that CLI can be imported."""
-        from helios_agent.cli import main
+        from prescale_agent.cli import main
         assert main is not None
 
 
@@ -438,7 +438,7 @@ def sample_config():
 @pytest.fixture
 def mock_metrics():
     """Create mock metric samples."""
-    from helios_agent.sources.base import MetricSample, MetricType
+    from prescale_agent.sources.base import MetricSample, MetricType
     
     now = datetime.now(timezone.utc)
     return [

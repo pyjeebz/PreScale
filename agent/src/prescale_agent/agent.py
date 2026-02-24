@@ -1,4 +1,4 @@
-"""Helios Agent - Main agent runner with unified metrics sources."""
+"""Prescale Agent - Main agent runner with unified metrics sources."""
 
 import asyncio
 import logging
@@ -6,7 +6,7 @@ import signal
 from datetime import datetime, timezone
 from typing import Optional
 
-from .client import HeliosClient
+from .client import PrescaleClient
 from .sources import MetricsSource, MetricSample, SourceRegistry
 from .config import AgentConfig
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class Agent:
     """
-    Main Helios metrics collection agent.
+    Main Prescale metrics collection agent.
     
     Uses a unified source interface to collect metrics from any backend:
     - system: Local host metrics via psutil
@@ -29,7 +29,7 @@ class Agent:
     def __init__(self, config: AgentConfig):
         self.config = config
         self.sources: list[MetricsSource] = []
-        self.client: Optional[HeliosClient] = None
+        self.client: Optional[PrescaleClient] = None
         self._running = False
         self._paused = False
         self._interval_override: Optional[int] = None  # Server-controlled interval
@@ -38,8 +38,8 @@ class Agent:
     
     async def setup(self):
         """Initialize sources and client."""
-        # Setup Helios client
-        self.client = HeliosClient(
+        # Setup Prescale client
+        self.client = PrescaleClient(
             endpoint=self.config.endpoint.url,
             api_key=self.config.endpoint.api_key,
             timeout=self.config.endpoint.timeout,
@@ -73,7 +73,7 @@ class Agent:
     async def run(self):
         """Run the agent main loop."""
         self._running = True
-        logger.info("Starting Helios Agent...")
+        logger.info("Starting Prescale Agent...")
         
         # Setup signal handlers
         loop = asyncio.get_running_loop()
@@ -84,13 +84,13 @@ class Agent:
                 # Windows doesn't support add_signal_handler
                 pass
         
-        # Check Helios API health
+        # Check Prescale API health
         if self.client:
             healthy = await self.client.check_health()
             if healthy:
-                logger.info(f"Connected to Helios at {self.config.endpoint.url}")
+                logger.info(f"Connected to Prescale at {self.config.endpoint.url}")
             else:
-                logger.warning(f"Could not connect to Helios at {self.config.endpoint.url}")
+                logger.warning(f"Could not connect to Prescale at {self.config.endpoint.url}")
         
         # Start source collection tasks
         tasks = []
@@ -111,7 +111,7 @@ class Agent:
     
     async def stop(self):
         """Stop the agent gracefully."""
-        logger.info("Stopping Helios Agent...")
+        logger.info("Stopping Prescale Agent...")
         self._running = False
         
         # Flush remaining metrics
@@ -158,18 +158,18 @@ class Agent:
             await asyncio.sleep(interval)
     
     async def _flush_loop(self):
-        """Periodically flush metrics to Helios."""
+        """Periodically flush metrics to Prescale."""
         while self._running:
             await asyncio.sleep(self.config.flush_interval)
             await self._flush_metrics()
     
     async def _flush_metrics(self):
-        """Flush buffered metrics to Helios."""
+        """Flush buffered metrics to Prescale."""
         if not self._metrics_buffer:
             return
         
         if not self.client:
-            logger.warning("No Helios client configured, discarding metrics")
+            logger.warning("No Prescale client configured, discarding metrics")
             self._metrics_buffer.clear()
             return
         
@@ -181,7 +181,7 @@ class Agent:
         result = await self.client.send_metrics(metrics_to_send)
         
         if result is not None:
-            logger.info(f"Sent {len(metrics_to_send)} metrics to Helios")
+            logger.info(f"Sent {len(metrics_to_send)} metrics to Prescale")
             
             # Apply control commands from server
             commands = result.get("commands")

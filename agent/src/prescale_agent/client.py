@@ -1,4 +1,4 @@
-"""Helios API client for sending metrics."""
+"""Prescale API client for sending metrics."""
 
 import asyncio
 import logging
@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class HeliosClient:
-    """Client for sending metrics to Helios API."""
+class PrescaleClient:
+    """Client for sending metrics to Prescale API."""
     
     def __init__(
         self,
@@ -35,7 +35,7 @@ class HeliosClient:
         """Get request headers."""
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "helios-agent/0.1.0",
+            "User-Agent": "prescale-agent/0.1.0",
         }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -52,7 +52,7 @@ class HeliosClient:
         return self._client
     
     async def send_metrics(self, metrics: list) -> Optional[dict]:
-        """Send metrics to Helios API.
+        """Send metrics to Prescale API.
         
         Args:
             metrics: List of metric samples to send
@@ -104,7 +104,7 @@ class HeliosClient:
         return None
     
     async def check_health(self) -> bool:
-        """Check if Helios API is healthy."""
+        """Check if Prescale API is healthy."""
         try:
             client = await self._get_client()
             response = await client.get(f"{self.endpoint}/health")
@@ -119,7 +119,7 @@ class HeliosClient:
         metric: str = "cpu_utilization",
         horizon_hours: int = 24,
     ) -> Optional[dict]:
-        """Get predictions from Helios API.
+        """Get predictions from Prescale API.
         
         Args:
             deployment: Deployment name
@@ -158,7 +158,7 @@ class HeliosClient:
         namespace: str = "default",
         metrics: Optional[list[str]] = None,
     ) -> Optional[dict]:
-        """Detect anomalies using Helios API.
+        """Detect anomalies using Prescale API.
         
         Args:
             deployment: Deployment name  

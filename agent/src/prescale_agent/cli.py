@@ -1,4 +1,4 @@
-"""Helios Agent CLI - Unified metrics collection."""
+"""Prescale Agent CLI - Unified metrics collection."""
 
 import asyncio
 import logging
@@ -29,17 +29,17 @@ def setup_logging(level: str):
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="helios-agent")
+@click.version_option(version=__version__, prog_name="prescale-agent")
 def main():
-    """Helios Agent - Unified metrics collection for predictive infrastructure intelligence."""
+    """Prescale Agent - Unified metrics collection for predictive infrastructure intelligence."""
     pass
 
 
 @main.command()
 @click.option("--config", "-c", "config_path", help="Path to config file")
-@click.option("--endpoint", "-e", envvar="HELIOS_ENDPOINT", help="Helios API endpoint")
-@click.option("--deployment", "-d", envvar="HELIOS_DEPLOYMENT", help="Deployment ID to send metrics to")
-@click.option("--api-key", envvar="HELIOS_API_KEY", help="Helios API key")
+@click.option("--endpoint", "-e", envvar="PRESCALE_ENDPOINT", help="Prescale API endpoint")
+@click.option("--deployment", "-d", envvar="PRESCALE_DEPLOYMENT", help="Deployment ID to send metrics to")
+@click.option("--api-key", envvar="PRESCALE_API_KEY", help="Prescale API key")
 @click.option("--interval", default=15, help="Collection interval in seconds")
 @click.option("--log-level", default="INFO", help="Log level")
 @click.option("--once", is_flag=True, help="Collect once and exit")
@@ -52,7 +52,7 @@ def run(
     log_level: str,
     once: bool,
 ):
-    """Run the Helios metrics collection agent."""
+    """Run the Prescale metrics collection agent."""
     setup_logging(log_level)
     
     # Load config
@@ -85,7 +85,7 @@ def run(
         else:
             source_names = [s.name for s in agent.sources]
             console.print(Panel(
-                f"[bold green]Helios Agent v{__version__}[/bold green]\n"
+                f"[bold green]Prescale Agent v{__version__}[/bold green]\n"
                 f"Endpoint: {config.endpoint.url}\n"
                 f"Sources: {', '.join(source_names)}\n"
                 f"Interval: {interval}s",
@@ -204,11 +204,11 @@ def test(config_path: Optional[str]):
             
             console.print()
         
-        # Test Helios connection
-        console.print(f"[cyan]Helios API ({config.endpoint.url}):[/cyan]")
-        from .client import HeliosClient
+        # Test Prescale connection
+        console.print(f"[cyan]Prescale API ({config.endpoint.url}):[/cyan]")
+        from .client import PrescaleClient
         
-        client = HeliosClient(
+        client = PrescaleClient(
             endpoint=config.endpoint.url,
             api_key=config.endpoint.api_key,
         )
@@ -257,13 +257,13 @@ def sources():
 @click.option("--output", "-o", type=click.Path(), help="Output file path")
 def init(output: Optional[str]):
     """Generate a sample configuration file."""
-    sample_config = """# Helios Agent Configuration
+    sample_config = """# Prescale Agent Configuration
 # Unified metrics collection from any monitoring backend
 
-# Helios API endpoint
+# Prescale API endpoint
 endpoint:
   url: http://localhost:8000
-  api_key: ${HELIOS_API_KEY}  # Or set via environment
+  api_key: ${PRESCALE_API_KEY}  # Or set via environment
   timeout: 30
   retry_attempts: 3
 
@@ -339,14 +339,14 @@ flush_interval: 10
 log_level: INFO
 """
     
-    output_path = output or "helios-agent.yaml"
+    output_path = output or "prescale-agent.yaml"
     
     with open(output_path, "w") as f:
         f.write(sample_config)
     
     console.print(f"[green]+ Created config file: {output_path}[/green]")
     console.print("\nEdit the file to enable your monitoring sources, then run:")
-    console.print(f"  [cyan]helios-agent run -c {output_path}[/cyan]")
+    console.print(f"  [cyan]prescale-agent run -c {output_path}[/cyan]")
 
 
 @main.command()
@@ -356,7 +356,7 @@ def status():
     import platform
     
     console.print(Panel(
-        f"[bold]Helios Agent v{__version__}[/bold]",
+        f"[bold]Prescale Agent v{__version__}[/bold]",
         title="Status",
     ))
     

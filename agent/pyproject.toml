@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "helios-agent"
+name = "prescale-agent"
 version = "0.2.0"
-description = "Metrics collection agent for Helios - Predictive Infrastructure Intelligence Platform"
+description = "Metrics collection agent for Prescale - Predictive Infrastructure Intelligence Platform"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.9"
 authors = [
-    {name = "Helios Platform", email = "maintainers@helios.dev"}
+    {name = "Prescale Platform", email = "maintainers@prescale.dev"}
 ]
 keywords = [
     "kubernetes",
@@ -63,7 +63,7 @@ kubernetes = [
     "kubernetes>=28.0.0",
 ]
 all = [
-    "helios-agent[prometheus,datadog,aws,azure,gcp,kubernetes]",
+    "prescale-agent[prometheus,datadog,aws,azure,gcp,kubernetes]",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -72,11 +72,11 @@ dev = [
 ]
 
 [project.scripts]
-helios-agent = "helios_agent.cli:main"
+prescale-agent = "prescale_agent.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/pyjeebz/helios"
-Repository = "https://github.com/pyjeebz/helios"
+Homepage = "https://github.com/pyjeebz/prescale"
+Repository = "https://github.com/pyjeebz/prescale"
 
 [tool.setuptools.packages.find]
 where = ["src"]

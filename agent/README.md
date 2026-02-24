@@ -1,40 +1,40 @@
-# Helios Agent
+# Prescale Agent
 
-Metrics collection agent for [Helios](https://github.com/pyjeebz/helios) - Predictive Infrastructure Intelligence Platform.
+Metrics collection agent for [Prescale](https://github.com/pyjeebz/prescale) - Predictive Infrastructure Intelligence Platform.
 
 ## Installation
 
 ```bash
 # Base installation (system metrics + Prometheus)
-pip install helios-platform-agent
+pip install prescale-platform-agent
 
 # With specific backends
-pip install helios-platform-agent[gcp]      # + GCP Cloud Monitoring
-pip install helios-platform-agent[aws]      # + AWS CloudWatch
-pip install helios-platform-agent[azure]    # + Azure Monitor
-pip install helios-platform-agent[datadog]  # + Datadog
-pip install helios-platform-agent[all]      # All backends
+pip install prescale-platform-agent[gcp]      # + GCP Cloud Monitoring
+pip install prescale-platform-agent[aws]      # + AWS CloudWatch
+pip install prescale-platform-agent[azure]    # + Azure Monitor
+pip install prescale-platform-agent[datadog]  # + Datadog
+pip install prescale-platform-agent[all]      # All backends
 ```
 
 ## Quick Start
 
 ```bash
 # Generate configuration file
-helios-agent init
+prescale-agent init
 
 # List available metric sources
-helios-agent sources
+prescale-agent sources
 
 # Test configured sources
-helios-agent test
+prescale-agent test
 
 # Run the agent
-helios-agent run --config helios-agent.yaml
+prescale-agent run --config prescale-agent.yaml
 ```
 
 ## Configuration
 
-Create a `helios-agent.yaml` file:
+Create a `prescale-agent.yaml` file:
 
 ```yaml
 agent:
@@ -67,8 +67,8 @@ sources:
         - name: cpu_usage
           query: rate(container_cpu_usage_seconds_total[5m])
 
-helios:
-  endpoint: http://helios-inference:8080
+prescale:
+  endpoint: http://prescale-inference:8080
 ```
 
 ## Supported Sources
@@ -85,22 +85,22 @@ helios:
 ## CLI Commands
 
 ```bash
-helios-agent init              # Generate config file
-helios-agent run               # Start collecting metrics
-helios-agent run --once        # Single collection (testing)
-helios-agent run --deployment my-deployment  # Associate with deployment
-helios-agent sources           # List available sources
-helios-agent test              # Test source connections
-helios-agent status            # Show agent status
+prescale-agent init              # Generate config file
+prescale-agent run               # Start collecting metrics
+prescale-agent run --once        # Single collection (testing)
+prescale-agent run --deployment my-deployment  # Associate with deployment
+prescale-agent sources           # List available sources
+prescale-agent test              # Test source connections
+prescale-agent status            # Show agent status
 ```
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `HELIOS_CONFIG_FILE` | Path to config file (default: `./helios-agent.yaml`) |
-| `HELIOS_ENDPOINT` | Helios inference endpoint |
-| `HELIOS_API_KEY` | API key for authentication |
+| `PRESCALE_CONFIG_FILE` | Path to config file (default: `./prescale-agent.yaml`) |
+| `PRESCALE_ENDPOINT` | Prescale inference endpoint |
+| `PRESCALE_API_KEY` | API key for authentication |
 
 ## License
 

@@ -1,4 +1,4 @@
-"""Configuration management for Helios Agent."""
+"""Configuration management for Prescale Agent."""
 
 import os
 from dataclasses import dataclass, field
@@ -11,8 +11,8 @@ from .sources import SourceConfig
 
 
 @dataclass
-class HeliosEndpoint:
-    """Helios API endpoint configuration."""
+class PrescaleEndpoint:
+    """Prescale API endpoint configuration."""
     
     url: str = "http://104.155.137.61"
     api_key: Optional[str] = None
@@ -25,8 +25,8 @@ class HeliosEndpoint:
 class AgentConfig:
     """Main agent configuration."""
     
-    # Helios endpoint
-    endpoint: HeliosEndpoint = field(default_factory=HeliosEndpoint)
+    # Prescale endpoint
+    endpoint: PrescaleEndpoint = field(default_factory=PrescaleEndpoint)
     
     # Metrics sources (unified)
     sources: list[SourceConfig] = field(default_factory=list)
@@ -51,9 +51,9 @@ class AgentConfig:
         # Endpoint
         if "endpoint" in data:
             ep = data["endpoint"]
-            config.endpoint = HeliosEndpoint(
+            config.endpoint = PrescaleEndpoint(
                 url=ep.get("url", config.endpoint.url),
-                api_key=ep.get("api_key") or os.environ.get("HELIOS_API_KEY"),
+                api_key=ep.get("api_key") or os.environ.get("PRESCALE_API_KEY"),
                 timeout=ep.get("timeout", config.endpoint.timeout),
                 retry_attempts=ep.get("retry_attempts", config.endpoint.retry_attempts),
                 retry_delay=ep.get("retry_delay", config.endpoint.retry_delay),
@@ -61,11 +61,11 @@ class AgentConfig:
         
         # Override API key from env
         if not config.endpoint.api_key:
-            config.endpoint.api_key = os.environ.get("HELIOS_API_KEY")
+            config.endpoint.api_key = os.environ.get("PRESCALE_API_KEY")
         
         # Override URL from env  
-        if os.environ.get("HELIOS_ENDPOINT"):
-            config.endpoint.url = os.environ["HELIOS_ENDPOINT"]
+        if os.environ.get("PRESCALE_ENDPOINT"):
+            config.endpoint.url = os.environ["PRESCALE_ENDPOINT"]
         
         # Parse sources
         config.sources = []
@@ -128,8 +128,8 @@ class AgentConfig:
         config = cls()
         
         # Endpoint
-        config.endpoint.url = os.environ.get("HELIOS_ENDPOINT", config.endpoint.url)
-        config.endpoint.api_key = os.environ.get("HELIOS_API_KEY")
+        config.endpoint.url = os.environ.get("PRESCALE_ENDPOINT", config.endpoint.url)
+        config.endpoint.api_key = os.environ.get("PRESCALE_API_KEY")
         
         # Default system source
         config.sources = [
@@ -175,10 +175,10 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
     
     # Try default locations
     default_paths = [
-        Path("helios-agent.yaml"),
-        Path("helios-agent.yml"),
-        Path.home() / ".helios" / "agent.yaml",
-        Path("/etc/helios/agent.yaml"),
+        Path("prescale-agent.yaml"),
+        Path("prescale-agent.yml"),
+        Path.home() / ".prescale" / "agent.yaml",
+        Path("/etc/prescale/agent.yaml"),
     ]
     
     for path in default_paths:
