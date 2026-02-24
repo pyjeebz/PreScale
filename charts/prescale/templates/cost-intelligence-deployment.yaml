@@ -2,15 +2,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "helios.costIntelligence.fullname" . }}
+  name: {{ include "prescale.costIntelligence.fullname" . }}
   labels:
-    {{- include "helios.labels" . | nindent 4 }}
+    {{- include "prescale.labels" . | nindent 4 }}
     app.kubernetes.io/component: cost-intelligence
 spec:
   replicas: {{ .Values.costIntelligence.replicaCount }}
   selector:
     matchLabels:
-      {{- include "helios.selectorLabels" . | nindent 6 }}
+      {{- include "prescale.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: cost-intelligence
   template:
     metadata:
@@ -19,21 +19,21 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "helios.selectorLabels" . | nindent 8 }}
+        {{- include "prescale.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: cost-intelligence
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "helios.serviceAccountName" . }}
+      serviceAccountName: {{ include "prescale.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: cost-intelligence
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: {{ include "helios.costIntelligence.image" . }}
+          image: {{ include "prescale.costIntelligence.image" . }}
           imagePullPolicy: {{ .Values.costIntelligence.image.pullPolicy }}
           ports:
             - name: http

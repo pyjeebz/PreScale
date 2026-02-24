@@ -1,4 +1,4 @@
-# Helios Helm Chart
+# Prescale Helm Chart
 
 Predictive Infrastructure Intelligence Platform - ML-powered resource forecasting and anomaly detection for Kubernetes.
 
@@ -11,18 +11,18 @@ Predictive Infrastructure Intelligence Platform - ML-powered resource forecastin
 ## Installation
 
 ```bash
-# Add the Helios Helm repository
-helm repo add helios https://pyjeebz.github.io/helios
+# Add the Prescale Helm repository
+helm repo add prescale https://pyjeebz.github.io/prescale
 helm repo update
 
-# Install Helios
-helm install helios helios/helios --namespace helios --create-namespace
+# Install Prescale
+helm install prescale prescale/prescale --namespace prescale --create-namespace
 ```
 
 ### Install from local chart
 
 ```bash
-helm install helios ./charts/helios --namespace helios --create-namespace
+helm install prescale ./charts/prescale --namespace prescale --create-namespace
 ```
 
 ## Configuration
@@ -67,14 +67,14 @@ inference:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - host: helios.example.com
+      - host: prescale.example.com
         paths:
           - path: /
             pathType: Prefix
     tls:
-      - secretName: helios-tls
+      - secretName: prescale-tls
         hosts:
-          - helios.example.com
+          - prescale.example.com
 
 costIntelligence:
   enabled: true
@@ -93,8 +93,8 @@ prometheus:
 ### Install with custom values
 
 ```bash
-helm install helios helios/helios \
-  --namespace helios \
+helm install prescale prescale/prescale \
+  --namespace prescale \
   --create-namespace \
   -f values-production.yaml
 ```
@@ -102,13 +102,13 @@ helm install helios helios/helios \
 ## Upgrading
 
 ```bash
-helm upgrade helios helios/helios --namespace helios -f values.yaml
+helm upgrade prescale prescale/prescale --namespace prescale -f values.yaml
 ```
 
 ## Uninstalling
 
 ```bash
-helm uninstall helios --namespace helios
+helm uninstall prescale --namespace prescale
 ```
 
 ## Components

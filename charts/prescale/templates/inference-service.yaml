@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "helios.inference.fullname" . }}
+  name: {{ include "prescale.inference.fullname" . }}
   labels:
-    {{- include "helios.labels" . | nindent 4 }}
+    {{- include "prescale.labels" . | nindent 4 }}
     app.kubernetes.io/component: inference
   {{- with .Values.inference.service.annotations }}
   annotations:
@@ -18,6 +18,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "helios.selectorLabels" . | nindent 4 }}
+    {{- include "prescale.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: inference
 {{- end }}

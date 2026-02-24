@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "helios.fullname" . }}-models
+  name: {{ include "prescale.fullname" . }}-models
   labels:
-    {{- include "helios.labels" . | nindent 4 }}
+    {{- include "prescale.labels" . | nindent 4 }}
 spec:
   accessModes:
     {{- toYaml .Values.models.persistence.accessModes | nindent 4 }}

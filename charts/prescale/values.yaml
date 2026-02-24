@@ -1,5 +1,5 @@
-# Helios Helm Chart Values
-# Default configuration values for the Helios platform
+# Prescale Helm Chart Values
+# Default configuration values for the Prescale platform
 
 # -- Global settings
 global:
@@ -18,7 +18,7 @@ inference:
   
   image:
     # -- Image repository
-    repository: ghcr.io/pyjeebz/helios/inference
+    repository: ghcr.io/pyjeebz/prescale/inference
     # -- Image pull policy
     pullPolicy: IfNotPresent
     # -- Image tag (defaults to chart appVersion)
@@ -38,14 +38,14 @@ inference:
       # kubernetes.io/ingress.class: nginx
       # cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - host: helios.local
+      - host: prescale.local
         paths:
           - path: /
             pathType: Prefix
     tls: []
-    #  - secretName: helios-tls
+    #  - secretName: prescale-tls
     #    hosts:
-    #      - helios.local
+    #      - prescale.local
   
   # -- Resource limits and requests
   resources:
@@ -86,7 +86,7 @@ inference:
   # -- Additional environment variables from secrets/configmaps
   envFrom: []
     # - secretRef:
-    #     name: helios-secrets
+    #     name: prescale-secrets
   
   # -- Liveness probe configuration
   livenessProbe:
@@ -118,7 +118,7 @@ costIntelligence:
   
   image:
     # -- Image repository
-    repository: ghcr.io/pyjeebz/helios/cost-intelligence
+    repository: ghcr.io/pyjeebz/prescale/cost-intelligence
     # -- Image pull policy
     pullPolicy: IfNotPresent
     # -- Image tag (defaults to chart appVersion)
@@ -193,7 +193,7 @@ grafana:
   # -- Enable bundled Grafana
   enabled: false
   
-  # -- Install Helios dashboards
+  # -- Install Prescale dashboards
   dashboards:
     enabled: true
 

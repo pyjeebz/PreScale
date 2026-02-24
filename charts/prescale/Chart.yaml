@@ -1,5 +1,5 @@
 apiVersion: v2
-name: helios
+name: prescale
 description: Predictive Infrastructure Intelligence Platform - ML-powered resource forecasting and anomaly detection
 type: application
 version: 0.1.0
@@ -16,13 +16,13 @@ keywords:
   - autoscaling
   - observability
 
-home: https://github.com/pyjeebz/helios
+home: https://github.com/pyjeebz/prescale
 sources:
-  - https://github.com/pyjeebz/helios
+  - https://github.com/pyjeebz/prescale
 
 maintainers:
-  - name: Helios Platform
-    email: maintainers@helios.dev
+  - name: Prescale Platform
+    email: maintainers@prescale.dev
     url: https://github.com/pyjeebz
 
 annotations:
