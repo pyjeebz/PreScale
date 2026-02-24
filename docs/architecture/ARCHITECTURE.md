@@ -1,12 +1,12 @@
-# Helios Architecture Design
+# Prescale Architecture Design
 
 ## 1. System Overview
 
-Helios is a **predictive infrastructure intelligence platform** that uses machine learning to forecast resource demand and provide proactive scaling recommendations.
+Prescale is a **predictive infrastructure intelligence platform** that uses machine learning to forecast resource demand and provide proactive scaling recommendations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              HELIOS PLATFORM                                     │
+│                              PRESCALE PLATFORM                                     │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
@@ -253,16 +253,16 @@ cpu_memory_ratio
 
 ```prometheus
 # Predictions as gauges
-helios_predicted_cpu{namespace="saleor", deployment="api"} 0.72
-helios_predicted_memory{namespace="saleor", deployment="api"} 0.58
+prescale_predicted_cpu{namespace="saleor", deployment="api"} 0.72
+prescale_predicted_memory{namespace="saleor", deployment="api"} 0.58
 
 # Anomaly scores
-helios_anomaly_score{namespace="saleor", deployment="api"} 0.23
-helios_anomaly_detected{namespace="saleor", deployment="api"} 0
+prescale_anomaly_score{namespace="saleor", deployment="api"} 0.23
+prescale_anomaly_detected{namespace="saleor", deployment="api"} 0
 
 # Recommendations  
-helios_recommended_replicas{namespace="saleor", deployment="api"} 3
-helios_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
+prescale_recommended_replicas{namespace="saleor", deployment="api"} 3
+prescale_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
 ```
 
 ---
@@ -335,7 +335,7 @@ helios_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
 
 ### 2.5 Autoscaling Integration (KEDA)
 
-**Purpose:** Automatically scale workloads based on Helios predictions.
+**Purpose:** Automatically scale workloads based on Prescale predictions.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -343,9 +343,9 @@ helios_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Helios Inference Service                    │   │
+│  │              Prescale Inference Service                    │   │
 │  │                                                          │   │
-│  │  GET /metrics → helios_predicted_cpu = 0.72             │   │
+│  │  GET /metrics → prescale_predicted_cpu = 0.72             │   │
 │  │                                                          │   │
 │  └─────────────────────────┬───────────────────────────────┘   │
 │                            │ Prometheus scrape                  │
@@ -353,7 +353,7 @@ helios_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │                    Prometheus                            │   │
 │  │                                                          │   │
-│  │  helios_predicted_cpu{deployment="saleor-api"} 0.72     │   │
+│  │  prescale_predicted_cpu{deployment="saleor-api"} 0.72     │   │
 │  │                                                          │   │
 │  └─────────────────────────┬───────────────────────────────┘   │
 │                            │ PromQL query                       │
@@ -364,7 +364,7 @@ helios_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
 │  │  triggers:                                              │   │
 │  │    - type: prometheus                                   │   │
 │  │      metadata:                                          │   │
-│  │        query: helios_predicted_cpu{deployment="..."}    │   │
+│  │        query: prescale_predicted_cpu{deployment="..."}    │   │
 │  │        threshold: "70"                                  │   │
 │  │                                                          │   │
 │  └─────────────────────────┬───────────────────────────────┘   │
@@ -476,7 +476,7 @@ helios_recommendation_confidence{namespace="saleor", deployment="api"} 0.87
 
 ```
 Namespaces:
-├── helios              # Helios inference service
+├── prescale              # Prescale inference service
 ├── saleor              # Demo application (Saleor e-commerce)
 ├── loadtest            # Locust load testing
 ├── monitoring          # Prometheus, Grafana, Alertmanager
@@ -484,10 +484,10 @@ Namespaces:
 └── gke-gmp-system      # GKE Managed Prometheus (GCP only)
 ```
 
-### 5.2 Helios Deployment
+### 5.2 Prescale Deployment
 
 ```yaml
-# infra/kubernetes/helios-inference/
+# infra/kubernetes/prescale-inference/
 ├── namespace.yaml
 ├── deployment.yaml      # Inference service (FastAPI)
 ├── service.yaml         # ClusterIP service
@@ -527,31 +527,31 @@ Namespaces:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
   annotations:
-    iam.gke.io/gcp-service-account: helios-inference@PROJECT.iam.gserviceaccount.com
+    iam.gke.io/gcp-service-account: prescale-inference@PROJECT.iam.gserviceaccount.com
 ```
 
 ---
 
 ## 7. Observability
 
-### 7.1 Helios Self-Monitoring
+### 7.1 Prescale Self-Monitoring
 
 ```yaml
 Metrics (Prometheus):
   # Inference latency
-  - helios_inference_duration_seconds
-  - helios_inference_requests_total
+  - prescale_inference_duration_seconds
+  - prescale_inference_requests_total
   
   # Model performance
-  - helios_prediction_confidence
-  - helios_anomaly_detections_total
+  - prescale_prediction_confidence
+  - prescale_anomaly_detections_total
   
   # Recommendation tracking
-  - helios_recommendations_total
-  - helios_scaling_actions_total
+  - prescale_recommendations_total
+  - prescale_scaling_actions_total
 
 Logging (Structured JSON):
   - Request/response logs
@@ -559,7 +559,7 @@ Logging (Structured JSON):
   - Recommendation audit trail
 
 Dashboards (Grafana):
-  - Helios Overview (predictions vs actuals)
+  - Prescale Overview (predictions vs actuals)
   - Anomaly Timeline
   - Scaling History
   - Model Performance
@@ -570,18 +570,18 @@ Dashboards (Grafana):
 ```yaml
 # Alertmanager rules
 groups:
-  - name: helios
+  - name: prescale
     rules:
-      - alert: HeliosHighAnomalyRate
-        expr: rate(helios_anomaly_detections_total[5m]) > 0.1
+      - alert: PrescaleHighAnomalyRate
+        expr: rate(prescale_anomaly_detections_total[5m]) > 0.1
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High anomaly detection rate"
       
-      - alert: HeliosInferenceLatency
-        expr: helios_inference_duration_seconds > 1
+      - alert: PrescaleInferenceLatency
+        expr: prescale_inference_duration_seconds > 1
         for: 5m
         labels:
           severity: warning
@@ -647,7 +647,7 @@ groups:
 ### A. Configuration Reference
 
 ```yaml
-# Helios configuration
+# Prescale configuration
 gcp:
   project_id: "your-project-id"
   region: "us-central1"

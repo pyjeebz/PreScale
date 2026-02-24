@@ -1,8 +1,8 @@
-# Helios on GCP: Complete Setup Guide
+# Prescale on GCP: Complete Setup Guide
 
-This guide details how to set up Helios to:
-1.  **Collect Real-time Metrics** (using the Helios Agent).
-2.  **Retrain Models Automatically** (using the Helios Backend).
+This guide details how to set up Prescale to:
+1.  **Collect Real-time Metrics** (using the Prescale Agent).
+2.  **Retrain Models Automatically** (using the Prescale Backend).
 
 ## Prerequisites
 
@@ -15,20 +15,20 @@ This guide details how to set up Helios to:
 
 ## Part 1: Real-time Monitoring (The Agent)
 
-The **Helios Agent** runs on your infrastructure (e.g., inside GKE), collects metrics, and pushes them to the Helios Dashboard in real-time.
+The **Prescale Agent** runs on your infrastructure (e.g., inside GKE), collects metrics, and pushes them to the Prescale Dashboard in real-time.
 
 ### 1. Install the Agent
 
 ```bash
-pip install helios-agent[gcp]
+pip install prescale-agent[gcp]
 ```
 
 ### 2. Configure the Agent
 
-Create a `helios-agent.yaml` file:
+Create a `prescale-agent.yaml` file:
 
 ```yaml
-# helios-agent.yaml
+# prescale-agent.yaml
 endpoint:
   url: "http://localhost:8001"  # Backend URL
 
@@ -48,7 +48,7 @@ sources:
 ### 3. Run the Agent
 
 ```bash
-helios-agent --config helios-agent.yaml
+prescale-agent --config prescale-agent.yaml
 ```
 
 ### 4. Verify on Dashboard
@@ -61,7 +61,7 @@ helios-agent --config helios-agent.yaml
 
 ## Part 2: Automated Model Retraining (The Backend)
 
-The **Helios Backend** can independently connect to GCP to fetch historical data (e.g., last 24h) to train new ML models.
+The **Prescale Backend** can independently connect to GCP to fetch historical data (e.g., last 24h) to train new ML models.
 
 ### 1. Configure the Backend
 
@@ -77,7 +77,7 @@ $env:RETRAIN_DATA_SOURCE = "gcp"
 ### 2. Run the Backend
 
 ```powershell
-# Ensure you are in the helios root directory
+# Ensure you are in the prescale root directory
 $env:PORT = "8001"
 python -m ml.inference.app
 ```
@@ -106,5 +106,5 @@ Open your browser to `http://localhost:3000`.
 
 | Component | Connected To | Purpose | Dashboard Verification |
 |-----------|--------------|---------|------------------------|
-| **Agent** | `helios-agent.yaml` | Real-time stream | **Agents** Card |
+| **Agent** | `prescale-agent.yaml` | Real-time stream | **Agents** Card |
 | **Backend** | Env Vars | Historical training | **Model Training** Card |

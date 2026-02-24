@@ -1,6 +1,6 @@
-# Helios on GCP: Testing Guide
+# Prescale on GCP: Testing Guide
 
-This guide explains how to configure and test the Helios ML Retraining service with Google Cloud Platform (GCP) Cloud Monitoring.
+This guide explains how to configure and test the Prescale ML Retraining service with Google Cloud Platform (GCP) Cloud Monitoring.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ This guide explains how to configure and test the Helios ML Retraining service w
 
 ## Configuration
 
-The Helios Inference Service uses **Environment Variables** for configuration. It does *not* read `helios-agent.yaml` directly (that is for the Go agent).
+The Prescale Inference Service uses **Environment Variables** for configuration. It does *not* read `prescale-agent.yaml` directly (that is for the Go agent).
 
 ### 1. Set Environment Variables
 
@@ -45,7 +45,7 @@ gcloud auth application-default login
 Start the inference service:
 
 ```powershell
-# In c:\Users\Windows\Desktop\helios
+# In c:\Users\Windows\Desktop\prescale
 $env:PORT = "8001"
 python -m ml.inference.app
 ```

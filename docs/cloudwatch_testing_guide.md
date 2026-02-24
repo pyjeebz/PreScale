@@ -1,6 +1,6 @@
-# Helios on AWS: Testing Guide
+# Prescale on AWS: Testing Guide
 
-This guide explains how to configure and test the Helios ML Retraining service with AWS CloudWatch.
+This guide explains how to configure and test the Prescale ML Retraining service with AWS CloudWatch.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ This guide explains how to configure and test the Helios ML Retraining service w
 
 ## Configuration
 
-The Helios Inference Service uses **Environment Variables** for configuration.
+The Prescale Inference Service uses **Environment Variables** for configuration.
 
 ### 1. Set Environment Variables
 
@@ -45,7 +45,7 @@ aws cloudwatch list-metrics --namespace AWS/EC2
 Start the inference service:
 
 ```powershell
-# In c:\Users\Windows\Desktop\helios
+# In c:\Users\Windows\Desktop\prescale
 $env:PORT = "8001"
 python -m ml.inference.app
 ```

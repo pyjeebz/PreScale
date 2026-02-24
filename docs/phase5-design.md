@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 5 implements the **Helios Inference Service** - a real-time prediction API that serves ML models and provides actionable scaling recommendations.
+Phase 5 implements the **Prescale Inference Service** - a real-time prediction API that serves ML models and provides actionable scaling recommendations.
 
 ---
 
@@ -33,10 +33,10 @@ Phase 5 implements the **Helios Inference Service** - a real-time prediction API
 │  │                                                                      │   │
 │  │  ┌───────────────────────────────────────────────────────────────┐  │   │
 │  │  │ /metrics (Prometheus format)                                   │  │   │
-│  │  │ - helios_predicted_cpu                                         │  │   │
-│  │  │ - helios_predicted_memory                                      │  │   │
-│  │  │ - helios_anomaly_score                                         │  │   │
-│  │  │ - helios_recommended_replicas                                  │  │   │
+│  │  │ - prescale_predicted_cpu                                         │  │   │
+│  │  │ - prescale_predicted_memory                                      │  │   │
+│  │  │ - prescale_anomaly_score                                         │  │   │
+│  │  │ - prescale_recommended_replicas                                  │  │   │
 │  │  └───────────────────────────────────────────────────────────────┘  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                            │                                               │
@@ -100,10 +100,10 @@ ml/scoring/
 
 ### 3. Kubernetes Manifests
 
-**Location:** `infra/kubernetes/helios-inference/`
+**Location:** `infra/kubernetes/prescale-inference/`
 
 ```
-infra/kubernetes/helios-inference/
+infra/kubernetes/prescale-inference/
 ├── namespace.yaml
 ├── configmap.yaml
 ├── deployment.yaml
@@ -130,10 +130,10 @@ infra/kubernetes/keda/
 
 ```
 infra/kubernetes/grafana/dashboards/
-├── helios-overview.json
-├── helios-predictions.json
-├── helios-anomalies.json
-└── helios-recommendations.json
+├── prescale-overview.json
+├── prescale-predictions.json
+├── prescale-anomalies.json
+└── prescale-recommendations.json
 ```
 
 ### 6. Alertmanager Rules
@@ -143,7 +143,7 @@ infra/kubernetes/grafana/dashboards/
 ```
 infra/kubernetes/alertmanager/
 ├── alertmanager-config.yaml
-└── helios-rules.yaml
+└── prescale-rules.yaml
 ```
 
 ---
@@ -301,28 +301,28 @@ Response:
 ```yaml
 GET /metrics
 Response (text/plain):
-  # HELP helios_predicted_cpu Predicted CPU utilization
-  # TYPE helios_predicted_cpu gauge
-  helios_predicted_cpu{namespace="saleor",deployment="saleor-api",horizon="5m"} 0.48
-  helios_predicted_cpu{namespace="saleor",deployment="saleor-api",horizon="30m"} 0.72
+  # HELP prescale_predicted_cpu Predicted CPU utilization
+  # TYPE prescale_predicted_cpu gauge
+  prescale_predicted_cpu{namespace="saleor",deployment="saleor-api",horizon="5m"} 0.48
+  prescale_predicted_cpu{namespace="saleor",deployment="saleor-api",horizon="30m"} 0.72
   
-  # HELP helios_anomaly_score Current anomaly score
-  # TYPE helios_anomaly_score gauge
-  helios_anomaly_score{namespace="saleor",deployment="saleor-api"} 1.2
+  # HELP prescale_anomaly_score Current anomaly score
+  # TYPE prescale_anomaly_score gauge
+  prescale_anomaly_score{namespace="saleor",deployment="saleor-api"} 1.2
   
-  # HELP helios_anomaly_detected Whether anomaly is detected (0/1)
-  # TYPE helios_anomaly_detected gauge
-  helios_anomaly_detected{namespace="saleor",deployment="saleor-api"} 0
+  # HELP prescale_anomaly_detected Whether anomaly is detected (0/1)
+  # TYPE prescale_anomaly_detected gauge
+  prescale_anomaly_detected{namespace="saleor",deployment="saleor-api"} 0
   
-  # HELP helios_recommended_replicas Recommended replica count
-  # TYPE helios_recommended_replicas gauge
-  helios_recommended_replicas{namespace="saleor",deployment="saleor-api"} 4
+  # HELP prescale_recommended_replicas Recommended replica count
+  # TYPE prescale_recommended_replicas gauge
+  prescale_recommended_replicas{namespace="saleor",deployment="saleor-api"} 4
   
-  # HELP helios_inference_duration_seconds Inference latency
-  # TYPE helios_inference_duration_seconds histogram
-  helios_inference_duration_seconds_bucket{endpoint="/predict",le="0.1"} 950
-  helios_inference_duration_seconds_bucket{endpoint="/predict",le="0.5"} 999
-  helios_inference_duration_seconds_bucket{endpoint="/predict",le="1.0"} 1000
+  # HELP prescale_inference_duration_seconds Inference latency
+  # TYPE prescale_inference_duration_seconds histogram
+  prescale_inference_duration_seconds_bucket{endpoint="/predict",le="0.1"} 950
+  prescale_inference_duration_seconds_bucket{endpoint="/predict",le="0.5"} 999
+  prescale_inference_duration_seconds_bucket{endpoint="/predict",le="1.0"} 1000
 ```
 
 ---
@@ -346,9 +346,9 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://prometheus.monitoring.svc:9090
-        metricName: helios_predicted_cpu
+        metricName: prescale_predicted_cpu
         query: |
-          helios_predicted_cpu{
+          prescale_predicted_cpu{
             namespace="saleor",
             deployment="saleor-api",
             horizon="30m"
@@ -365,26 +365,26 @@ spec:
 
 ```bash
 # Service
-HELIOS_PORT=8080
-HELIOS_LOG_LEVEL=INFO
+PRESCALE_PORT=8080
+PRESCALE_LOG_LEVEL=INFO
 
 # Models
-HELIOS_MODEL_PATH=/app/models
-HELIOS_MODEL_REFRESH_INTERVAL=3600
+PRESCALE_MODEL_PATH=/app/models
+PRESCALE_MODEL_REFRESH_INTERVAL=3600
 
 # Metrics
-HELIOS_METRICS_NAMESPACE=saleor
-HELIOS_METRICS_DEPLOYMENT=saleor-api
+PRESCALE_METRICS_NAMESPACE=saleor
+PRESCALE_METRICS_DEPLOYMENT=saleor-api
 
 # Cloud (for real-time scoring)
 GCP_PROJECT_ID=YOUR_GCP_PROJECT_ID
-HELIOS_SCORING_INTERVAL=300
+PRESCALE_SCORING_INTERVAL=300
 
 # Thresholds
-HELIOS_CPU_SCALE_UP=0.80
-HELIOS_CPU_SCALE_DOWN=0.20
-HELIOS_MEMORY_WARNING=0.85
-HELIOS_ANOMALY_THRESHOLD=2.5
+PRESCALE_CPU_SCALE_UP=0.80
+PRESCALE_CPU_SCALE_DOWN=0.20
+PRESCALE_MEMORY_WARNING=0.85
+PRESCALE_ANOMALY_THRESHOLD=2.5
 ```
 
 ### ConfigMap
@@ -393,8 +393,8 @@ HELIOS_ANOMALY_THRESHOLD=2.5
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: helios-config
-  namespace: helios
+  name: prescale-config
+  namespace: prescale
 data:
   config.yaml: |
     service:
@@ -467,7 +467,7 @@ pytest tests/inference/
 ### Integration Tests
 ```bash
 # Port-forward inference service
-kubectl port-forward -n helios svc/helios-inference 8080:8080
+kubectl port-forward -n prescale svc/prescale-inference 8080:8080
 
 # Test health
 curl http://localhost:8080/health

@@ -1,8 +1,8 @@
-# Helios Integration Guide
+# Prescale Integration Guide
 
-## Integrating Helios into Existing Infrastructure
+## Integrating Prescale into Existing Infrastructure
 
-This guide explains how to deploy Helios into an existing customer environment to provide predictive infrastructure intelligence.
+This guide explains how to deploy Prescale into an existing customer environment to provide predictive infrastructure intelligence.
 
 ---
 
@@ -19,7 +19,7 @@ This guide explains how to deploy Helios into an existing customer environment t
 
 ## Integration Architecture
 
-Helios connects to your existing observability stack - it doesn't replace it:
+Prescale connects to your existing observability stack - it doesn't replace it:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -40,7 +40,7 @@ Helios connects to your existing observability stack - it doesn't replace it:
 │                    └────────────┬────────────┘                              │
 │                                 │                                           │
 │  ┌──────────────────────────────┼───────────────────────────────────────┐  │
-│  │                              │         HELIOS (NEW)                   │  │
+│  │                              │         PRESCALE (NEW)                   │  │
 │  │                              ▼                                        │  │
 │  │  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐     │  │
 │  │  │ Metrics Adapter │──▶│ ML Pipeline     │──▶│ Inference API   │     │  │
@@ -66,22 +66,22 @@ Helios connects to your existing observability stack - it doesn't replace it:
 
 ### Option 1: Sidecar Deployment (Recommended for Single Customer)
 
-Deploy Helios alongside existing services in the customer's cluster:
+Deploy Prescale alongside existing services in the customer's cluster:
 
 ```yaml
-# helios-customer-deployment.yaml
+# prescale-customer-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
 spec:
   replicas: 2
   template:
     spec:
       containers:
-        - name: helios-inference
-          image: gcr.io/YOUR_PROJECT/helios-inference:latest
+        - name: prescale-inference
+          image: gcr.io/YOUR_PROJECT/prescale-inference:latest
           env:
             - name: PROMETHEUS_URL
               value: "http://prometheus.monitoring:9090"  # Customer's Prometheus
@@ -93,11 +93,11 @@ spec:
 
 ### Option 2: SaaS / Multi-Tenant
 
-Run Helios as a service that multiple customers connect to:
+Run Prescale as a service that multiple customers connect to:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    HELIOS SaaS PLATFORM                         │
+│                    PRESCALE SaaS PLATFORM                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   Customer A        Customer B        Customer C                │
@@ -105,7 +105,7 @@ Run Helios as a service that multiple customers connect to:
 │       │                 │                 │                     │
 │       ▼                 ▼                 ▼                     │
 │   ┌───────────────────────────────────────────────────────┐    │
-│   │              Helios API Gateway                        │    │
+│   │              Prescale API Gateway                        │    │
 │   │              (tenant isolation)                        │    │
 │   └───────────────────────────────────────────────────────┘    │
 │                           │                                     │
@@ -121,15 +121,15 @@ Run Helios as a service that multiple customers connect to:
 
 ### Option 3: Agent-Based (Remote Monitoring)
 
-Install a lightweight agent that pushes metrics to Helios:
+Install a lightweight agent that pushes metrics to Prescale:
 
 ```python
-# helios_agent.py - Install on customer infrastructure
-from helios_sdk import HeliosAgent
+# prescale_agent.py - Install on customer infrastructure
+from prescale_sdk import PrescaleAgent
 
-agent = HeliosAgent(
+agent = PrescaleAgent(
     api_key="customer-api-key",
-    endpoint="https://helios.yourcompany.com",
+    endpoint="https://prescale.yourcompany.com",
     customer_id="gaming-corp"
 )
 
@@ -246,25 +246,25 @@ if __name__ == "__main__":
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helios-gaming-corp
-  namespace: helios
+  name: prescale-gaming-corp
+  namespace: prescale
   labels:
     customer: gaming-corp
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: helios-inference
+      app: prescale-inference
       customer: gaming-corp
   template:
     metadata:
       labels:
-        app: helios-inference
+        app: prescale-inference
         customer: gaming-corp
     spec:
       containers:
         - name: inference
-          image: gcr.io/YOUR_PROJECT/helios-inference:latest
+          image: gcr.io/YOUR_PROJECT/prescale-inference:latest
           ports:
             - containerPort: 8080
           env:
@@ -275,7 +275,7 @@ spec:
             - name: MODEL_PREFIX
               value: "gaming-corp"
             - name: GCS_BUCKET
-              value: "helios-models-production"
+              value: "prescale-models-production"
           resources:
             requests:
               memory: "512Mi"
@@ -292,7 +292,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: helios-alerts-gaming-corp
+  name: prescale-alerts-gaming-corp
 data:
   alerts.yaml: |
     webhooks:
@@ -322,7 +322,7 @@ data:
 
 ### Gaming-Specific Challenges
 
-| Challenge | Helios Solution |
+| Challenge | Prescale Solution |
 |-----------|-----------------|
 | **Spike traffic** (game launches, events) | Prophet model with custom seasonality for scheduled events |
 | **Match-based scaling** | Custom metrics: `active_matches`, `players_in_queue` |
@@ -406,14 +406,14 @@ spec:
   maxReplicaCount: 100
   
   triggers:
-    # Scale based on Helios predictions
+    # Scale based on Prescale predictions
     - type: prometheus
       metadata:
-        serverAddress: http://helios-inference.helios:8080
-        metricName: helios_predicted_players_1h
+        serverAddress: http://prescale-inference.prescale:8080
+        metricName: prescale_predicted_players_1h
         threshold: "80"  # Players per server
         query: |
-          helios_forecast_value{
+          prescale_forecast_value{
             customer="gaming-corp",
             metric="concurrent_users",
             horizon="1h"
@@ -430,11 +430,11 @@ spec:
     # Scale based on anomaly detection
     - type: prometheus
       metadata:
-        serverAddress: http://helios-inference.helios:8080
-        metricName: helios_anomaly_score
+        serverAddress: http://prescale-inference.prescale:8080
+        metricName: prescale_anomaly_score
         threshold: "2.5"
         query: |
-          helios_anomaly_score{
+          prescale_anomaly_score{
             customer="gaming-corp",
             metric="concurrent_users"
           }
@@ -528,7 +528,7 @@ scheduler.add_event(
 ```json
 {
   "dashboard": {
-    "title": "Helios - Gaming Corp",
+    "title": "Prescale - Gaming Corp",
     "panels": [
       {
         "title": "Player Forecast (1 Hour)",
@@ -539,7 +539,7 @@ scheduler.add_event(
             "legendFormat": "Actual Players"
           },
           {
-            "expr": "helios_forecast_value{customer='gaming-corp', metric='concurrent_users', horizon='1h'}",
+            "expr": "prescale_forecast_value{customer='gaming-corp', metric='concurrent_users', horizon='1h'}",
             "legendFormat": "Predicted (1h)"
           }
         ]
@@ -549,7 +549,7 @@ scheduler.add_event(
         "type": "stat",
         "targets": [
           {
-            "expr": "helios_anomaly_score{customer='gaming-corp'}",
+            "expr": "prescale_anomaly_score{customer='gaming-corp'}",
             "legendFormat": "Anomaly Score"
           }
         ],
@@ -564,7 +564,7 @@ scheduler.add_event(
         "type": "table",
         "targets": [
           {
-            "expr": "helios_recommendation{customer='gaming-corp'}",
+            "expr": "prescale_recommendation{customer='gaming-corp'}",
             "format": "table"
           }
         ]
@@ -658,7 +658,7 @@ class CloudWatchAdapter(MetricsAdapter):
 ### Database Schema
 
 ```sql
--- Multi-tenant schema for Helios SaaS
+-- Multi-tenant schema for Prescale SaaS
 CREATE TABLE customers (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -717,7 +717,7 @@ CREATE TABLE anomalies (
 from fastapi import FastAPI, Depends, HTTPException, Header
 from typing import Optional
 
-app = FastAPI(title="Helios Multi-Tenant API")
+app = FastAPI(title="Prescale Multi-Tenant API")
 
 async def get_customer(x_api_key: str = Header(...)):
     """Validate API key and return customer context."""
