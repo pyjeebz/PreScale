@@ -1,4 +1,4 @@
-"""Pydantic models for Helios Inference API."""
+"""Pydantic models for Prescale Inference API."""
 
 from datetime import datetime
 from enum import Enum

@@ -1,5 +1,5 @@
 """
-Helios ML Tests
+Prescale ML Tests
 
 Unit tests for ML models: Baseline, Prophet, and XGBoost.
 """
@@ -334,13 +334,13 @@ class TestTrainingPipeline:
 
     def test_import_pipeline(self):
         """Test that training pipeline can be imported."""
-        from train import HeliosTrainingPipeline
-        assert HeliosTrainingPipeline is not None
+        from train import PrescaleTrainingPipeline
+        assert PrescaleTrainingPipeline is not None
 
     def test_pipeline_initialization(self):
         """Test pipeline initialization."""
-        from train import HeliosTrainingPipeline
-        pipeline = HeliosTrainingPipeline(
+        from train import PrescaleTrainingPipeline
+        pipeline = PrescaleTrainingPipeline(
             output_dir="test_artifacts",
             target_metric="cpu_usage"
         )

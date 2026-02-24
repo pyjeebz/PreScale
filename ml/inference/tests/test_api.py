@@ -1,4 +1,4 @@
-"""Tests for Helios Inference Service."""
+"""Tests for Prescale Inference Service."""
 
 from datetime import datetime, timedelta
 
@@ -52,7 +52,7 @@ class TestHealthEndpoints:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["service"] == "helios-inference"
+        assert data["service"] == "prescale-inference"
         assert "version" in data
 
 
@@ -262,8 +262,8 @@ class TestMetrics:
 
         # Check for expected metrics
         content = response.text
-        assert "helios_" in content
-        assert "helios_up" in content or "helios_requests_total" in content
+        assert "prescale_" in content
+        assert "prescale_up" in content or "prescale_requests_total" in content
 
 
 class TestStats:

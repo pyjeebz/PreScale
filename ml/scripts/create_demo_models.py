@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Demo Models for Helios
+Generate Demo Models for Prescale
 
 Creates pre-trained demo models that can be used for testing and evaluation
 without requiring users to set up their own data pipelines.
@@ -202,7 +202,7 @@ def create_anomaly_detector(data: pd.DataFrame, output_dir: Path) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate demo models for Helios")
+    parser = argparse.ArgumentParser(description="Generate demo models for Prescale")
     parser.add_argument(
         "--output-dir",
         type=str,

@@ -1,5 +1,5 @@
 """
-Train ML models for Helios inference service.
+Train ML models for Prescale inference service.
 
 This script trains:
 1. Time series forecasting model (XGBoost) for CPU/memory predictions
@@ -265,7 +265,7 @@ def save_model(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Helios ML models")
+    parser = argparse.ArgumentParser(description="Train Prescale ML models")
     parser.add_argument(
         "--output-dir", type=str, default="./models", help="Output directory for trained models"
     )
@@ -276,7 +276,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("HELIOS ML MODEL TRAINING")
+    print("PRESCALE ML MODEL TRAINING")
     print("=" * 60)
 
     # Generate synthetic training data
@@ -311,7 +311,7 @@ def main():
     print("=" * 60)
     print(f"\nModels saved to: {output_dir.absolute()}")
     print("\nTo deploy, copy models to GCS:")
-    print(f"  gsutil -m cp -r {output_dir}/* gs://helios-models/")
+    print(f"  gsutil -m cp -r {output_dir}/* gs://prescale-models/")
 
 
 if __name__ == "__main__":

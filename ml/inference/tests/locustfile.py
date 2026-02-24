@@ -1,5 +1,5 @@
 """
-Locust load testing for Helios Inference Service.
+Locust load testing for Prescale Inference Service.
 
 Run with:
     locust -f locustfile.py --host=http://localhost:8080
@@ -13,7 +13,7 @@ import random
 from locust import HttpUser, between, task
 
 
-class HeliosInferenceUser(HttpUser):
+class PrescaleInferenceUser(HttpUser):
     """Simulates user behavior against the inference service."""
 
     wait_time = between(0.1, 0.5)  # Fast requests for load testing
@@ -83,8 +83,8 @@ class HeliosInferenceUser(HttpUser):
     def get_recommendations(self):
         """Scaling recommendations."""
         payload = {
-            "workload": random.choice(["saleor-api", "saleor-worker", "helios-inference"]),
-            "namespace": random.choice(["saleor", "helios"]),
+            "workload": random.choice(["saleor-api", "saleor-worker", "prescale-inference"]),
+            "namespace": random.choice(["saleor", "prescale"]),
             "current_state": {
                 "replicas": random.randint(1, 5),
                 "cpu_request": random.choice(["100m", "250m", "500m"]),

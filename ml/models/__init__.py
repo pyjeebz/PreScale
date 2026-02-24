@@ -1,4 +1,4 @@
-"""Models module for Helios ML."""
+"""Models module for Prescale ML."""
 
 from .baseline import BaselineModel
 from .prophet_model import ProphetForecaster

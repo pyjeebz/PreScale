@@ -1,4 +1,4 @@
-"""Configuration for Helios Inference Service."""
+"""Configuration for Prescale Inference Service."""
 
 import os
 from dataclasses import dataclass, field
@@ -32,9 +32,9 @@ class MetricsConfig:
     """Prometheus metrics configuration."""
 
     enabled: bool = True
-    prefix: str = "helios"
+    prefix: str = "prescale"
     default_labels: dict = field(
-        default_factory=lambda: {"service": "helios-inference", "version": "0.1.0"}
+        default_factory=lambda: {"service": "prescale-inference", "version": "0.1.0"}
     )
 
 
@@ -131,7 +131,7 @@ class InferenceConfig:
             ),
             metrics=MetricsConfig(
                 enabled=os.getenv("METRICS_ENABLED", "true").lower() == "true",
-                prefix=os.getenv("METRICS_PREFIX", "helios"),
+                prefix=os.getenv("METRICS_PREFIX", "prescale"),
             ),
             anomaly=AnomalyConfig(
                 default_threshold_sigma=float(os.getenv("ANOMALY_THRESHOLD", "2.5")),
@@ -147,7 +147,7 @@ class InferenceConfig:
             ),
             auth=AuthConfig(
                 enabled=os.getenv("AUTH_ENABLED", "false").lower() == "true",
-                api_key=os.getenv("HELIOS_API_KEY", ""),
+                api_key=os.getenv("PRESCALE_API_KEY", ""),
             ),
             retraining=RetrainingConfig(
                 enabled=os.getenv("RETRAIN_ENABLED", "true").lower() == "true",

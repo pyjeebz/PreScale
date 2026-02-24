@@ -1,5 +1,5 @@
 """
-Database models for Helios deployments and agents.
+Database models for Prescale deployments and agents.
 
 Uses in-memory storage for simplicity. Can be replaced with SQLite/PostgreSQL later.
 """

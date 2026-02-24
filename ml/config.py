@@ -1,5 +1,5 @@
 """
-Helios ML Configuration
+Prescale ML Configuration
 
 Central configuration for GCP project, metrics, and model parameters.
 """
@@ -17,7 +17,7 @@ class GCPConfig:
     )
     region: str = field(default_factory=lambda: os.environ.get("GCP_REGION", "us-central1"))
     gke_cluster: str = field(
-        default_factory=lambda: os.environ.get("GKE_CLUSTER_NAME", "helios-dev-gke")
+        default_factory=lambda: os.environ.get("GKE_CLUSTER_NAME", "prescale-dev-gke")
     )
 
 
@@ -84,7 +84,7 @@ class ModelConfig:
 
 
 @dataclass
-class HeliosConfig:
+class PrescaleConfig:
     """Main configuration container."""
 
     gcp: GCPConfig = field(default_factory=GCPConfig)
@@ -97,4 +97,4 @@ class HeliosConfig:
 
 
 # Global config instance
-config = HeliosConfig()
+config = PrescaleConfig()

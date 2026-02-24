@@ -1,5 +1,5 @@
 """
-Helios Inference Service - FastAPI Application
+Prescale Inference Service - FastAPI Application
 
 Real-time ML inference API for infrastructure predictions,
 anomaly detection, and scaling recommendations.
@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     # Startup
-    logger.info("Starting Helios Inference Service...")
+    logger.info("Starting Prescale Inference Service...")
     init_metrics()
 
     # Load models
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     retrain_scheduler.stop()
-    logger.info("Shutting down Helios Inference Service...")
+    logger.info("Shutting down Prescale Inference Service...")
     set_ready(False)
 
 
@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
 # =============================================================================
 
 app = FastAPI(
-    title="Helios Inference Service",
+    title="Prescale Inference Service",
     description=(
         "Real-time ML inference API for predictive infrastructure intelligence. "
         "Provides time-series forecasting, anomaly detection, and scaling recommendations."
@@ -410,7 +410,7 @@ async def prometheus_metrics():
 
 
 # =============================================================================
-# Ingestion Endpoint (from helios-agent)
+# Ingestion Endpoint (from prescale-agent)
 # =============================================================================
 
 
@@ -420,7 +420,7 @@ async def prometheus_metrics():
     summary="Ingest metrics from agents",
 )
 async def ingest_metrics(request: Request) -> dict:
-    """Receive metrics from helios-agent and acknowledge receipt.
+    """Receive metrics from prescale-agent and acknowledge receipt.
 
     The agent posts a JSON payload like:
     {
@@ -553,7 +553,7 @@ async def get_metric_latest(
 async def root() -> dict[str, Any]:
     """Get service information."""
     return {
-        "service": "helios-inference",
+        "service": "prescale-inference",
         "version": __version__,
         "status": "running",
         "docs": "/docs",

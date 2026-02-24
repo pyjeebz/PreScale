@@ -1,5 +1,5 @@
 """
-Helios ML Training Pipeline
+Prescale ML Training Pipeline
 
 Orchestrates data fetching, feature engineering, model training, and evaluation.
 """
@@ -23,9 +23,9 @@ from pipeline.data_fetcher import CloudMonitoringFetcher
 from pipeline.feature_engineering import FeatureEngineer
 
 
-class HeliosTrainingPipeline:
+class PrescaleTrainingPipeline:
     """
-    End-to-end training pipeline for Helios ML models.
+    End-to-end training pipeline for Prescale ML models.
 
     Pipeline stages:
     1. Fetch data from Cloud Monitoring
@@ -487,7 +487,7 @@ class HeliosTrainingPipeline:
             Dictionary with all results
         """
         print("\n" + "=" * 60)
-        print("HELIOS ML TRAINING PIPELINE")
+        print("PRESCALE ML TRAINING PIPELINE")
         print("=" * 60)
         print(f"Started at: {datetime.now()}")
         print(f"Config: {hours} hours, namespace='{namespace}'")
@@ -529,7 +529,7 @@ def main():
     """Main entry point for training."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Train Helios ML models")
+    parser = argparse.ArgumentParser(description="Train Prescale ML models")
     parser.add_argument("--hours", type=int, default=config.default_lookback_hours,
                        help="Hours of historical data to fetch")
     parser.add_argument("--namespace", type=str, default="loadtest",
@@ -538,7 +538,7 @@ def main():
                        help="Target metric to forecast (rps, cpu_utilization, etc.)")
     args = parser.parse_args()
     
-    pipeline = HeliosTrainingPipeline(
+    pipeline = PrescaleTrainingPipeline(
         output_dir="artifacts",
         target_metric=args.target,
     )

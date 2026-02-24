@@ -1,4 +1,4 @@
-"""Prometheus metrics exporter for Helios inference service."""
+"""Prometheus metrics exporter for Prescale inference service."""
 
 import time
 from typing import Optional
@@ -27,7 +27,7 @@ SERVICE_INFO = Info(
 SERVICE_INFO.info(
     {
         "version": "0.1.0",
-        "service": "helios-inference",
+        "service": "prescale-inference",
     }
 )
 

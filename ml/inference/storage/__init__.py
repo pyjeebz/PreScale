@@ -1,5 +1,5 @@
 """
-Helios Storage Backends.
+Prescale Storage Backends.
 
 Pluggable storage layer supporting SQLite (default) and in-memory backends.
 """

@@ -1,4 +1,4 @@
-# Helios ML - Phase 4 Dependencies
+# Prescale ML - Phase 4 Dependencies
 
 # Data Processing
 pandas>=2.0.0

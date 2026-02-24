@@ -1,4 +1,4 @@
-# Helios Inference Service
+# Prescale Inference Service
 """
 Real-time ML inference API for infrastructure predictions,
 anomaly detection, and scaling recommendations.

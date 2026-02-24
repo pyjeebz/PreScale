@@ -2,7 +2,7 @@
 AWS CloudWatch Data Fetcher for ML Training.
 
 Mirrors CloudMonitoringFetcher but for AWS CloudWatch metrics.
-Returns same DataFrame format for seamless integration with HeliosTrainingPipeline.
+Returns same DataFrame format for seamless integration with PrescaleTrainingPipeline.
 """
 
 import logging
@@ -34,7 +34,7 @@ class CloudWatchFetcher:
     - Application Load Balancer metrics
 
     Returns DataFrames in the same format as CloudMonitoringFetcher
-    for drop-in compatibility with HeliosTrainingPipeline.
+    for drop-in compatibility with PrescaleTrainingPipeline.
     """
 
     def __init__(

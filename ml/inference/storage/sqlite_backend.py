@@ -1,5 +1,5 @@
 """
-SQLite storage backend for Helios.
+SQLite storage backend for Prescale.
 
 Provides persistent storage for deployments, agents, and metrics using SQLite.
 Drop-in replacement for the in-memory stores in db.py.
@@ -16,7 +16,7 @@ from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = Path(__file__).parent.parent / "helios.db"
+DEFAULT_DB_PATH = Path(__file__).parent.parent / "prescale.db"
 
 
 class SQLiteDeploymentStore:
