@@ -1,12 +1,12 @@
-# Helios
+# Prescale
 
 **Predictive Infrastructure Intelligence Platform**
 
-[![CI](https://github.com/pyjeebz/helios/actions/workflows/ci.yml/badge.svg)](https://github.com/pyjeebz/helios/actions/workflows/ci.yml)
-[![Release](https://github.com/pyjeebz/helios/actions/workflows/release.yml/badge.svg)](https://github.com/pyjeebz/helios/actions/workflows/release.yml)
+[![CI](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml)
+[![Release](https://github.com/pyjeebz/prescale/actions/workflows/release.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Helios uses machine learning to forecast infrastructure demand, detect anomalies, and provide proactive scaling recommendations. It supports multi-cloud metrics collection, real-time dashboards, and extensible agent architecture.
+Prescale uses machine learning to forecast infrastructure demand, detect anomalies, and provide proactive scaling recommendations. It supports multi-cloud metrics collection, real-time dashboards, and extensible agent architecture.
 
 ---
 
@@ -15,7 +15,7 @@ Helios uses machine learning to forecast infrastructure demand, detect anomalies
 ### Option 1: Docker (Easiest)
 
 ```bash
-docker run -d -p 8080:8080 ghcr.io/pyjeebz/helios/inference:latest
+docker run -d -p 8080:8080 ghcr.io/pyjeebz/prescale/inference:latest
 # Open http://localhost:8080
 ```
 
@@ -25,8 +25,8 @@ docker run -d -p 8080:8080 ghcr.io/pyjeebz/helios/inference:latest
 
 ```bash
 # Clone and setup
-git clone https://github.com/pyjeebz/helios.git
-cd helios
+git clone https://github.com/pyjeebz/prescale.git
+cd prescale
 
 # Python environment
 python -m venv .venv
@@ -47,8 +47,8 @@ npm run dev
 ### Option 3: Kubernetes (Helm)
 
 ```bash
-helm repo add helios https://pyjeebz.github.io/helios
-helm install helios helios/helios
+helm repo add prescale https://pyjeebz.github.io/prescale
+helm install prescale prescale/prescale
 ```
 
 ### First Steps After Setup
@@ -68,7 +68,7 @@ helm install helios helios/helios
 | **Scaling Recommendations** | Proactive advice for resource scaling |
 | **Multi-Cloud Support** | GCP, AWS, Azure, Prometheus, custom sources |
 | **Web Dashboard** | Real-time charts, agent map, predictions, anomalies |
-| **CLI Tools** | `helios` CLI for predictions, anomaly detection, recommendations |
+| **CLI Tools** | `prescale` CLI for predictions, anomaly detection, recommendations |
 | **Pluggable Storage** | In-memory (dev), PostgreSQL, TimescaleDB, InfluxDB (planned) |
 
 ---
@@ -77,7 +77,7 @@ helm install helios helios/helios
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Helios Agent ──► ML Pipeline ──► Inference Service (API)   │
+│  Prescale Agent ──► ML Pipeline ──► Inference Service (API)  │
 │     │                │                │                     │
 │     ▼                ▼                ▼                     │
 │  Metrics         Training         Predictions/Anomalies     │
@@ -91,19 +91,19 @@ helm install helios helios/helios
 ## 📁 Project Structure
 
 ```
-helios/
+prescale/
 ├── agent/              # Metrics collection agent (pluggable sources)
 ├── cli/                # CLI tools for predictions/anomalies/recommendations
 ├── ml/                 # ML models, training, inference service (FastAPI)
 │   └── inference/web/  # Vue.js web dashboard
 ├── infra/              # Kubernetes, Terraform, Docker, Helm
-├── charts/helios/      # Helm chart
+├── charts/prescale/    # Helm chart
 ├── docs/               # Documentation
 ```
 
 ---
 
-## 🤖 Helios Agent
+## 🤖 Prescale Agent
 
 Collects metrics from:
 - System (CPU, memory, disk, network)
@@ -116,11 +116,11 @@ Collects metrics from:
 ### Installation
 
 ```bash
-pip install helios-agent
-pip install helios-agent[gcp]      # GCP
-pip install helios-agent[aws]      # AWS
-pip install helios-agent[azure]    # Azure
-pip install helios-agent[all]      # All backends
+pip install prescale-agent
+pip install prescale-agent[gcp]      # GCP
+pip install prescale-agent[aws]      # AWS
+pip install prescale-agent[azure]    # Azure
+pip install prescale-agent[all]      # All backends
 ```
 
 ### Configuration
@@ -143,8 +143,8 @@ sources:
       queries:
         - name: cpu_usage
           query: rate(container_cpu_usage_seconds_total[5m])
-helios:
-  endpoint: http://helios-inference:8080
+prescale:
+  endpoint: http://prescale-inference:8080
 ```
 
 ---

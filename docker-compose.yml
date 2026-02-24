@@ -1,4 +1,4 @@
-# Helios - Local Development Docker Compose
+# Prescale - Local Development Docker Compose
 # Use for local development and testing
 
 services:
@@ -80,4 +80,4 @@ volumes:
 
 networks:
   default:
-    name: helios-network
+    name: prescale-network

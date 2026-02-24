@@ -1,11 +1,11 @@
-# Helios - Makefile for common operations
+# Prescale - Makefile for common operations
 # Run 'make help' to see available commands
 
 .PHONY: help install dev up down build test clean lint
 
 # Default target
 help:
-	@echo "Helios Development Commands"
+	@echo "Prescale Development Commands"
 	@echo "============================"
 	@echo ""
 	@echo "Local Development:"
@@ -26,7 +26,7 @@ help:
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make clean       - Remove build artifacts"
-	@echo "  make agent       - Run Helios agent locally"
+	@echo "  make agent       - Run Prescale agent locally"
 
 # ============================================================================
 # Local Development
@@ -41,7 +41,7 @@ dev:
 	cd ml && python -m uvicorn inference.app:app --host 0.0.0.0 --port 8080 --reload
 
 agent:
-	cd agent && python -m helios_agent run --config ../helios-agent.yaml
+	cd agent && python -m prescale_agent run --config ../prescale-agent.yaml
 
 # ============================================================================
 # Docker Compose
@@ -93,16 +93,16 @@ format:
 # ============================================================================
 
 k8s-apply:
-	kubectl apply -f infra/kubernetes/helios-inference/
+	kubectl apply -f infra/kubernetes/prescale-inference/
 
 k8s-delete:
-	kubectl delete -f infra/kubernetes/helios-inference/
+	kubectl delete -f infra/kubernetes/prescale-inference/
 
 k8s-logs:
-	kubectl logs -n helios -l app.kubernetes.io/name=helios-inference -f
+	kubectl logs -n prescale -l app.kubernetes.io/name=prescale-inference -f
 
 k8s-status:
-	kubectl get pods,svc,deploy -n helios
+	kubectl get pods,svc,deploy -n prescale
 
 # ============================================================================
 # Cleanup

@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "helios-platform"
+name = "prescale-platform"
 version = "0.1.0"
 description = "Predictive Infrastructure Intelligence Platform - ML-powered forecasting and autoscaling"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.9"
 authors = [
-    {name = "Helios Platform", email = "maintainers@helios.dev"}
+    {name = "Prescale Platform", email = "maintainers@prescale.dev"}
 ]
 keywords = [
     "kubernetes",
@@ -47,7 +47,7 @@ dependencies = [
 
 [project.optional-dependencies]
 agent = [
-    "helios-agent>=0.1.0",
+    "prescale-agent>=0.1.0",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -57,13 +57,13 @@ dev = [
 ]
 
 [project.scripts]
-helios = "helios_cli.main:cli"
+prescale = "prescale_cli.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/pyjeebz/helios"
-Documentation = "https://pyjeebz.github.io/helios"
-Repository = "https://github.com/pyjeebz/helios"
-Issues = "https://github.com/pyjeebz/helios/issues"
+Homepage = "https://github.com/pyjeebz/prescale"
+Documentation = "https://pyjeebz.github.io/prescale"
+Repository = "https://github.com/pyjeebz/prescale"
+Issues = "https://github.com/pyjeebz/prescale/issues"
 
 [tool.setuptools.packages.find]
 where = ["cli/src"]

@@ -11,6 +11,9 @@ sources:
     metrics:
       - "kubernetes.io/node/cpu/allocatable_utilization"
       - "kubernetes.io/node/memory/allocatable_utilization"
+      - kubernetes.io/container/cpu/limit_utilization
+      - kubernetes.io/container/memory/limit_utilization
+      - kubernetes.io/container/memory/used_bytes
     labels:
       deployment: "8b6e5836"
       environment: "production"

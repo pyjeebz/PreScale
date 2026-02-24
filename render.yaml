@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: helios-inference
+    name: prescale-inference
     env: docker
     dockerfilePath: ./ml/inference/Dockerfile
     dockerContext: ./ml

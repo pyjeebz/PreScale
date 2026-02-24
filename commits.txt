@@ -1,0 +1,90 @@
+First commit
+feat: Add Terraform modules for GCP infrastructure setup
+Add load testing framework with personas and traffic patterns
+feat: Add Kubernetes configuration for Locust load testing setup
+feat: Enhance monitoring setup with Grafana and Prometheus configurations
+feat: Phase 3 - Observability with GKE Managed Prometheus
+Phase 4: ML pipeline with baseline, Prophet, and XGBoost models
+feat(kubernetes): Add Prescale Inference Service with autoscaling and monitoring
+Add predictor and recommender services for time-series forecasting and scaling decisions
+feat(kubernetes): Add ConfigMap and Deployment for cost intelligence service; update inference service image and config
+ Implement cost forecasting and savings analysis modules
+Add comprehensive documentation for Prescale ML Pipeline, Inference Service, and Cost Intelligence Dashboard
+Add Windows and Bash setup scripts for GCP configuration
+Update README.md with new content and formatting improvements
+Update README.md with new content and formatting improvements
+Reorganize repo: separate core product from demo environment
+Remove obsolete metric fetching scripts and training data
+Add Apache License 2.0
+Phase 1: Open Source Core Foundation
+fix(ci): Make lint and security scan more lenient
+fix: Update GitHub URLs from placeholder to pyjeebz/prescale
+style: Auto-fix formatting and import sorting
+Add unified metrics collection agent with pluggable sources
+docs: Add prescale-agent documentation to README
+fix: Correct Docker COPY paths for CI build context
+feat: Add CI badges, quick deploy buttons, and Render config
+fix: Use PYPI_API_TOKEN instead of OIDC for PyPI publishing
+fix: Fix README encoding (UTF-16 to UTF-8) and add Helm dependency update step
+fix: Rename packages to prescale-platform and prescale-platform-agent for PyPI uniqueness
+feat: Add GitHub Pages workflow for Helm chart repository
+chore: Trigger Helm Pages deployment
+feat: Add ingestion endpoint for metrics from prescale-agent and create initial agent configuration
+fix: open-source readiness - port alignment, docker-compose, Makefile
+feat(agent): enhance GCP Cloud Monitoring collector with robust value extraction
+feat(config): add GCP Cloud Monitoring backend configuration
+feat(ml): add CLI args and portable model format for training pipeline
+feat(inference): add portable model loaders for production deployment
+feat(k8s): add GCS model download init container for inference deployment
+feat(cli): enhance predict, detect, and recommend commands with rich output
+build(ml): add Cloud Build configuration for inference container
+build(cli): add pyproject.toml for prescale-cli package
+chore: update .gitignore to exclude ML artifacts and temp files
+chore(gitignore): add Prescale-specific exclusions for artifacts and temp files
+docs(readme): comprehensive rewrite with updated architecture and features
+docs(cli): complete CLI documentation with examples and options
+docs(quickstart): rewrite with three deployment options
+docs(infra): modernize deployment guide with current architecture
+docs(examples): clarify demo environment purpose and usage
+chore: remove unnecessary files and duplicate directories
+Add example agent configuration with all sources documented
+Add ML model tests for baseline, prophet, and xgboost
+Add agent package tests and README for PyPI
+Add CLI tests and fix pyproject.toml URLs
+Update CI workflow with separate test jobs for ML, agent, and CLI
+Update release workflow to publish both agent and CLI to PyPI
+Add script to generate demo models for testing
+Add optional API key authentication for inference service
+Bump agent to v0.2.0, update default endpoint to deployed service
+Rename package to prescale-agent
+ci: retrigger build
+chore: move files from web-ui to main
+fix: resolve stash pop conflicts by keeping stashed versions
+docs: update README with latest from web-ui
+fix(web): Update vite proxy config for API routing
+feat(web): Simplify dashboard to focus on AI insights - remove heavy metrics charts
+feat(web): Add AgentInstall page with copy-to-clipboard and live status
+feat(web): Add DeploymentsOverview page with create modal and environment badges
+fix(web): Update Predictions page styling and fix API calls
+fix(web): Update Anomalies page with improved detection display
+feat(web): Add routes for AgentInstall and DeploymentsOverview pages
+feat(web): Add deployments Pinia store for multi-deployment management
+feat(web): Add agents Pinia store for agent status management
+feat(web): Update App.vue with deployment selector in header and new navigation
+feat(web): Add API service with ML endpoints for predict, detect, recommend
+feat(web): Add reusable UI components (charts, badges, modals, stats cards)
+style(web): Add global styles with Tailwind CSS configuration
+chore(web): Add Vue app entry point and TypeScript declarations
+chore(web): Add package.json with Vue, Tailwind, and Chart.js dependencies
+chore(web): Add TypeScript configuration files
+chore(web): Add Tailwind CSS and PostCSS configuration
+chore(web): Add HTML entry point for Vue application
+docs: Update README files with web dashboard documentation
+docs: Enhance Quick Start with clearer setup options and first steps
+docs: Update installation instructions to reflect package name change from prescale-platform-agent to prescale-agent
+security: Remove GCP project ID from tracked config, add example file
+fix: Update hostname retrieval logic in ingest_metrics function
+fix: Update API target ports in Vite configuration
+fix: Handle null values in anomaly deviation and value display
+fix: Handle potential null values in action confidence display
+fix: Merge config-level labels into collected metrics

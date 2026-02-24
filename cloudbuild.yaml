@@ -4,16 +4,16 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/helios-inference:${_TAG_NAME}'
+      - 'gcr.io/$PROJECT_ID/prescale-inference:${_TAG_NAME}'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/helios-inference:latest'
+      - 'gcr.io/$PROJECT_ID/prescale-inference:latest'
       - '-f'
       - 'ml/inference/Dockerfile'
       - 'ml'
 
 images:
-  - 'gcr.io/$PROJECT_ID/helios-inference:${_TAG_NAME}'
-  - 'gcr.io/$PROJECT_ID/helios-inference:latest'
+  - 'gcr.io/$PROJECT_ID/prescale-inference:${_TAG_NAME}'
+  - 'gcr.io/$PROJECT_ID/prescale-inference:latest'
 
 substitutions:
   _TAG_NAME: '0.1.0'

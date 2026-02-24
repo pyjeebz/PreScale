@@ -1,6 +1,6 @@
-# Contributing to Helios
+# Contributing to Prescale
 
-Thank you for your interest in contributing to Helios! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Prescale! This document provides guidelines and information for contributors.
 
 ## 📋 Table of Contents
 
@@ -16,7 +16,7 @@ Thank you for your interest in contributing to Helios! This document provides gu
 
 ## Code of Conduct
 
-This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [conduct@helios.dev](mailto:conduct@helios.dev).
+This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [conduct@prescale.dev](mailto:conduct@prescale.dev).
 
 ## Getting Started
 
@@ -33,12 +33,12 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/helios.git
-   cd helios
+   git clone https://github.com/YOUR_USERNAME/prescale.git
+   cd prescale
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/pyjeebz/helios.git
+   git remote add upstream https://github.com/pyjeebz/prescale.git
    ```
 
 ## Development Setup
@@ -82,7 +82,7 @@ pytest tests/ -v
 docker-compose up -d
 
 # Or deploy to local Kubernetes
-helm install helios ./charts/helios --namespace helios --create-namespace
+helm install prescale ./charts/prescale --namespace prescale --create-namespace
 ```
 
 ## How to Contribute
@@ -288,14 +288,14 @@ def predict_cpu(data: pd.DataFrame, horizon: int = 24) -> Dict[str, Any]:
 
 - **GitHub Discussions**: Ask questions and share ideas
 - **Discord**: Real-time chat with the community
-- **Stack Overflow**: Tag questions with `helios-ml`
+- **Stack Overflow**: Tag questions with `prescale-ml`
 
 ### Maintainers
 
 Questions about contributing? Reach out to:
 
 - GitHub: [@pyjeebz](https://github.com/pyjeebz)
-- Email: [maintainers@helios.dev](mailto:maintainers@helios.dev)
+- Email: [maintainers@prescale.dev](mailto:maintainers@prescale.dev)
 
 ### Recognition
 
@@ -308,6 +308,6 @@ Contributors are recognized in:
 
 ## License
 
-By contributing to Helios, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
+By contributing to Prescale, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
 
-Thank you for contributing to Helios! 🚀
+Thank you for contributing to Prescale! 🚀

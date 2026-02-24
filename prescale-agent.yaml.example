@@ -1,10 +1,10 @@
-# Helios Agent Configuration
+# Prescale Agent Configuration
 # Unified metrics collection from any monitoring backend
 
-# Helios API endpoint
+# Prescale API endpoint
 endpoint:
   url: http://localhost:8080
-  api_key: ${HELIOS_API_KEY}  # Or set via environment
+  api_key: ${PRESCALE_API_KEY}  # Or set via environment
   timeout: 30
   retry_attempts: 3
 
