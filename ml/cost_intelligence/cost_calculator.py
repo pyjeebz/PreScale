@@ -186,10 +186,10 @@ class CostCalculator:
             ),
         ]
 
-        helios_workloads = [
+        prescale_workloads = [
             self.calculate_workload_cost(
-                name="helios-inference",
-                namespace="helios",
+                name="prescale-inference",
+                namespace="prescale",
                 cpu_cores=0.1,
                 memory_gb=0.256,
                 replicas=2,
@@ -221,7 +221,7 @@ class CostCalculator:
 
         namespaces = [
             self.calculate_namespace_cost("saleor", saleor_workloads),
-            self.calculate_namespace_cost("helios", helios_workloads),
+            self.calculate_namespace_cost("prescale", prescale_workloads),
             self.calculate_namespace_cost("monitoring", monitoring_workloads),
         ]
 

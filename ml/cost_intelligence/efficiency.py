@@ -166,8 +166,8 @@ class EfficiencyAnalyzer:
                 "memory_used": 0.128,  # 50% usage
             },
             {
-                "name": "helios-inference",
-                "namespace": "helios",
+                "name": "prescale-inference",
+                "namespace": "prescale",
                 "cpu_requested": 0.2,  # 2 replicas * 0.1 cores
                 "cpu_used": 0.05,  # 25% usage
                 "memory_requested": 0.512,

@@ -32,20 +32,20 @@ logger = logging.getLogger(__name__)
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
-    "helios_cost_requests_total", "Total cost API requests", ["endpoint", "method", "status"]
+    "prescale_cost_requests_total", "Total cost API requests", ["endpoint", "method", "status"]
 )
 
 COST_GAUGE = Gauge(
-    "helios_cost_current", "Current costs by namespace and resource", ["namespace", "resource"]
+    "prescale_cost_current", "Current costs by namespace and resource", ["namespace", "resource"]
 )
 
-SAVINGS_GAUGE = Gauge("helios_savings_total", "Total savings by type", ["type"])
+SAVINGS_GAUGE = Gauge("prescale_savings_total", "Total savings by type", ["type"])
 
-EFFICIENCY_GAUGE = Gauge("helios_efficiency", "Resource efficiency by namespace", ["namespace"])
+EFFICIENCY_GAUGE = Gauge("prescale_efficiency", "Resource efficiency by namespace", ["namespace"])
 
-FORECAST_GAUGE = Gauge("helios_cost_forecast", "Cost forecast by period", ["period"])
+FORECAST_GAUGE = Gauge("prescale_cost_forecast", "Cost forecast by period", ["period"])
 
-REQUEST_LATENCY = Histogram("helios_cost_request_latency_seconds", "Request latency", ["endpoint"])
+REQUEST_LATENCY = Histogram("prescale_cost_request_latency_seconds", "Request latency", ["endpoint"])
 
 
 def update_metrics():
@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Helios Cost Intelligence",
+    title="Prescale Cost Intelligence",
     description="Cost analysis and optimization API for Kubernetes infrastructure",
     version="0.1.0",
     lifespan=lifespan,

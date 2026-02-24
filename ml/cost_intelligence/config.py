@@ -49,7 +49,7 @@ class InferenceConfig:
 
     url: str = field(
         default_factory=lambda: os.environ.get(
-            "INFERENCE_URL", "http://helios-inference.helios.svc.cluster.local"
+            "INFERENCE_URL", "http://prescale-inference.prescale.svc.cluster.local"
         )
     )
     timeout: int = field(default_factory=lambda: int(os.environ.get("INFERENCE_TIMEOUT", "10")))

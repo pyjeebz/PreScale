@@ -185,8 +185,8 @@ class SavingsAnalyzer:
             ),
             SavingsEvent(
                 timestamp=now - timedelta(days=1),
-                workload="helios-inference",
-                namespace="helios",
+                workload="prescale-inference",
+                namespace="prescale",
                 optimization_type=OptimizationType.RIGHTSIZING,
                 savings_hourly=0.01,
                 savings_monthly=7.20,
@@ -202,7 +202,7 @@ class SavingsAnalyzer:
 
         savings_by_type = {OptimizationType.AUTOSCALING: 25.20, OptimizationType.RIGHTSIZING: 7.20}
 
-        savings_by_namespace = {"saleor": 25.20, "helios": 7.20}
+        savings_by_namespace = {"saleor": 25.20, "prescale": 7.20}
 
         return events, total_savings, savings_by_type, savings_by_namespace
 
