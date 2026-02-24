@@ -1,4 +1,4 @@
-"""Configuration commands for Helios CLI."""
+"""Configuration commands for Prescale CLI."""
 
 import json
 import os
@@ -11,15 +11,15 @@ from rich.table import Table
 
 console = Console()
 
-CONFIG_DIR = Path.home() / ".helios"
+CONFIG_DIR = Path.home() / ".prescale"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
 
 @click.group()
 def config() -> None:
-    """Manage Helios CLI configuration.
+    """Manage Prescale CLI configuration.
     
-    Configure endpoints, credentials, and preferences for the Helios CLI.
+    Configure endpoints, credentials, and preferences for the Prescale CLI.
     """
     pass
 
@@ -63,15 +63,15 @@ def set(key: str, value: str) -> None:
     Available keys:
     
     \b
-      endpoint    - Helios API endpoint URL
+      endpoint    - Prescale API endpoint URL
       api_key     - API key for authentication
       output      - Default output format (table, json, yaml)
     
     Examples:
     
     \b
-      helios config set endpoint http://helios.example.com:8000
-      helios config set output json
+      prescale config set endpoint http://prescale.example.com:8000
+      prescale config set output json
     """
     valid_keys = ["endpoint", "api_key", "output"]
     
@@ -97,7 +97,7 @@ def unset(key: str) -> None:
     """Remove a configuration value.
     
     Example:
-        helios config unset api_key
+        prescale config unset api_key
     """
     config_data = _load_config()
     
@@ -113,15 +113,15 @@ def unset(key: str) -> None:
 def init() -> None:
     """Initialize configuration interactively.
     
-    Guides you through setting up the Helios CLI configuration.
+    Guides you through setting up the Prescale CLI configuration.
     """
-    console.print("[bold]Helios CLI Configuration[/bold]")
+    console.print("[bold]Prescale CLI Configuration[/bold]")
     console.print()
     
     # Endpoint
     default_endpoint = "http://localhost:8000"
     endpoint = click.prompt(
-        "Helios API endpoint",
+        "Prescale API endpoint",
         default=default_endpoint,
     )
     
@@ -154,7 +154,7 @@ def init() -> None:
     console.print(f"[green]✓[/green] Configuration saved to {CONFIG_FILE}")
     console.print()
     console.print("[bold]Test your connection:[/bold]")
-    console.print("  helios status")
+    console.print("  prescale status")
 
 
 @config.command()
@@ -206,7 +206,7 @@ def _display_config(config_data: dict) -> None:
     # API Key
     api_key = file_config.get("api_key", "")
     api_key_display = "***" if api_key else "(not set)"
-    api_key_source = "config file" if api_key else "env: HELIOS_API_KEY" if runtime.get("api_key_set") else "(not set)"
+    api_key_source = "config file" if api_key else "env: PRESCALE_API_KEY" if runtime.get("api_key_set") else "(not set)"
     table.add_row("api_key", api_key_display, api_key_source)
     
     # Output
@@ -217,5 +217,5 @@ def _display_config(config_data: dict) -> None:
     
     console.print()
     console.print("[bold]Environment Variables:[/bold]")
-    console.print("  HELIOS_ENDPOINT - Override API endpoint")
-    console.print("  HELIOS_API_KEY  - API key for authentication")
+    console.print("  PRESCALE_ENDPOINT - Override API endpoint")
+    console.print("  PRESCALE_API_KEY  - API key for authentication")

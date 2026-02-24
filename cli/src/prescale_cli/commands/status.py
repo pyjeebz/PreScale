@@ -1,4 +1,4 @@
-"""Status command for Helios CLI."""
+"""Status command for Prescale CLI."""
 
 import json
 
@@ -14,12 +14,12 @@ console = Console()
 @click.command()
 @click.pass_context
 def status(ctx: click.Context) -> None:
-    """Check Helios service status.
+    """Check Prescale service status.
     
-    Displays the health and status of connected Helios services.
+    Displays the health and status of connected Prescale services.
     
     Example:
-        helios status
+        prescale status
     """
     endpoint = ctx.obj["endpoint"]
     api_key = ctx.obj["api_key"]
@@ -28,7 +28,7 @@ def status(ctx: click.Context) -> None:
     results = {}
     
     # Check inference service
-    with console.status("[bold blue]Checking Helios services..."):
+    with console.status("[bold blue]Checking Prescale services..."):
         # Health check
         try:
             headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -88,9 +88,9 @@ def _display_status(results: dict, endpoint: str) -> None:
     }.get(status, "?")
     
     console.print(Panel(
-        f"[bold]Helios Service Status[/bold]\n"
+        f"[bold]Prescale Service Status[/bold]\n"
         f"Endpoint: [cyan]{endpoint}[/cyan]",
-        title="🌟 Helios",
+        title="🌟 Prescale",
         border_style=status_color,
     ))
     console.print()
@@ -140,6 +140,6 @@ def _display_status(results: dict, endpoint: str) -> None:
     # Quick actions
     console.print()
     console.print("[bold]Quick Actions:[/bold]")
-    console.print("  [dim]helios predict cpu -d <deployment>[/dim]  - Get CPU predictions")
-    console.print("  [dim]helios detect -d <deployment>[/dim]       - Detect anomalies")
-    console.print("  [dim]helios recommend -d <deployment>[/dim]    - Get recommendations")
+    console.print("  [dim]prescale predict cpu -d <deployment>[/dim]  - Get CPU predictions")
+    console.print("  [dim]prescale detect -d <deployment>[/dim]       - Detect anomalies")
+    console.print("  [dim]prescale recommend -d <deployment>[/dim]    - Get recommendations")

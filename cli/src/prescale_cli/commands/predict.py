@@ -1,4 +1,4 @@
-"""Prediction commands for Helios CLI."""
+"""Prediction commands for Prescale CLI."""
 
 import json
 from datetime import datetime
@@ -21,8 +21,8 @@ def predict() -> None:
     
     \b
     Examples:
-        helios predict cpu                    # Quick CPU prediction
-        helios predict memory -d my-app       # Memory for specific app
+        prescale predict cpu                    # Quick CPU prediction
+        prescale predict memory -d my-app       # Memory for specific app
     """
     pass
 
@@ -40,9 +40,9 @@ def cpu(ctx: click.Context, deployment: str | None, namespace: str, periods: int
     
     \b
     Examples:
-        helios predict cpu                      # Quick prediction
-        helios predict cpu -d my-app -p 24      # 24 periods ahead
-        helios predict cpu --model prophet      # Use Prophet model
+        prescale predict cpu                      # Quick prediction
+        prescale predict cpu -d my-app -p 24      # 24 periods ahead
+        prescale predict cpu --model prophet      # Use Prophet model
     """
     _run_prediction(ctx, "cpu_utilization", deployment, namespace, periods, model)
 
@@ -60,8 +60,8 @@ def memory(ctx: click.Context, deployment: str | None, namespace: str, periods: 
     
     \b
     Examples:
-        helios predict memory                   # Quick prediction
-        helios predict memory -d my-app -p 48   # 48 periods ahead
+        prescale predict memory                   # Quick prediction
+        prescale predict memory -d my-app -p 48   # 48 periods ahead
     """
     _run_prediction(ctx, "memory_utilization", deployment, namespace, periods, model)
 
@@ -109,7 +109,7 @@ def _run_prediction(ctx: click.Context, metric: str, deployment: str | None,
                 console.print(f"[red]Error:[/red] API returned {e.response.status_code}: {e.response.text}")
             raise SystemExit(1)
         except httpx.HTTPError as e:
-            console.print(f"[red]Error:[/red] Failed to connect to Helios: {e}")
+            console.print(f"[red]Error:[/red] Failed to connect to Prescale: {e}")
             raise SystemExit(1)
     
     if output_format == "json":
@@ -133,7 +133,7 @@ def _display_prediction_table(data: dict, metric_type: str, deployment: str | No
     
     console.print(Panel(
         "\n".join(info_lines),
-        title="🔮 Helios Prediction",
+        title="🔮 Prescale Prediction",
         border_style="blue",
     ))
     console.print()

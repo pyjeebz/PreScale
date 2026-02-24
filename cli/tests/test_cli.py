@@ -1,7 +1,7 @@
 """
-Helios CLI Tests
+Prescale CLI Tests
 
-Unit tests for the Helios CLI commands.
+Unit tests for the Prescale CLI commands.
 """
 
 import json
@@ -17,13 +17,13 @@ class TestCLIImport:
 
     def test_import_main(self):
         """Test that main CLI can be imported."""
-        from helios_cli.main import cli, main
+        from prescale_cli.main import cli, main
         assert cli is not None
         assert main is not None
 
     def test_import_commands(self):
         """Test that all commands can be imported."""
-        from helios_cli.commands import predict, detect, recommend, status, config, agent
+        from prescale_cli.commands import predict, detect, recommend, status, config, agent
         assert predict is not None
         assert detect is not None
         assert recommend is not None
@@ -37,13 +37,13 @@ class TestCLIVersion:
 
     def test_version_import(self):
         """Test that version can be imported."""
-        from helios_cli import __version__
+        from prescale_cli import __version__
         assert __version__ is not None
         assert isinstance(__version__, str)
 
     def test_version_format(self):
         """Test that version follows semver format."""
-        from helios_cli import __version__
+        from prescale_cli import __version__
         parts = __version__.split(".")
         assert len(parts) >= 2  # At least major.minor
 
@@ -53,13 +53,13 @@ class TestCLIGroup:
 
     def test_cli_help(self):
         """Test CLI help output."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         
         assert result.exit_code == 0
-        assert "Helios CLI" in result.output
+        assert "Prescale CLI" in result.output
         assert "status" in result.output
         assert "detect" in result.output
         assert "recommend" in result.output
@@ -67,13 +67,13 @@ class TestCLIGroup:
 
     def test_cli_version_option(self):
         """Test --version option."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         
         assert result.exit_code == 0
-        assert "helios" in result.output.lower()
+        assert "prescale" in result.output.lower()
 
 
 class TestStatusCommand:
@@ -81,7 +81,7 @@ class TestStatusCommand:
 
     def test_status_help(self):
         """Test status command help."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["status", "--help"])
@@ -89,10 +89,10 @@ class TestStatusCommand:
         assert result.exit_code == 0
         assert "status" in result.output.lower()
 
-    @patch("helios_cli.commands.status.httpx.get")
+    @patch("prescale_cli.commands.status.httpx.get")
     def test_status_healthy(self, mock_get):
         """Test status command with healthy service."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         # Mock healthy response
         mock_response = MagicMock()
@@ -111,10 +111,10 @@ class TestStatusCommand:
         # Should attempt to check health
         assert mock_get.called
 
-    @patch("helios_cli.commands.status.httpx.get")
+    @patch("prescale_cli.commands.status.httpx.get")
     def test_status_json_output(self, mock_get):
         """Test status command with JSON output."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -135,7 +135,7 @@ class TestDetectCommand:
 
     def test_detect_help(self):
         """Test detect command help."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["detect", "--help"])
@@ -146,7 +146,7 @@ class TestDetectCommand:
 
     def test_detect_sensitivity_options(self):
         """Test that sensitivity options are validated."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         
@@ -158,7 +158,7 @@ class TestDetectCommand:
 
     def test_detect_metric_options(self):
         """Test that metric options are validated."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["detect", "--help"])
@@ -172,7 +172,7 @@ class TestRecommendCommand:
 
     def test_recommend_help(self):
         """Test recommend command help."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["recommend", "--help"])
@@ -186,7 +186,7 @@ class TestPredictCommand:
 
     def test_predict_help(self):
         """Test predict command help."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["predict", "--help"])
@@ -200,7 +200,7 @@ class TestConfigCommand:
 
     def test_config_help(self):
         """Test config command help."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["config", "--help"])
@@ -213,7 +213,7 @@ class TestAgentCommand:
 
     def test_agent_help(self):
         """Test agent command help."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["agent", "--help"])
@@ -226,7 +226,7 @@ class TestOutputFormats:
 
     def test_table_format_default(self):
         """Test that table is the default output format."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
@@ -235,7 +235,7 @@ class TestOutputFormats:
 
     def test_json_format_option(self):
         """Test JSON output format option."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
@@ -244,7 +244,7 @@ class TestOutputFormats:
 
     def test_yaml_format_option(self):
         """Test YAML output format option."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
@@ -257,7 +257,7 @@ class TestEndpointOptions:
 
     def test_endpoint_option(self):
         """Test --endpoint option is available."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
@@ -266,7 +266,7 @@ class TestEndpointOptions:
 
     def test_api_key_option(self):
         """Test --api-key option is available."""
-        from helios_cli.main import cli
+        from prescale_cli.main import cli
         
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
@@ -279,7 +279,7 @@ class TestSampleDataGeneration:
 
     def test_generate_sample_metrics(self):
         """Test sample metrics generation."""
-        from helios_cli.commands.detect import generate_sample_metrics
+        from prescale_cli.commands.detect import generate_sample_metrics
         
         metrics = generate_sample_metrics(lookback_hours=1)
         
@@ -289,7 +289,7 @@ class TestSampleDataGeneration:
 
     def test_generate_sample_metrics_values(self):
         """Test that generated values are in reasonable range."""
-        from helios_cli.commands.detect import generate_sample_metrics
+        from prescale_cli.commands.detect import generate_sample_metrics
         
         metrics = generate_sample_metrics(lookback_hours=2)
         

@@ -1,26 +1,26 @@
-"""Main CLI entry point for Helios."""
+"""Main CLI entry point for Prescale."""
 
 import click
 from rich.console import Console
 
-from helios_cli import __version__
-from helios_cli.commands import predict, detect, recommend, status, config, agent
+from prescale_cli import __version__
+from prescale_cli.commands import predict, detect, recommend, status, config, agent
 
 console = Console()
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="helios")
+@click.version_option(version=__version__, prog_name="prescale")
 @click.option(
     "--endpoint",
     "-e",
-    envvar="HELIOS_ENDPOINT",
+    envvar="PRESCALE_ENDPOINT",
     default="http://104.155.137.61",
-    help="Helios API endpoint URL",
+    help="Prescale API endpoint URL",
 )
 @click.option(
     "--api-key",
-    envvar="HELIOS_API_KEY",
+    envvar="PRESCALE_API_KEY",
     default=None,
     help="API key for authentication",
 )
@@ -33,22 +33,22 @@ console = Console()
 )
 @click.pass_context
 def cli(ctx: click.Context, endpoint: str, api_key: str | None, output: str) -> None:
-    """Helios CLI - Predictive Infrastructure Intelligence Platform.
+    """Prescale CLI - Predictive Infrastructure Intelligence Platform.
     
     ML-powered resource forecasting and anomaly detection for Kubernetes.
     
     \b
     Quick Commands (all have sensible defaults):
-        helios status                    # Check service health
-        helios detect                    # Detect anomalies
-        helios recommend                 # Get scaling recommendations
-        helios predict cpu               # CPU predictions (needs models)
+        prescale status                    # Check service health
+        prescale detect                    # Detect anomalies
+        prescale recommend                 # Get scaling recommendations
+        prescale predict cpu               # CPU predictions (needs models)
     
     \b
     Examples with options:
-        helios detect -d my-app -n prod --sensitivity high
-        helios recommend -d my-app --cost-optimize
-        helios predict cpu -d my-app -p 24
+        prescale detect -d my-app -n prod --sensitivity high
+        prescale recommend -d my-app --cost-optimize
+        prescale predict cpu -d my-app -p 24
     """
     ctx.ensure_object(dict)
     ctx.obj["endpoint"] = endpoint

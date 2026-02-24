@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "helios-cli"
+name = "prescale-cli"
 version = "0.1.0"
-description = "CLI for Helios - Predictive Infrastructure Intelligence Platform"
+description = "CLI for Prescale - Predictive Infrastructure Intelligence Platform"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [
-    { name = "Helios Team" }
+    { name = "Prescale Team" }
 ]
 keywords = ["kubernetes", "ml", "infrastructure", "cli", "devops"]
 classifiers = [
@@ -40,15 +40,15 @@ dev = [
 ]
 
 [project.scripts]
-helios = "helios_cli.main:main"
+prescale = "prescale_cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/pyjeebz/helios"
-Documentation = "https://github.com/pyjeebz/helios#readme"
-Repository = "https://github.com/pyjeebz/helios"
+Homepage = "https://github.com/pyjeebz/prescale"
+Documentation = "https://github.com/pyjeebz/prescale#readme"
+Repository = "https://github.com/pyjeebz/prescale"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/helios_cli"]
+packages = ["src/prescale_cli"]
 
 [tool.hatch.build.targets.sdist]
 include = [

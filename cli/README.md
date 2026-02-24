@@ -1,27 +1,27 @@
-# Helios CLI
+# Prescale CLI
 
-Command-line interface for Helios - Predictive Infrastructure Intelligence Platform.
+Command-line interface for Prescale - Predictive Infrastructure Intelligence Platform.
 
 ## Installation
 
 ```bash
-pip install helios-cli
+pip install prescale-cli
 ```
 
 ## Quick Start
 
 ```bash
 # Configure endpoint
-export HELIOS_ENDPOINT="http://helios-inference:8080"
+export PRESCALE_ENDPOINT="http://prescale-inference:8080"
 
 # Get CPU predictions for a deployment
-helios predict cpu --deployment my-app --namespace default
+prescale predict cpu --deployment my-app --namespace default
 
 # Detect anomalies
-helios detect --deployment my-app --namespace default
+prescale detect --deployment my-app --namespace default
 
 # Get scaling recommendations
-helios recommend --deployment my-app --namespace default --replicas 2
+prescale recommend --deployment my-app --namespace default --replicas 2
 ```
 
 ## Configuration
@@ -29,34 +29,34 @@ helios recommend --deployment my-app --namespace default --replicas 2
 ### Environment Variables
 
 ```bash
-export HELIOS_ENDPOINT="http://helios-inference:8080"
+export PRESCALE_ENDPOINT="http://prescale-inference:8080"
 ```
 
 ### Configuration File
 
 ```bash
 # Set endpoint
-helios config set endpoint http://helios-inference:8080
+prescale config set endpoint http://prescale-inference:8080
 
 # View current configuration
-helios config show
+prescale config show
 ```
 
 ## Commands
 
-### `helios predict`
+### `prescale predict`
 
 Forecast future resource utilization.
 
 ```bash
 # Predict CPU for next 12 periods (default)
-helios predict cpu --deployment my-app --namespace default
+prescale predict cpu --deployment my-app --namespace default
 
 # Predict memory with custom periods
-helios predict memory --deployment my-app --namespace default --periods 24
+prescale predict memory --deployment my-app --namespace default --periods 24
 
 # Short flags
-helios predict cpu -d my-app -n default -p 12
+prescale predict cpu -d my-app -n default -p 12
 ```
 
 **Output:**
@@ -71,16 +71,16 @@ helios predict cpu -d my-app -n default -p 12
 Model: baseline | Data points: 228
 ```
 
-### `helios detect`
+### `prescale detect`
 
 Detect anomalies in current metrics.
 
 ```bash
 # Check for anomalies
-helios detect --deployment my-app --namespace default
+prescale detect --deployment my-app --namespace default
 
 # Short flags
-helios detect -d my-app -n default
+prescale detect -d my-app -n default
 ```
 
 **Output:**
@@ -94,16 +94,16 @@ helios detect -d my-app -n default
 ╰─────────────────────────────────────────────╯
 ```
 
-### `helios recommend`
+### `prescale recommend`
 
 Get scaling recommendations based on predictions.
 
 ```bash
 # Get recommendations for current replicas
-helios recommend --deployment my-app --namespace default --replicas 2
+prescale recommend --deployment my-app --namespace default --replicas 2
 
 # Short flags
-helios recommend -d my-app -n default -r 2
+prescale recommend -d my-app -n default -r 2
 ```
 
 **Output:**
@@ -120,18 +120,18 @@ helios recommend -d my-app -n default -r 2
 ╰─────────────────────────────────────────────╯
 ```
 
-### `helios status`
+### `prescale status`
 
-Check connection to Helios inference service.
+Check connection to Prescale inference service.
 
 ```bash
-helios status
+prescale status
 ```
 
 **Output:**
 ```
-Helios Inference Service
-  Endpoint: http://helios-inference:8080
+Prescale Inference Service
+  Endpoint: http://prescale-inference:8080
   Status: Connected ✓
   Models: 3 loaded (baseline, prophet, xgboost)
 ```
@@ -142,7 +142,7 @@ Helios Inference Service
 
 | Option | Description |
 |--------|-------------|
-| `--endpoint`, `-e` | Override HELIOS_ENDPOINT |
+| `--endpoint`, `-e` | Override PRESCALE_ENDPOINT |
 | `--format`, `-f` | Output format: `table`, `json`, `yaml` |
 | `--verbose`, `-v` | Enable verbose output |
 | `--help` | Show help message |
@@ -178,10 +178,10 @@ All commands support JSON output for scripting:
 
 ```bash
 # Get predictions as JSON
-helios predict cpu -d my-app -n default -f json
+prescale predict cpu -d my-app -n default -f json
 
 # Parse with jq
-helios recommend -d my-app -n default -r 2 -f json | jq '.recommended_replicas'
+prescale recommend -d my-app -n default -r 2 -f json | jq '.recommended_replicas'
 ```
 
 ## Examples
@@ -192,7 +192,7 @@ helios recommend -d my-app -n default -r 2 -f json | jq '.recommended_replicas'
 #!/bin/bash
 # Check if scaling is needed before deployment
 
-RECOMMENDATION=$(helios recommend -d my-app -n prod -r 2 -f json)
+RECOMMENDATION=$(prescale recommend -d my-app -n prod -r 2 -f json)
 SCALE_ACTION=$(echo $RECOMMENDATION | jq -r '.action')
 
 if [ "$SCALE_ACTION" = "scale_out" ]; then
@@ -207,7 +207,7 @@ fi
 #!/bin/bash
 # Alert on anomalies
 
-RESULT=$(helios detect -d my-app -n prod -f json)
+RESULT=$(prescale detect -d my-app -n prod -f json)
 STATUS=$(echo $RESULT | jq -r '.status')
 
 if [ "$STATUS" = "ANOMALY" ]; then
@@ -222,10 +222,10 @@ fi
 
 ```bash
 # Check endpoint is reachable
-curl http://helios-inference:8080/health
+curl http://prescale-inference:8080/health
 
 # Verify environment variable
-echo $HELIOS_ENDPOINT
+echo $PRESCALE_ENDPOINT
 ```
 
 ### No Data
@@ -234,7 +234,7 @@ If predictions return empty results:
 
 1. Ensure the agent is collecting metrics for the deployment
 2. Check the namespace matches
-3. Verify metrics are being ingested: `curl http://helios-inference:8080/models`
+3. Verify metrics are being ingested: `curl http://prescale-inference:8080/models`
 
 ## License
 

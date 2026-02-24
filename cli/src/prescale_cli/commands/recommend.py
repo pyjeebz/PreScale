@@ -1,4 +1,4 @@
-"""Scaling recommendation commands for Helios CLI."""
+"""Scaling recommendation commands for Prescale CLI."""
 
 import json
 import random
@@ -31,11 +31,11 @@ def recommend(ctx: click.Context, deployment: str, namespace: str, replicas: int
     
     \b
     Examples:
-        helios recommend                          # Quick recommend with defaults
-        helios recommend -d my-app -n prod        # Specific deployment
-        helios recommend --cost-optimize          # Prioritize savings
-        helios recommend --performance            # Prioritize performance
-        helios recommend -r 3 -t 0.6              # Custom config
+        prescale recommend                          # Quick recommend with defaults
+        prescale recommend -d my-app -n prod        # Specific deployment
+        prescale recommend --cost-optimize          # Prioritize savings
+        prescale recommend --performance            # Prioritize performance
+        prescale recommend -r 3 -t 0.6              # Custom config
     """
     endpoint = ctx.obj["endpoint"]
     api_key = ctx.obj["api_key"]
@@ -81,7 +81,7 @@ def recommend(ctx: click.Context, deployment: str, namespace: str, replicas: int
             console.print(f"[red]Error:[/red] API returned {e.response.status_code}: {e.response.text}")
             raise SystemExit(1)
         except httpx.HTTPError as e:
-            console.print(f"[red]Error:[/red] Failed to connect to Helios: {e}")
+            console.print(f"[red]Error:[/red] Failed to connect to Prescale: {e}")
             raise SystemExit(1)
     
     if output_format == "json":
@@ -114,7 +114,7 @@ def _display_recommendations(data: dict, deployment: str, namespace: str, strate
     
     console.print(Panel(
         "\n".join(info_lines),
-        title="📊 Helios Recommendations",
+        title="📊 Prescale Recommendations",
         border_style="blue",
     ))
     console.print()

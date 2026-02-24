@@ -1,4 +1,4 @@
-"""Anomaly detection commands for Helios CLI."""
+"""Anomaly detection commands for Prescale CLI."""
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -57,10 +57,10 @@ def detect(ctx: click.Context, deployment: str | None, namespace: str | None, lo
     
     \b
     Examples:
-        helios detect                           # Quick detect with defaults
-        helios detect -d my-app -n production   # Specific deployment
-        helios detect --sensitivity high        # More sensitive detection
-        helios detect -m memory_utilization     # Check memory instead
+        prescale detect                           # Quick detect with defaults
+        prescale detect -d my-app -n production   # Specific deployment
+        prescale detect --sensitivity high        # More sensitive detection
+        prescale detect -m memory_utilization     # Check memory instead
     """
     endpoint = ctx.obj["endpoint"]
     api_key = ctx.obj["api_key"]
@@ -99,7 +99,7 @@ def detect(ctx: click.Context, deployment: str | None, namespace: str | None, lo
             console.print(f"[red]Error:[/red] API returned {e.response.status_code}: {e.response.text}")
             raise SystemExit(1)
         except httpx.HTTPError as e:
-            console.print(f"[red]Error:[/red] Failed to connect to Helios: {e}")
+            console.print(f"[red]Error:[/red] Failed to connect to Prescale: {e}")
             raise SystemExit(1)
     
     if output_format == "json":
@@ -135,7 +135,7 @@ def _display_anomalies(data: dict, deployment: str | None, namespace: str | None
     console.print(Panel(
         "\n".join(info_lines) + "\n"
         f"Status: [{status_color}]{status.upper()}[/{status_color}]",
-        title="🔍 Helios Anomaly Detection",
+        title="🔍 Prescale Anomaly Detection",
         border_style=status_color.split()[-1] if " " in status_color else status_color,
     ))
     console.print()
