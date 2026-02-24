@@ -96,9 +96,9 @@ onMounted(() => {
       <!-- Logo -->
       <div class="h-16 flex items-center gap-3 px-6" style="border-bottom: 1px solid var(--border-primary);">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--accent-gradient);">
-          <span class="text-white font-bold text-sm">H</span>
+          <span class="text-white font-bold text-sm">P</span>
         </div>
-        <span class="text-lg font-semibold" style="color: var(--text-primary);">Helios</span>
+        <span class="text-lg font-semibold" style="color: var(--text-primary);">Prescale</span>
         <span class="ml-auto text-xs font-mono px-1.5 py-0.5 rounded" style="color: var(--text-tertiary); background: var(--bg-card); border: 1px solid var(--border-primary);">v0.2.0</span>
       </div>
 

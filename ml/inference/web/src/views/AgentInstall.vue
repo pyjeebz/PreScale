@@ -21,25 +21,25 @@ let pollInterval: ReturnType<typeof setInterval> | null = null
 const copiedPip = ref(false)
 const copiedStart = ref(false)
 
-const heliosEndpoint = computed(() => {
+const prescaleEndpoint = computed(() => {
   const origin = window.location.origin
   return origin.replace(':3000', ':8080')
 })
 
-const installCommand = 'pip install helios-agent'
+const installCommand = 'pip install prescale-agent'
 
 const startCommand = computed(() => {
   const depName = deployment.value?.name || 'my-deployment'
-  return `helios-agent run \\
+  return `prescale-agent run \\
   --deployment ${depName} \\
-  --endpoint ${heliosEndpoint.value}`
+  --endpoint ${prescaleEndpoint.value}`
 })
 
 const envVarsCommand = computed(() => {
   const depName = deployment.value?.name || 'my-deployment'
-  return `export HELIOS_DEPLOYMENT=${depName}
-export HELIOS_ENDPOINT=${heliosEndpoint.value}
-helios-agent run`
+  return `export PRESCALE_DEPLOYMENT=${depName}
+export PRESCALE_ENDPOINT=${prescaleEndpoint.value}
+prescale-agent run`
 })
 
 async function copyToClipboard(text: string, type: 'pip' | 'start') {
@@ -88,7 +88,7 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="mb-8">
       <h1 class="text-2xl font-bold mb-2" style="color: var(--text-primary);">
-        Install Helios Agent
+        Install Prescale Agent
       </h1>
       <p style="color: var(--text-tertiary);">
         Run this command on each server you want to monitor.

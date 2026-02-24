@@ -1,6 +1,6 @@
-# Helios Web Dashboard
+# Prescale Web Dashboard
 
-Vue.js dashboard for [Helios](https://github.com/pyjeebz/helios) - Predictive Infrastructure Intelligence Platform.
+Vue.js dashboard for [Prescale](https://github.com/pyjeebz/prescale) - Predictive Infrastructure Intelligence Platform.
 
 ## Quick Start
 

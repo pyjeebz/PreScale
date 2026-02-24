@@ -5,7 +5,7 @@ export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(true)
 
   function init() {
-    const stored = localStorage.getItem('helios-theme')
+    const stored = localStorage.getItem('prescale-theme')
     if (stored) {
       isDark.value = stored === 'dark'
     } else {
@@ -16,13 +16,13 @@ export const useThemeStore = defineStore('theme', () => {
 
   function toggle() {
     isDark.value = !isDark.value
-    localStorage.setItem('helios-theme', isDark.value ? 'dark' : 'light')
+    localStorage.setItem('prescale-theme', isDark.value ? 'dark' : 'light')
     applyTheme()
   }
 
   function setTheme(dark: boolean) {
     isDark.value = dark
-    localStorage.setItem('helios-theme', dark ? 'dark' : 'light')
+    localStorage.setItem('prescale-theme', dark ? 'dark' : 'light')
     applyTheme()
   }
 

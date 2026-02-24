@@ -8,7 +8,7 @@ export default {
     theme: {
         extend: {
             colors: {
-                helios: {
+                prescale: {
                     50: '#eef2ff',
                     100: '#e0e7ff',
                     200: '#c7d2fe',
