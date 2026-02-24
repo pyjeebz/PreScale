@@ -104,7 +104,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "helios_up{namespace=\"helios\"}",
+          "expr": "prescale_up{namespace=\"prescale\"}",
           "refId": "A"
         }
       ],
@@ -150,7 +150,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "helios_uptime_seconds{namespace=\"helios\"}",
+          "expr": "prescale_uptime_seconds{namespace=\"prescale\"}",
           "refId": "A"
         }
       ],
@@ -212,7 +212,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "helios_models_loaded{namespace=\"helios\"}",
+          "expr": "prescale_models_loaded{namespace=\"prescale\"}",
           "refId": "A"
         }
       ],
@@ -258,7 +258,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(helios_requests_total{namespace=\"helios\"}[5m]))",
+          "expr": "sum(rate(prescale_requests_total{namespace=\"prescale\"}[5m]))",
           "refId": "A"
         }
       ],
@@ -321,7 +321,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(helios_request_latency_seconds_bucket{namespace=\"helios\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(prescale_request_latency_seconds_bucket{namespace=\"prescale\"}[5m])) by (le))",
           "refId": "A"
         }
       ],
@@ -384,7 +384,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(helios_requests_total{namespace=\"helios\", status=~\"5..\"}[5m])) / sum(rate(helios_requests_total{namespace=\"helios\"}[5m])) * 100",
+          "expr": "sum(rate(prescale_requests_total{namespace=\"prescale\", status=~\"5..\"}[5m])) / sum(rate(prescale_requests_total{namespace=\"prescale\"}[5m])) * 100",
           "refId": "A"
         }
       ],
@@ -473,7 +473,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(helios_predictions_total{namespace=\"helios\"}[5m])) by (model)",
+          "expr": "sum(rate(prescale_predictions_total{namespace=\"prescale\"}[5m])) by (model)",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -550,7 +550,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(helios_prediction_latency_seconds_bucket{namespace=\"helios\"}[5m])) by (le, model))",
+          "expr": "histogram_quantile(0.50, sum(rate(prescale_prediction_latency_seconds_bucket{namespace=\"prescale\"}[5m])) by (le, model))",
           "legendFormat": "p50 - {{model}}",
           "refId": "A"
         },
@@ -559,7 +559,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(helios_prediction_latency_seconds_bucket{namespace=\"helios\"}[5m])) by (le, model))",
+          "expr": "histogram_quantile(0.95, sum(rate(prescale_prediction_latency_seconds_bucket{namespace=\"prescale\"}[5m])) by (le, model))",
           "legendFormat": "p95 - {{model}}",
           "refId": "B"
         },
@@ -568,7 +568,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(helios_prediction_latency_seconds_bucket{namespace=\"helios\"}[5m])) by (le, model))",
+          "expr": "histogram_quantile(0.99, sum(rate(prescale_prediction_latency_seconds_bucket{namespace=\"prescale\"}[5m])) by (le, model))",
           "legendFormat": "p99 - {{model}}",
           "refId": "C"
         }
@@ -645,7 +645,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "increase(helios_prediction_cache_hits_total{namespace=\"helios\"}[5m])",
+          "expr": "increase(prescale_prediction_cache_hits_total{namespace=\"prescale\"}[5m])",
           "legendFormat": "Cache Hits",
           "refId": "A"
         },
@@ -654,7 +654,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "increase(helios_prediction_cache_misses_total{namespace=\"helios\"}[5m])",
+          "expr": "increase(prescale_prediction_cache_misses_total{namespace=\"prescale\"}[5m])",
           "legendFormat": "Cache Misses",
           "refId": "B"
         }
@@ -805,7 +805,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "increase(helios_anomalies_detected_total{namespace=\"helios\"}[5m])",
+          "expr": "increase(prescale_anomalies_detected_total{namespace=\"prescale\"}[5m])",
           "legendFormat": "{{severity}}",
           "refId": "A"
         }
@@ -882,7 +882,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "increase(helios_data_points_analyzed_total{namespace=\"helios\"}[5m])",
+          "expr": "increase(prescale_data_points_analyzed_total{namespace=\"prescale\"}[5m])",
           "legendFormat": "Data Points",
           "refId": "A"
         }
@@ -972,7 +972,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "helios_recommended_replicas{namespace=\"helios\"}",
+          "expr": "prescale_recommended_replicas{namespace=\"prescale\"}",
           "legendFormat": "{{workload}} ({{namespace}})",
           "refId": "A"
         }
@@ -1049,7 +1049,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "increase(helios_recommendations_total{namespace=\"helios\"}[5m])",
+          "expr": "increase(prescale_recommendations_total{namespace=\"prescale\"}[5m])",
           "legendFormat": "{{action}} - {{workload}}",
           "refId": "A"
         }
@@ -1061,7 +1061,7 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["helios", "inference", "ml"],
+  "tags": ["prescale", "inference", "ml"],
   "templating": {
     "list": [
       {
@@ -1091,8 +1091,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Helios Inference Service",
-  "uid": "helios-inference",
+  "title": "Prescale Inference Service",
+  "uid": "prescale-inference",
   "version": 1,
   "weekStart": ""
 }

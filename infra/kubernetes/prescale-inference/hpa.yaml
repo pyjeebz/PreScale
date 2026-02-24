@@ -1,16 +1,16 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
   labels:
-    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/name: prescale-inference
     app.kubernetes.io/component: autoscaling
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: helios-inference
+    name: prescale-inference
   minReplicas: 2
   maxReplicas: 10
   metrics:

@@ -5,8 +5,8 @@ kind: Kustomization
 resources:
   - trigger-auth.yaml
   - scaledobject-saleor.yaml
-  - scaledobject-helios.yaml
+  - scaledobject-prescale.yaml
 
 commonLabels:
-  app.kubernetes.io/part-of: helios
+  app.kubernetes.io/part-of: prescale
   app.kubernetes.io/component: autoscaling

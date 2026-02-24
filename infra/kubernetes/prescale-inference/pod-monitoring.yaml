@@ -2,15 +2,15 @@
 apiVersion: monitoring.googleapis.com/v1
 kind: PodMonitoring
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
   labels:
-    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/name: prescale-inference
     app.kubernetes.io/component: monitoring
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: helios-inference
+      app.kubernetes.io/name: prescale-inference
   endpoints:
     - port: http
       path: /metrics

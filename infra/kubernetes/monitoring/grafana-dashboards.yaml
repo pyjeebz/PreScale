@@ -4,7 +4,7 @@ metadata:
   name: grafana-dashboards
   namespace: monitoring
 data:
-  helios-ml-dashboard.json: |
+  prescale-ml-dashboard.json: |
     {
       "annotations": {
         "list": []
@@ -197,7 +197,7 @@ data:
         }
       ],
       "schemaVersion": 39,
-      "tags": ["helios", "ml", "traffic"],
+      "tags": ["prescale", "ml", "traffic"],
       "templating": {
         "list": [
           {
@@ -217,7 +217,7 @@ data:
         ]
       },
       "time": {"from": "now-6h", "to": "now"},
-      "title": "Helios ML Observability",
-      "uid": "helios-ml-observability",
+      "title": "Prescale ML Observability",
+      "uid": "prescale-ml-observability",
       "version": 1
     }

@@ -1,5 +1,5 @@
 # KEDA ScaledObject for Saleor API
-# Scales based on Helios predictions and Prometheus metrics
+# Scales based on Prescale predictions and Prometheus metrics
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -8,7 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/name: saleor-api
     app.kubernetes.io/component: autoscaling
-    app.kubernetes.io/managed-by: helios
+    app.kubernetes.io/managed-by: prescale
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -94,13 +94,13 @@ spec:
         threshold: "0.5"
         activationThreshold: "0.2"
     
-    # Helios predicted utilization (proactive scaling)
+    # Prescale predicted utilization (proactive scaling)
     - type: prometheus
       metadata:
         serverAddress: http://prometheus-operated.monitoring:9090
-        metricName: helios_predicted_utilization
+        metricName: prescale_predicted_utilization
         query: |
-          max(helios_recommended_replicas{
+          max(prescale_recommended_replicas{
             workload="saleor-api",
             namespace="saleor"
           }) or vector(2)

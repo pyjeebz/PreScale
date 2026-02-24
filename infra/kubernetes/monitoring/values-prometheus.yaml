@@ -1,4 +1,4 @@
-# kube-prometheus-stack values for Helios ML Observability
+# kube-prometheus-stack values for Prescale ML Observability
 # Phase 3: Metrics structured for ML training data export
 # Optimized for GKE Autopilot
 
@@ -32,7 +32,7 @@ prometheus:
 
 grafana:
   enabled: true
-  adminPassword: "helios-admin-2025"
+  adminPassword: "prescale-admin-2025"
   
   # Persistence for dashboards
   persistence:

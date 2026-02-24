@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: helios
+  name: prescale
   labels:
-    app.kubernetes.io/name: helios
+    app.kubernetes.io/name: prescale
     app.kubernetes.io/component: inference

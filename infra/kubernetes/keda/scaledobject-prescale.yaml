@@ -1,18 +1,18 @@
-# KEDA ScaledObject for Helios Inference Service
+# KEDA ScaledObject for Prescale Inference Service
 # Self-scaling based on request load
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: helios-inference-scaler
-  namespace: helios
+  name: prescale-inference-scaler
+  namespace: prescale
   labels:
-    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/name: prescale-inference
     app.kubernetes.io/component: autoscaling
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: helios-inference
+    name: prescale-inference
   
   minReplicaCount: 2
   maxReplicaCount: 10
@@ -40,9 +40,9 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://prometheus-operated.monitoring:9090
-        metricName: helios_predictions_rate
+        metricName: prescale_predictions_rate
         query: |
-          sum(rate(helios_predictions_total[2m])) * 60
+          sum(rate(prescale_predictions_total[2m])) * 60
         threshold: "50"
         activationThreshold: "5"
     
@@ -50,10 +50,10 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://prometheus-operated.monitoring:9090
-        metricName: helios_request_latency
+        metricName: prescale_request_latency
         query: |
           histogram_quantile(0.95, 
-            sum(rate(helios_request_latency_seconds_bucket[5m])) by (le)
+            sum(rate(prescale_request_latency_seconds_bucket[5m])) by (le)
           )
         threshold: "0.5"
         activationThreshold: "0.1"
@@ -62,15 +62,15 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://prometheus-operated.monitoring:9090
-        metricName: helios_cpu_utilization
+        metricName: prescale_cpu_utilization
         query: |
           avg(rate(container_cpu_usage_seconds_total{
-            namespace="helios",
-            pod=~"helios-inference-.*"
+            namespace="prescale",
+            pod=~"prescale-inference-.*"
           }[5m])) / 
           avg(kube_pod_container_resource_requests{
-            namespace="helios",
-            pod=~"helios-inference-.*",
+            namespace="prescale",
+            pod=~"prescale-inference-.*",
             resource="cpu"
           })
         threshold: "0.7"

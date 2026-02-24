@@ -1,28 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
   labels:
-    app.kubernetes.io/name: helios-inference
+    app.kubernetes.io/name: prescale-inference
     app.kubernetes.io/component: inference
     app.kubernetes.io/version: "0.1.0"
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: helios-inference
+      app.kubernetes.io/name: prescale-inference
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: helios-inference
+        app.kubernetes.io/name: prescale-inference
         app.kubernetes.io/component: inference
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: helios-inference
+      serviceAccountName: prescale-inference
       
       # Init container to download models from GCS
       initContainers:
@@ -34,9 +34,9 @@ spec:
             - |
               set -e
               echo "Downloading models from GCS..."
-              gcloud storage cp gs://helios-ml-models/cpu_forecaster/1.0.0/model.pkl /app/models/cpu_forecaster/1.0.0/model.pkl || true
-              gcloud storage cp gs://helios-ml-models/anomaly_detector/1.0.0/model.pkl /app/models/anomaly_detector/1.0.0/model.pkl || true
-              gcloud storage cp gs://helios-ml-models/prophet_model.joblib /app/models/prophet_model.joblib || true
+              gcloud storage cp gs://prescale-ml-models/cpu_forecaster/1.0.0/model.pkl /app/models/cpu_forecaster/1.0.0/model.pkl || true
+              gcloud storage cp gs://prescale-ml-models/anomaly_detector/1.0.0/model.pkl /app/models/anomaly_detector/1.0.0/model.pkl || true
+              gcloud storage cp gs://prescale-ml-models/prophet_model.joblib /app/models/prophet_model.joblib || true
               echo "Models downloaded:"
               find /app/models -type f
               echo "Done"
@@ -46,7 +46,7 @@ spec:
       
       containers:
         - name: inference
-          image: gcr.io/gen-lang-client-0702968356/helios-inference:0.3.0
+          image: gcr.io/gen-lang-client-0702968356/prescale-inference:0.3.0
           imagePullPolicy: Always
           
           ports:
@@ -56,11 +56,11 @@ spec:
           
           envFrom:
             - configMapRef:
-                name: helios-inference-config
+                name: prescale-inference-config
           
           env:
             - name: MODELS_GCS_BUCKET
-              value: "helios-ml-models"
+              value: "prescale-ml-models"
           
           resources:
             requests:
@@ -105,5 +105,5 @@ spec:
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    app.kubernetes.io/name: helios-inference
+                    app.kubernetes.io/name: prescale-inference
                 topologyKey: kubernetes.io/hostname

@@ -1,8 +1,8 @@
-# Kustomization for Helios Inference Service
+# Kustomization for Prescale Inference Service
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: helios
+namespace: prescale
 
 resources:
   - namespace.yaml
@@ -14,10 +14,10 @@ resources:
   - hpa.yaml
 
 commonLabels:
-  app.kubernetes.io/part-of: helios
+  app.kubernetes.io/part-of: prescale
   app.kubernetes.io/managed-by: kustomize
 
 # Image configuration (override in overlays)
 images:
-  - name: helios-inference
+  - name: prescale-inference
     newTag: "0.1.0"

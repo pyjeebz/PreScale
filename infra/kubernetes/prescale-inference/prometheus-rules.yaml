@@ -1,0 +1,174 @@
+# Prescale Alert Rules for Prometheus Alertmanager
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prescale-inference-alerts
+  namespace: prescale
+  labels:
+    app.kubernetes.io/name: prescale-inference
+    app.kubernetes.io/component: alerting
+spec:
+  groups:
+    - name: prescale-inference
+      rules:
+        # Service Health
+        - alert: PrescaleInferenceDown
+          expr: |
+            prescale_up{namespace="prescale"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: prescale-inference
+          annotations:
+            summary: "Prescale Inference Service is down"
+            description: "The Prescale inference service has been down for more than 1 minute."
+            runbook_url: "https://docs.prescale.io/runbooks/inference-down"
+
+        - alert: PrescaleInferenceNotReady
+          expr: |
+            prescale_ready{namespace="prescale"} == 0
+          for: 2m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "Prescale Inference Service is not ready"
+            description: "The Prescale inference service is up but not ready to serve traffic."
+
+        # Model Health
+        - alert: PrescaleNoModelsLoaded
+          expr: |
+            prescale_models_loaded{namespace="prescale"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: prescale-inference
+          annotations:
+            summary: "No ML models loaded"
+            description: "Prescale inference service has no models loaded. Predictions will fail."
+
+        # Latency
+        - alert: PrescaleHighPredictionLatency
+          expr: |
+            histogram_quantile(0.95, 
+              sum(rate(prescale_prediction_latency_seconds_bucket{namespace="prescale"}[5m])) by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "High prediction latency"
+            description: "P95 prediction latency is {{ $value | humanizeDuration }} (threshold: 500ms)"
+
+        - alert: PrescaleVeryHighPredictionLatency
+          expr: |
+            histogram_quantile(0.95, 
+              sum(rate(prescale_prediction_latency_seconds_bucket{namespace="prescale"}[5m])) by (le)
+            ) > 2
+          for: 2m
+          labels:
+            severity: critical
+            service: prescale-inference
+          annotations:
+            summary: "Very high prediction latency"
+            description: "P95 prediction latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+
+        # Error Rate
+        - alert: PrescaleHighErrorRate
+          expr: |
+            sum(rate(prescale_requests_total{namespace="prescale", status=~"5.."}[5m])) 
+            / sum(rate(prescale_requests_total{namespace="prescale"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "High error rate"
+            description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+        - alert: PrescaleVeryHighErrorRate
+          expr: |
+            sum(rate(prescale_requests_total{namespace="prescale", status=~"5.."}[5m])) 
+            / sum(rate(prescale_requests_total{namespace="prescale"}[5m])) > 0.20
+          for: 2m
+          labels:
+            severity: critical
+            service: prescale-inference
+          annotations:
+            summary: "Very high error rate"
+            description: "Error rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+
+        # Anomaly Detection
+        - alert: PrescaleCriticalAnomaliesDetected
+          expr: |
+            increase(prescale_anomalies_detected_total{namespace="prescale", severity="critical"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            service: prescale-inference
+          annotations:
+            summary: "Critical anomalies detected"
+            description: "{{ $value }} critical anomalies detected in the last 5 minutes for metric {{ $labels.metric }}"
+
+        - alert: PrescaleHighAnomalyRate
+          expr: |
+            sum(increase(prescale_anomalies_detected_total{namespace="prescale"}[15m])) > 10
+          for: 0m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "High anomaly detection rate"
+            description: "{{ $value }} anomalies detected in the last 15 minutes"
+
+        # Cache Performance
+        - alert: PrescaleLowCacheHitRate
+          expr: |
+            sum(rate(prescale_prediction_cache_hits_total{namespace="prescale"}[5m])) 
+            / (sum(rate(prescale_prediction_cache_hits_total{namespace="prescale"}[5m])) 
+               + sum(rate(prescale_prediction_cache_misses_total{namespace="prescale"}[5m]))) < 0.5
+          for: 10m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "Low cache hit rate"
+            description: "Prediction cache hit rate is {{ $value | humanizePercentage }} (expected > 50%)"
+
+        # Recommendation Alerts
+        - alert: PrescaleScaleUpRecommended
+          expr: |
+            increase(prescale_recommendations_total{namespace="prescale", action="scale_out"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: info
+            service: prescale-inference
+          annotations:
+            summary: "Scale-up recommended"
+            description: "Prescale recommends scaling out {{ $labels.workload }} workload"
+
+        # Resource Usage
+        - alert: PrescaleHighMemoryUsage
+          expr: |
+            container_memory_working_set_bytes{namespace="prescale", container="inference"} 
+            / container_spec_memory_limit_bytes{namespace="prescale", container="inference"} > 0.85
+          for: 5m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "High memory usage"
+            description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+
+        - alert: PrescaleHighCPUUsage
+          expr: |
+            rate(container_cpu_usage_seconds_total{namespace="prescale", container="inference"}[5m]) 
+            / container_spec_cpu_quota{namespace="prescale", container="inference"} * 100000 > 0.85
+          for: 5m
+          labels:
+            severity: warning
+            service: prescale-inference
+          annotations:
+            summary: "High CPU usage"
+            description: "CPU usage is {{ $value | humanizePercentage }} of limit"

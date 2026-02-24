@@ -1,31 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helios-cost-intelligence
-  namespace: helios
+  name: prescale-cost-intelligence
+  namespace: prescale
   labels:
-    app.kubernetes.io/name: helios-cost-intelligence
+    app.kubernetes.io/name: prescale-cost-intelligence
     app.kubernetes.io/component: cost-intelligence
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: helios-cost-intelligence
+      app.kubernetes.io/name: prescale-cost-intelligence
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: helios-cost-intelligence
+        app.kubernetes.io/name: prescale-cost-intelligence
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8081"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: helios-inference
+      serviceAccountName: prescale-inference
       
       containers:
         - name: cost-intelligence
           # Replace YOUR_GCP_PROJECT_ID with your actual GCP project ID
-          image: gcr.io/YOUR_GCP_PROJECT_ID/helios-cost-intelligence:0.1.0
+          image: gcr.io/YOUR_GCP_PROJECT_ID/prescale-cost-intelligence:0.1.0
           imagePullPolicy: Always
           
           ports:
@@ -35,7 +35,7 @@ spec:
           
           envFrom:
             - configMapRef:
-                name: helios-cost-intelligence-config
+                name: prescale-cost-intelligence-config
           
           resources:
             requests:
@@ -66,10 +66,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: helios-cost-intelligence
-  namespace: helios
+  name: prescale-cost-intelligence
+  namespace: prescale
   labels:
-    app.kubernetes.io/name: helios-cost-intelligence
+    app.kubernetes.io/name: prescale-cost-intelligence
 spec:
   type: ClusterIP
   ports:
@@ -78,4 +78,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/name: helios-cost-intelligence
+    app.kubernetes.io/name: prescale-cost-intelligence

@@ -1,6 +1,6 @@
-# Helios Deployment Guide
+# Prescale Deployment Guide
 
-Complete guide for deploying Helios infrastructure and services.
+Complete guide for deploying Prescale infrastructure and services.
 
 ## Architecture Overview
 
@@ -8,9 +8,9 @@ Complete guide for deploying Helios infrastructure and services.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         GKE Cluster                                  │
 │  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                     helios namespace                         │   │
+│  │                     prescale namespace                         │   │
 │  │  ┌─────────────────┐    ┌─────────────────┐                 │   │
-│  │  │ Helios Inference│    │  Init Container │                 │   │
+│  │  │ Prescale Inference│    │  Init Container │                 │   │
 │  │  │   (FastAPI)     │◄───│  (GCS Download) │                 │   │
 │  │  │                 │    └─────────────────┘                 │   │
 │  │  │ • /predict      │                                        │   │
@@ -99,7 +99,7 @@ This creates:
 
 ```bash
 # Create GKE cluster
-gcloud container clusters create helios-cluster \
+gcloud container clusters create prescale-cluster \
   --region $GCP_REGION \
   --num-nodes 2 \
   --machine-type e2-medium \
@@ -107,11 +107,11 @@ gcloud container clusters create helios-cluster \
   --workload-pool=${GCP_PROJECT_ID}.svc.id.goog
 
 # Get credentials
-gcloud container clusters get-credentials helios-cluster --region $GCP_REGION
+gcloud container clusters get-credentials prescale-cluster --region $GCP_REGION
 
 # Create GCS bucket
-gsutil mb -l $GCP_REGION gs://${GCP_PROJECT_ID}-helios-models
-gsutil uniformbucketlevelaccess set on gs://${GCP_PROJECT_ID}-helios-models
+gsutil mb -l $GCP_REGION gs://${GCP_PROJECT_ID}-prescale-models
+gsutil uniformbucketlevelaccess set on gs://${GCP_PROJECT_ID}-prescale-models
 ```
 
 ---
@@ -120,7 +120,7 @@ gsutil uniformbucketlevelaccess set on gs://${GCP_PROJECT_ID}-helios-models
 
 ```bash
 # From project root
-cd /path/to/helios
+cd /path/to/prescale
 
 # Build with Cloud Build
 gcloud builds submit --config cloudbuild.yaml \
@@ -141,33 +141,33 @@ python train.py --namespace your-namespace --hours 24
 
 # Upload to GCS
 gsutil cp artifacts/cpu_forecaster/1.0.0/model.pkl \
-  gs://${GCP_PROJECT_ID}-helios-models/cpu_forecaster/1.0.0/model.pkl
+  gs://${GCP_PROJECT_ID}-prescale-models/cpu_forecaster/1.0.0/model.pkl
 
 gsutil cp artifacts/prophet_model.joblib \
-  gs://${GCP_PROJECT_ID}-helios-models/prophet_model.joblib
+  gs://${GCP_PROJECT_ID}-prescale-models/prophet_model.joblib
 
 gsutil cp -r artifacts/anomaly_detector/ \
-  gs://${GCP_PROJECT_ID}-helios-models/anomaly_detector/
+  gs://${GCP_PROJECT_ID}-prescale-models/anomaly_detector/
 ```
 
 ---
 
-## Step 5: Deploy Helios Inference
+## Step 5: Deploy Prescale Inference
 
 ### Update Configuration
 
-Edit `infra/kubernetes/helios-inference/deployment.yaml`:
+Edit `infra/kubernetes/prescale-inference/deployment.yaml`:
 
 ```yaml
 # Update image
-image: gcr.io/YOUR_PROJECT_ID/helios-inference:latest
+image: gcr.io/YOUR_PROJECT_ID/prescale-inference:latest
 
 # Update GCS bucket in init container
 command:
   - gsutil
   - cp
   - -r
-  - gs://YOUR_PROJECT_ID-helios-models/*
+  - gs://YOUR_PROJECT_ID-prescale-models/*
   - /models/
 ```
 
@@ -175,27 +175,27 @@ command:
 
 ```bash
 # Create namespace
-kubectl create namespace helios
+kubectl create namespace prescale
 
 # Apply manifests
-kubectl apply -f infra/kubernetes/helios-inference/
+kubectl apply -f infra/kubernetes/prescale-inference/
 
 # Wait for deployment
 kubectl wait --for=condition=available \
-  deployment/helios-inference -n helios --timeout=300s
+  deployment/prescale-inference -n prescale --timeout=300s
 
 # Check pods
-kubectl get pods -n helios
+kubectl get pods -n prescale
 
 # Check logs
-kubectl logs -n helios deploy/helios-inference
+kubectl logs -n prescale deploy/prescale-inference
 ```
 
 ### Verify Deployment
 
 ```bash
 # Get external IP
-kubectl get svc helios-inference -n helios
+kubectl get svc prescale-inference -n prescale
 
 # Test health endpoint
 curl http://EXTERNAL_IP:8080/health
@@ -223,9 +223,9 @@ kubectl port-forward -n monitoring svc/grafana 3000:3000
 
 ---
 
-## Step 7: Configure Helios Agent
+## Step 7: Configure Prescale Agent
 
-Create `helios-agent.yaml`:
+Create `prescale-agent.yaml`:
 
 ```yaml
 agent:
@@ -243,15 +243,15 @@ sources:
       filters:
         namespace: your-workload-namespace
 
-helios:
+prescale:
   endpoint: http://EXTERNAL_IP:8080
 ```
 
 Run the agent:
 
 ```bash
-pip install helios-agent[gcp]
-helios-agent run --config helios-agent.yaml
+pip install prescale-agent[gcp]
+prescale-agent run --config prescale-agent.yaml
 ```
 
 ---
@@ -261,17 +261,17 @@ helios-agent run --config helios-agent.yaml
 ### Deployment
 
 ```yaml
-# infra/kubernetes/helios-inference/deployment.yaml
+# infra/kubernetes/prescale-inference/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: helios-inference
+      app: prescale-inference
   template:
     spec:
       initContainers:
@@ -283,7 +283,7 @@ spec:
               mountPath: /models
       containers:
         - name: inference
-          image: gcr.io/PROJECT/helios-inference:latest
+          image: gcr.io/PROJECT/prescale-inference:latest
           ports:
             - containerPort: 8080
           env:
@@ -300,19 +300,19 @@ spec:
 ### Service
 
 ```yaml
-# infra/kubernetes/helios-inference/service.yaml
+# infra/kubernetes/prescale-inference/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: helios-inference
-  namespace: helios
+  name: prescale-inference
+  namespace: prescale
 spec:
   type: LoadBalancer
   ports:
     - port: 8080
       targetPort: 8080
   selector:
-    app: helios-inference
+    app: prescale-inference
 ```
 
 ---
@@ -325,13 +325,13 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: helios-inference-hpa
-  namespace: helios
+  name: prescale-inference-hpa
+  namespace: prescale
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: helios-inference
+    name: prescale-inference
   minReplicas: 2
   maxReplicas: 10
   metrics:
@@ -351,7 +351,7 @@ spec:
 
 ```bash
 # Check logs
-kubectl logs -n helios deploy/helios-inference --previous
+kubectl logs -n prescale deploy/prescale-inference --previous
 
 # Common issues:
 # - Models not found: Check GCS bucket permissions
@@ -362,20 +362,20 @@ kubectl logs -n helios deploy/helios-inference --previous
 
 ```bash
 # Check init container logs
-kubectl logs -n helios POD_NAME -c model-downloader
+kubectl logs -n prescale POD_NAME -c model-downloader
 
 # Verify GCS access
-kubectl exec -n helios deploy/helios-inference -- gsutil ls gs://your-bucket/
+kubectl exec -n prescale deploy/prescale-inference -- gsutil ls gs://your-bucket/
 ```
 
 ### Service Not Accessible
 
 ```bash
 # Check service
-kubectl describe svc helios-inference -n helios
+kubectl describe svc prescale-inference -n prescale
 
 # Check endpoints
-kubectl get endpoints helios-inference -n helios
+kubectl get endpoints prescale-inference -n prescale
 ```
 
 ---
@@ -384,13 +384,13 @@ kubectl get endpoints helios-inference -n helios
 
 ```bash
 # Delete Kubernetes resources
-kubectl delete namespace helios
+kubectl delete namespace prescale
 
 # Delete GKE cluster (if using manual setup)
-gcloud container clusters delete helios-cluster --region $GCP_REGION
+gcloud container clusters delete prescale-cluster --region $GCP_REGION
 
 # Delete GCS bucket
-gsutil rm -r gs://${GCP_PROJECT_ID}-helios-models
+gsutil rm -r gs://${GCP_PROJECT_ID}-prescale-models
 
 # Or with Terraform
 cd infra/terraform/gcp
