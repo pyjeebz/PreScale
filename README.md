@@ -1,4 +1,4 @@
-# Prescale
+<img width="1126" height="239" alt="Screenshot 2026-02-27 232126" src="https://github.com/user-attachments/assets/ff059c51-d44f-4b5c-b009-c558a20b9521" />
 
 **Predictive Infrastructure Intelligence Platform**
 
@@ -6,7 +6,7 @@
 [![Release](https://github.com/pyjeebz/prescale/actions/workflows/release.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Prescale uses machine learning to forecast infrastructure demand, detect anomalies, and provide proactive scaling recommendations. It supports multi-cloud metrics collection, real-time dashboards, and extensible agent architecture.
+PreScale uses machine learning to forecast infrastructure demand, detect anomalies, and provide proactive scaling recommendations. It supports multi-cloud metrics collection, real-time dashboards, and extensible agent architecture.
 
 ---
 
