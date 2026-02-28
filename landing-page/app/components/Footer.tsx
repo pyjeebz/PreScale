@@ -1,4 +1,6 @@
 import { Github } from "lucide-react";
+import { Link } from "react-router";
+import { PreScaleLogo } from "./PreScaleLogo";
 
 export function Footer() {
   return (
@@ -7,11 +9,8 @@ export function Footer() {
         <div className="flex flex-col md:flex-row justify-between gap-8">
           {/* Logo + description */}
           <div className="max-w-xs">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                <span className="text-white font-bold text-xs">P</span>
-              </div>
-              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Prescale</span>
+            <div className="mb-3">
+              <PreScaleLogo size="sm" />
             </div>
             <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
               Open-source predictive infrastructure intelligence.
@@ -20,25 +19,46 @@ export function Footer() {
           </div>
 
           {/* Links */}
-          <div className="flex gap-16">
+          <div className="flex gap-12 sm:gap-16 flex-wrap">
             <div>
-              <div className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Resources</div>
+              <div className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Documentation</div>
               <ul className="space-y-2">
                 {[
-                  { label: "Documentation", href: "https://github.com/pyjeebz/prescale/tree/main/docs" },
-                  { label: "API Reference", href: "https://github.com/pyjeebz/prescale/tree/main/docs" },
-                  { label: "Architecture", href: "https://github.com/pyjeebz/prescale/blob/main/docs/architecture/ARCHITECTURE.md" },
+                  { label: "Quickstart", href: "/docs/quickstart" },
+                  { label: "Configuration", href: "/docs/configuration" },
+                  { label: "API Reference", href: "/docs/api" },
+                  { label: "All Docs", href: "/docs" },
                 ].map((link) => (
                   <li key={link.label}>
-                    <a
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <Link
+                      to={link.href}
                       className="text-xs transition-opacity hover:opacity-80"
                       style={{ color: "var(--text-muted)" }}
                     >
                       {link.label}
-                    </a>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Integrations</div>
+              <ul className="space-y-2">
+                {[
+                  { label: "Prometheus", href: "/integrations/prometheus" },
+                  { label: "Grafana", href: "/integrations/grafana" },
+                  { label: "Datadog", href: "/integrations/datadog" },
+                  { label: "CloudWatch", href: "/integrations/cloudwatch" },
+                  { label: "Azure Monitor", href: "/integrations/azure-monitor" },
+                ].map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      to={link.href}
+                      className="text-xs transition-opacity hover:opacity-80"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {link.label}
+                    </Link>
                   </li>
                 ))}
               </ul>

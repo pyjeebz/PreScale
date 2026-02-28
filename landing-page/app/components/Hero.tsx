@@ -1,7 +1,9 @@
 import { motion } from "motion/react";
+import { Link } from "react-router";
 import { Button } from "./ui/button";
-import { ArrowRight, Github, Terminal } from "lucide-react";
+import { ArrowRight, Github, Terminal, BookOpen } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
+import { PreScaleLogo } from "./PreScaleLogo";
 
 export function Hero() {
   const { theme } = useTheme();
@@ -80,6 +82,18 @@ export function Hero() {
           >
             Get Started
             <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="px-6 py-5 text-sm font-medium rounded-lg"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-accent)", color: "var(--text-secondary)" }}
+            asChild
+          >
+            <Link to="/docs">
+              <BookOpen className="mr-2 h-4 w-4" />
+              Documentation
+            </Link>
           </Button>
           <Button
             size="lg"
