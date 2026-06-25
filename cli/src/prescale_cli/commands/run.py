@@ -20,6 +20,7 @@ from prescale_cli.loadtest import (
     RunReport,
     analyze,
     build_targets,
+    check_robots,
     default_levels,
     discover_sitemap,
     route_label,
@@ -49,13 +50,18 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="HTTP method to fire.")
 @click.option("--timeout", default=10.0, type=float,
               help="Per-request timeout in seconds.")
+@click.option("--max-rps", default=None, type=float,
+              help="Cap aggregate requests/sec (default: unlimited). A safety ceiling.")
+@click.option("--ignore-robots", "ignore_robots", is_flag=True,
+              help="Skip the robots.txt courtesy check.")
 @click.option("--i-own-this", "yes", is_flag=True,
               help="Skip the confirmation prompt for non-local targets.")
 @click.option("--json", "as_json", is_flag=True,
               help="Emit the raw report as JSON.")
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
-        method: str, timeout: float, yes: bool, as_json: bool) -> None:
+        method: str, timeout: float, max_rps: float | None, ignore_robots: bool,
+        yes: bool, as_json: bool) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -100,9 +106,19 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
 
     targets = build_targets(url, paths=paths, extra=extra)
 
+    if not ignore_robots and not as_json:
+        disallowed = asyncio.run(check_robots(targets, timeout=timeout))
+        if disallowed:
+            console.print(f"[yellow]⚠ robots.txt disallows {len(disallowed)} of these "
+                          "route(s) — testing anyway (use --ignore-robots to "
+                          "silence):[/yellow]")
+            for route in disallowed[:8]:
+                console.print(f"    [yellow]{route_label(route)}[/yellow]")
+
     if not as_json:
+        cap = f", capped at {max_rps:g} req/s" if max_rps else ""
         console.print(f"\n[bold]PreScale[/bold] — load testing [cyan]{url}[/cyan]  "
-                      f"({len(targets)} route{'s' if len(targets) != 1 else ''})")
+                      f"({len(targets)} route{'s' if len(targets) != 1 else ''}{cap})")
         if len(targets) > 1:
             for target in targets[:12]:
                 console.print(f"  [dim]{route_label(target)}[/dim]")
@@ -120,19 +136,21 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         if as_json:
             stages, warning = asyncio.run(run_loadtest(
                 targets, levels=levels, stage_seconds=stage_seconds,
-                method=method, timeout=timeout,
+                method=method, timeout=timeout, max_rps=max_rps,
             ))
         else:
             with console.status("[bold blue]Warming up…") as status:
                 stages, warning = asyncio.run(run_loadtest(
                     targets, levels=levels, stage_seconds=stage_seconds,
-                    method=method, timeout=timeout, progress_cb=render_progress(status),
+                    method=method, timeout=timeout, max_rps=max_rps,
+                    progress_cb=render_progress(status),
                 ))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1)
 
-    report = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold)
+    report = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
+                     rate_capped=max_rps is not None)
 
     if as_json:
         console.print(json.dumps(_report_to_dict(report, warning), indent=2))

@@ -36,6 +36,8 @@ def test_run_help_has_key_options():
     assert "--i-own-this" in result.output
     assert "--path" in result.output
     assert "--from-sitemap" in result.output
+    assert "--max-rps" in result.output
+    assert "--ignore-robots" in result.output
 
 
 def test_run_rejects_non_url():

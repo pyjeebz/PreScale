@@ -1,12 +1,16 @@
 """Tests for the pure logic of the prescale run load engine."""
 
+import asyncio
+
 from prescale_cli.loadtest import (
     RouteStat,
     StageResult,
+    _RateGate,
     analyze,
     build_targets,
     default_levels,
     detect_saturation,
+    disallowed_targets,
     parse_sitemap,
     percentile,
     route_label,
@@ -220,3 +224,43 @@ def test_marginal_when_only_top_level_wobbles():
     assert report.onset_users == 20
     assert report.max_tested == 20
     assert report.marginal is True
+
+
+def test_rate_capped_suppresses_saturation():
+    stages = [_lvl(1, 100), _lvl(5, 400), _lvl(10, 440), _lvl(20, 450)]  # would plateau
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02, rate_capped=True)
+    assert report.saturated is False
+
+
+# --- M5 safety rails ---
+
+def test_rate_gate_paces_starts():
+    gate = _RateGate(50)  # 50 rps -> 20ms between starts
+
+    async def fire_five():
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 100
+        t0 = loop.time()
+        for _ in range(5):
+            await gate.wait(deadline)
+        return loop.time() - t0
+
+    elapsed = asyncio.run(fire_five())
+    assert elapsed >= 0.06  # 4 gaps * 20ms, with slack for scheduling
+
+
+def test_robots_disallowed_filtering():
+    robots = "User-agent: *\nDisallow: /api\n"
+    targets = [
+        "https://app.com/",
+        "https://app.com/api/search",
+        "https://app.com/pricing",
+    ]
+    assert disallowed_targets(robots, targets, "prescale/0.1.0") == [
+        "https://app.com/api/search",
+    ]
+
+
+def test_robots_empty_allows_all():
+    targets = ["https://app.com/", "https://app.com/api"]
+    assert disallowed_targets("", targets, "prescale/0.1.0") == []

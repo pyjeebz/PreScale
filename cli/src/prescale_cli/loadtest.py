@@ -14,13 +14,18 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
+
+from prescale_cli import __version__
 
 
 class LoadError(Exception):
     """Raised when the target can't be reached at all (nothing to test)."""
 
+
+_USER_AGENT = f"prescale/{__version__}"
 
 # Concurrency levels we step through. Filtered against --max-users at runtime.
 _LADDER = [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000]
@@ -104,7 +109,9 @@ async def discover_sitemap(base_url: str, *, timeout: float = 10.0,
     pages: list[str] = []
     nested: list[str] = []
 
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout, follow_redirects=True, headers={"User-Agent": _USER_AGENT}
+    ) as client:
         async def load(url: str) -> None:
             try:
                 resp = await client.get(url)
@@ -140,6 +147,32 @@ async def discover_sitemap(base_url: str, *, timeout: float = 10.0,
         if len(out) >= cap:
             break
     return out
+
+
+def disallowed_targets(robots_text: str, targets: list[str], user_agent: str) -> list[str]:
+    """Targets that robots.txt disallows for `user_agent` (empty robots = all allowed)."""
+    parser = RobotFileParser()
+    parser.parse(robots_text.splitlines())
+    return [t for t in targets if not parser.can_fetch(user_agent, t)]
+
+
+async def check_robots(targets: list[str], *, timeout: float = 10.0) -> list[str]:
+    """Best-effort: fetch robots.txt and return the disallowed subset of targets.
+    Never raises; a missing or unreadable robots.txt means everything is allowed."""
+    if not targets:
+        return []
+    parts = urlparse(targets[0])
+    origin = f"{parts.scheme}://{parts.netloc}"
+    async with httpx.AsyncClient(
+        timeout=timeout, follow_redirects=True, headers={"User-Agent": _USER_AGENT}
+    ) as client:
+        try:
+            resp = await client.get(f"{origin}/robots.txt")
+        except httpx.HTTPError:
+            return []
+    if resp.status_code >= 400:
+        return []
+    return disallowed_targets(resp.text, targets, _USER_AGENT)
 
 
 @dataclass
@@ -268,12 +301,38 @@ class _Sink:
         return StageResult(users=users, duration=duration, routes=self.routes)
 
 
+class _RateGate:
+    """Caps the aggregate rate at which requests are *started* across all VUs by
+    spacing out start times. No lock needed: the reserve step has no await."""
+
+    def __init__(self, max_rps: float) -> None:
+        self.interval = 1.0 / max_rps
+        self._next = 0.0
+
+    async def wait(self, deadline: float) -> bool:
+        """Reserve the next start slot. Returns False (without sleeping) if that
+        slot falls past the stage deadline, so the worker can stop promptly
+        instead of sleeping on a slot it will never use."""
+        loop = asyncio.get_running_loop()
+        now = loop.time()
+        scheduled = self._next if self._next > now else now
+        if scheduled >= deadline:
+            return False
+        self._next = scheduled + self.interval
+        delay = scheduled - now
+        if delay > 0:
+            await asyncio.sleep(delay)
+        return True
+
+
 async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
-                  sink: _Sink, pick) -> None:
+                  sink: _Sink, pick, gate: _RateGate | None = None) -> None:
     """Closed-loop VU: pick a route and fire requests back-to-back until the
-    stage deadline."""
+    stage deadline (respecting the optional rate gate)."""
     loop = asyncio.get_running_loop()
     while loop.time() < deadline:
+        if gate is not None and not await gate.wait(deadline):
+            break
         target = pick()
         start = time.perf_counter()
         try:
@@ -288,14 +347,15 @@ async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
 
 
 async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
-                     users: int, duration: float) -> StageResult:
+                     users: int, duration: float,
+                     gate: _RateGate | None = None) -> StageResult:
     sink = _Sink()
     cycle = itertools.cycle(targets)  # round-robin spreads load evenly across routes
     loop = asyncio.get_running_loop()
     start = loop.time()
     deadline = start + duration
     await asyncio.gather(
-        *(_worker(client, method, deadline, sink, lambda: next(cycle))
+        *(_worker(client, method, deadline, sink, lambda: next(cycle), gate)
           for _ in range(users))
     )
     # Use actual elapsed wall-time (workers finish their in-flight request after the
@@ -311,6 +371,7 @@ async def run_loadtest(
     stage_seconds: float,
     method: str = "GET",
     timeout: float = 10.0,
+    max_rps: float | None = None,
     hard_stop_rate: float = 0.5,
     progress_cb=None,
 ) -> tuple[list[StageResult], str | None]:
@@ -323,8 +384,10 @@ async def run_loadtest(
     limits = httpx.Limits(max_connections=max_conns, max_keepalive_connections=max_conns)
     warning: str | None = None
 
+    gate = _RateGate(max_rps) if max_rps else None
     async with httpx.AsyncClient(
-        timeout=timeout, limits=limits, follow_redirects=True
+        timeout=timeout, limits=limits, follow_redirects=True,
+        headers={"User-Agent": _USER_AGENT},
     ) as client:
         try:
             preflight = await client.request(method, targets[0])
@@ -340,7 +403,7 @@ async def run_loadtest(
         for users in levels:
             if progress_cb:
                 progress_cb(users)
-            stage = await _run_stage(client, targets, method, users, stage_seconds)
+            stage = await _run_stage(client, targets, method, users, stage_seconds, gate)
             stages.append(stage)
             if stage.error_rate >= hard_stop_rate:
                 break
@@ -399,7 +462,7 @@ def _bottleneck_hint(stat: RouteStat, reason: str, sat: SaturationInfo) -> str:
 
 
 def analyze(stages: list[StageResult], *, latency_wall: float,
-            error_threshold: float) -> RunReport:
+            error_threshold: float, rate_capped: bool = False) -> RunReport:
     """Find the first level that crosses the error or latency threshold, and the
     route most responsible for it."""
     onset: StageResult | None = None
@@ -413,6 +476,8 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
             break
 
     sat = detect_saturation(stages)
+    if rate_capped:  # the plateau would be our own ceiling, not the app's
+        sat = SaturationInfo(False, None, sat.peak_rps)
     max_tested = stages[-1].users if stages else 0
     if onset is None:
         return RunReport(

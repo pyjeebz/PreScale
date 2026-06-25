@@ -64,18 +64,25 @@ prescale run <url> [options]
 |---|---|---|
 | `-u, --max-users` | `200` | Peak virtual users to ramp to |
 | `-s, --stage-seconds` | `5` | Seconds to hold each load level |
+| `--path` | — | Extra route to test, relative to URL (repeatable) |
+| `--from-sitemap` | off | Also pull GET routes from the site's `sitemap.xml` |
 | `--latency-wall` | `2.0` | p95 latency (s) treated as failure |
 | `--error-threshold` | `0.02` | Error rate (0–1) treated as failure |
 | `-m, --method` | `GET` | HTTP method to fire |
 | `--timeout` | `10` | Per-request timeout (s) |
+| `--max-rps` | — | Cap aggregate requests/sec (a safety ceiling) |
 | `--i-own-this` | off | Skip the confirmation prompt for non-local targets |
+| `--ignore-robots` | off | Skip the `robots.txt` courtesy check |
 | `--json` | off | Emit the raw report as JSON |
 
 ```bash
 # Local app, quick check
 prescale run http://localhost:8000
 
-# Staging, ramp harder, skip the prompt, machine-readable
+# Specific routes, gently, on staging
+prescale run https://staging.myapp.com --path /api/search --path /pricing --max-rps 200 --i-own-this
+
+# Ramp harder, skip the prompt, machine-readable
 prescale run https://staging.myapp.com -u 500 --i-own-this --json
 ```
 
@@ -95,9 +102,9 @@ Load testing sends real traffic and can cause real outages or bills. PreScale de
 ## Roadmap
 
 - [x] `prescale run` — ramp, error-onset detection, plain-English readiness verdict
-- [ ] Multi-route testing — `--path` and opportunistic `--from-sitemap`
-- [ ] Saturation detection (throughput plateau) + richer bottleneck inference
-- [ ] Safety rails — request-rate ceiling, robots.txt
+- [x] Multi-route testing — `--path` and opportunistic `--from-sitemap`
+- [x] Saturation detection (throughput plateau) + richer bottleneck inference
+- [x] Safety rails — `--max-rps` ceiling, `robots.txt` awareness, identifiable User-Agent
 - [ ] `prescale audit` — static scan for scaling footguns
 - [ ] PyPI release + demo GIF
 
