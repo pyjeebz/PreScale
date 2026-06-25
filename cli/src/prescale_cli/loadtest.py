@@ -1,15 +1,19 @@
 """Self-contained launch-readiness load engine for `prescale run`.
 
-Ramps virtual users against a single URL, captures latency/error signals at
-each level, and finds the point where the target starts to fail. Pure-Python
-on top of httpx + asyncio so it needs no external load tool and no server.
+Ramps virtual users across one or more routes, captures latency/error signals
+per route and per level, and finds where the target starts to fail. Pure
+Python on top of httpx + asyncio so it needs no external load tool and no
+server.
 """
 
 from __future__ import annotations
 
 import asyncio
+import itertools
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 
@@ -41,21 +45,112 @@ def percentile(sorted_vals: list[float], p: float) -> float:
     return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (k - lo)
 
 
-@dataclass
-class StageResult:
-    """Aggregated outcome of holding `users` concurrent VUs for `duration`s."""
+def route_label(url: str) -> str:
+    """Short display label for a target URL: its path (+ query), defaulting '/'."""
+    parts = urlparse(url)
+    label = parts.path or "/"
+    if parts.query:
+        label = f"{label}?{parts.query}"
+    return label
 
-    users: int
-    duration: float
+
+def _normalize(url: str) -> str:
+    """Canonical form for de-duping: empty path becomes '/', fragment dropped."""
+    u = urlparse(url)
+    return urlunparse((u.scheme, u.netloc, u.path or "/", u.params, u.query, ""))
+
+
+def build_targets(base_url: str, paths=(), extra=()) -> list[str]:
+    """De-duplicated, same-origin list of URLs to test: the base URL, plus any
+    user paths (joined to the base), plus extras (e.g. sitemap URLs). Cross-origin
+    entries are dropped so we only ever hit the host we vetted."""
+    base = urlparse(base_url)
+    origin = (base.scheme, base.netloc)
+    candidates = [base_url, *(urljoin(base_url, p) for p in paths), *extra]
+    out: list[str] = []
+    seen: set[str] = set()
+    for url in candidates:
+        u = urlparse(url)
+        if (u.scheme, u.netloc) != origin:
+            continue
+        norm = _normalize(url)
+        if norm not in seen:
+            seen.add(norm)
+            out.append(norm)
+    return out
+
+
+def parse_sitemap(content: str, origin: str) -> list[str]:
+    """Extract same-origin <loc> URLs from a sitemap or sitemap index."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return []
+    locs: list[str] = []
+    for elem in root.iter():
+        if elem.tag.rsplit("}", 1)[-1] == "loc" and elem.text:
+            url = elem.text.strip()
+            if url.startswith(origin):
+                locs.append(url)
+    return locs
+
+
+async def discover_sitemap(base_url: str, *, timeout: float = 10.0,
+                           cap: int = 20) -> list[str]:
+    """Best-effort: fetch sitemap.xml (falling back to robots.txt), follow one
+    level of sitemap-index nesting, and return up to `cap` same-origin page URLs."""
+    parts = urlparse(base_url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    pages: list[str] = []
+    nested: list[str] = []
+
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        async def load(url: str) -> None:
+            try:
+                resp = await client.get(url)
+            except httpx.HTTPError:
+                return
+            if resp.status_code >= 400:
+                return
+            for loc in parse_sitemap(resp.text, origin):
+                (nested if loc.endswith(".xml") else pages).append(loc)
+
+        await load(f"{origin}/sitemap.xml")
+        if not pages and not nested:
+            try:
+                robots = await client.get(f"{origin}/robots.txt")
+            except httpx.HTTPError:
+                robots = None
+            if robots is not None and robots.status_code < 400:
+                for line in robots.text.splitlines():
+                    if line.lower().startswith("sitemap:"):
+                        await load(line.split(":", 1)[1].strip())
+        for child in nested[:3]:
+            if len(pages) >= cap:
+                break
+            await load(child)
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for url in pages:
+        if url.endswith(".xml") or url in seen:
+            continue
+        seen.add(url)
+        out.append(url)
+        if len(out) >= cap:
+            break
+    return out
+
+
+@dataclass
+class RouteStat:
+    """Per-route outcome within a stage."""
+
     total: int = 0
     errors: int = 0
-    latencies: list[float] = field(default_factory=list)  # successful responses, seconds
+    latencies: list[float] = field(default_factory=list)  # successful, seconds
     status_counts: dict[int, int] = field(default_factory=dict)
     error_kinds: dict[str, int] = field(default_factory=dict)
-
-    @property
-    def rps(self) -> float:
-        return self.total / self.duration if self.duration else 0.0
 
     @property
     def error_rate(self) -> float:
@@ -66,88 +161,135 @@ class StageResult:
 
 
 @dataclass
+class StageResult:
+    """Aggregated outcome of holding `users` concurrent VUs for `duration`s,
+    broken down per route."""
+
+    users: int
+    duration: float
+    routes: dict[str, RouteStat] = field(default_factory=dict)
+
+    @property
+    def total(self) -> int:
+        return sum(r.total for r in self.routes.values())
+
+    @property
+    def errors(self) -> int:
+        return sum(r.errors for r in self.routes.values())
+
+    @property
+    def error_rate(self) -> float:
+        total = self.total
+        return self.errors / total if total else 0.0
+
+    @property
+    def rps(self) -> float:
+        return self.total / self.duration if self.duration else 0.0
+
+    def _merged_latencies(self) -> list[float]:
+        merged: list[float] = []
+        for route in self.routes.values():
+            merged.extend(route.latencies)
+        return merged
+
+    def pct(self, p: float) -> float:
+        return percentile(sorted(self._merged_latencies()), p)
+
+    def worst_route(self, by: str):
+        """(label, RouteStat) of the most-degraded route, or None."""
+        if not self.routes:
+            return None
+        if by == "latency":
+            return max(self.routes.items(), key=lambda kv: kv[1].pct(0.95))
+        return max(self.routes.items(), key=lambda kv: (kv[1].error_rate, kv[1].errors))
+
+
+@dataclass
 class RunReport:
     stages: list[StageResult]
     survives_users: int
     max_tested: int
     onset_users: int | None = None
     onset_reason: str | None = None  # "errors" | "latency"
+    culprit_route: str | None = None
     bottleneck: str | None = None
     latency_wall: float = 2.0
 
 
 class _Sink:
-    """Per-stage accumulator. A 5xx/429 is a failure; everything else with a
-    status code counts toward latency."""
+    """Per-stage accumulator, keyed by route label. A 5xx/429 is a failure;
+    everything else with a status code counts toward latency."""
 
     def __init__(self) -> None:
-        self.total = 0
-        self.errors = 0
-        self.latencies: list[float] = []
-        self.status_counts: dict[int, int] = {}
-        self.error_kinds: dict[str, int] = {}
+        self.routes: dict[str, RouteStat] = {}
 
-    def _kind(self, k: str) -> None:
-        self.error_kinds[k] = self.error_kinds.get(k, 0) + 1
+    def _stat(self, target: str) -> RouteStat:
+        label = route_label(target)
+        stat = self.routes.get(label)
+        if stat is None:
+            stat = RouteStat()
+            self.routes[label] = stat
+        return stat
 
-    def record_response(self, status: int, latency: float) -> None:
-        self.total += 1
-        self.status_counts[status] = self.status_counts.get(status, 0) + 1
+    def _kind(self, stat: RouteStat, kind: str) -> None:
+        stat.error_kinds[kind] = stat.error_kinds.get(kind, 0) + 1
+
+    def record_response(self, target: str, status: int, latency: float) -> None:
+        stat = self._stat(target)
+        stat.total += 1
+        stat.status_counts[status] = stat.status_counts.get(status, 0) + 1
         if status >= 500:
-            self.errors += 1
-            self._kind("5xx")
+            stat.errors += 1
+            self._kind(stat, "5xx")
         elif status == 429:
-            self.errors += 1
-            self._kind("rate limited (429)")
+            stat.errors += 1
+            self._kind(stat, "rate limited (429)")
         else:
-            self.latencies.append(latency)
+            stat.latencies.append(latency)
 
-    def record_error(self, kind: str) -> None:
-        self.total += 1
-        self.errors += 1
-        self._kind(kind)
+    def record_error(self, target: str, kind: str) -> None:
+        stat = self._stat(target)
+        stat.total += 1
+        stat.errors += 1
+        self._kind(stat, kind)
 
     def to_stage(self, users: int, duration: float) -> StageResult:
-        return StageResult(
-            users=users,
-            duration=duration,
-            total=self.total,
-            errors=self.errors,
-            latencies=self.latencies,
-            status_counts=self.status_counts,
-            error_kinds=self.error_kinds,
-        )
+        return StageResult(users=users, duration=duration, routes=self.routes)
 
 
-async def _worker(client: httpx.AsyncClient, url: str, method: str,
-                  deadline: float, sink: _Sink) -> None:
-    """Closed-loop VU: fire requests back-to-back until the stage deadline."""
+async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
+                  sink: _Sink, pick) -> None:
+    """Closed-loop VU: pick a route and fire requests back-to-back until the
+    stage deadline."""
     loop = asyncio.get_running_loop()
     while loop.time() < deadline:
+        target = pick()
         start = time.perf_counter()
         try:
-            resp = await client.request(method, url)
-            sink.record_response(resp.status_code, time.perf_counter() - start)
+            resp = await client.request(method, target)
+            sink.record_response(target, resp.status_code, time.perf_counter() - start)
         except httpx.TimeoutException:
-            sink.record_error("timeout")
+            sink.record_error(target, "timeout")
         except httpx.ConnectError:
-            sink.record_error("connection refused")
+            sink.record_error(target, "connection refused")
         except httpx.HTTPError:
-            sink.record_error("network")
+            sink.record_error(target, "network")
 
 
-async def _run_stage(client: httpx.AsyncClient, url: str, method: str,
+async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
                      users: int, duration: float) -> StageResult:
     sink = _Sink()
+    cycle = itertools.cycle(targets)  # round-robin spreads load evenly across routes
     deadline = asyncio.get_running_loop().time() + duration
     await asyncio.gather(
-        *(_worker(client, url, method, deadline, sink) for _ in range(users))
+        *(_worker(client, method, deadline, sink, lambda: next(cycle))
+          for _ in range(users))
     )
     return sink.to_stage(users, duration)
 
 
 async def run_loadtest(
-    url: str,
+    targets: list[str],
     *,
     levels: list[int],
     stage_seconds: float,
@@ -156,8 +298,11 @@ async def run_loadtest(
     hard_stop_rate: float = 0.5,
     progress_cb=None,
 ) -> tuple[list[StageResult], str | None]:
-    """Preflight the URL, then ramp through `levels`. Stops early once a stage
-    is more than `hard_stop_rate` failed. Returns (stages, warning)."""
+    """Preflight the target, then ramp through `levels`, spreading each stage's
+    load across `targets`. Stops early once a stage is more than `hard_stop_rate`
+    failed. Returns (stages, warning)."""
+    if not targets:
+        raise LoadError("No targets to test.")
     max_conns = max(levels) + 50
     limits = httpx.Limits(max_connections=max_conns, max_keepalive_connections=max_conns)
     warning: str | None = None
@@ -166,9 +311,9 @@ async def run_loadtest(
         timeout=timeout, limits=limits, follow_redirects=True
     ) as client:
         try:
-            preflight = await client.request(method, url)
+            preflight = await client.request(method, targets[0])
         except httpx.HTTPError as exc:
-            raise LoadError(f"Couldn't reach {url}: {exc}") from exc
+            raise LoadError(f"Couldn't reach {targets[0]}: {exc}") from exc
         if preflight.status_code >= 400:
             warning = (
                 f"First request returned HTTP {preflight.status_code} — "
@@ -179,7 +324,7 @@ async def run_loadtest(
         for users in levels:
             if progress_cb:
                 progress_cb(users)
-            stage = await _run_stage(client, url, method, users, stage_seconds)
+            stage = await _run_stage(client, targets, method, users, stage_seconds)
             stages.append(stage)
             if stage.error_rate >= hard_stop_rate:
                 break
@@ -187,13 +332,13 @@ async def run_loadtest(
     return stages, warning
 
 
-def _bottleneck_hint(onset: StageResult, reason: str, latency_wall: float) -> str:
+def _bottleneck_hint(stat: RouteStat, reason: str, latency_wall: float) -> str:
     if reason == "latency":
         return (
             f"No errors yet, but p95 crosses {latency_wall:g}s — users feel it "
             "before anything 500s. Often a slow query, N+1, or missing cache."
         )
-    kind = max(onset.error_kinds, key=onset.error_kinds.get) if onset.error_kinds else ""
+    kind = max(stat.error_kinds, key=stat.error_kinds.get) if stat.error_kinds else ""
     hints = {
         "5xx": "Server returned 5xx under load — likely an unhandled overload "
                "(DB connection pool, worker queue, or an uncaught error path).",
@@ -210,32 +355,34 @@ def _bottleneck_hint(onset: StageResult, reason: str, latency_wall: float) -> st
 
 def analyze(stages: list[StageResult], *, latency_wall: float,
             error_threshold: float) -> RunReport:
-    """Find the first level that crosses the error or latency threshold."""
+    """Find the first level that crosses the error or latency threshold, and the
+    route most responsible for it."""
     onset: StageResult | None = None
     reason: str | None = None
     for stage in stages:
         if stage.total and stage.error_rate >= error_threshold:
             onset, reason = stage, "errors"
             break
-        if stage.latencies and stage.pct(0.95) >= latency_wall:
+        if stage._merged_latencies() and stage.pct(0.95) >= latency_wall:
             onset, reason = stage, "latency"
             break
 
     max_tested = stages[-1].users if stages else 0
     if onset is None:
-        survives = max_tested
-        bottleneck = None
-    else:
-        idx = stages.index(onset)
-        survives = stages[idx - 1].users if idx > 0 else 0
-        bottleneck = _bottleneck_hint(onset, reason, latency_wall)
+        return RunReport(stages, max_tested, max_tested, latency_wall=latency_wall)
 
+    idx = stages.index(onset)
+    survives = stages[idx - 1].users if idx > 0 else 0
+    worst = onset.worst_route("latency" if reason == "latency" else "errors")
+    culprit = worst[0] if worst else None
+    bottleneck = _bottleneck_hint(worst[1], reason, latency_wall) if worst else None
     return RunReport(
         stages=stages,
         survives_users=survives,
         max_tested=max_tested,
-        onset_users=onset.users if onset else None,
+        onset_users=onset.users,
         onset_reason=reason,
+        culprit_route=culprit,
         bottleneck=bottleneck,
         latency_wall=latency_wall,
     )

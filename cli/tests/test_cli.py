@@ -34,6 +34,8 @@ def test_run_help_has_key_options():
     assert result.exit_code == 0
     assert "--max-users" in result.output
     assert "--i-own-this" in result.output
+    assert "--path" in result.output
+    assert "--from-sitemap" in result.output
 
 
 def test_run_rejects_non_url():
