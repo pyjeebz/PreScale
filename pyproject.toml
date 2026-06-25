@@ -3,37 +3,35 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "prescale-platform"
+name = "prescale"
 version = "0.1.0"
-description = "Predictive Infrastructure Intelligence Platform - ML-powered forecasting and autoscaling"
+description = "Launch-readiness load testing for solo/indie devs - find what breaks before your users do"
 readme = "README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
-    {name = "Prescale Platform", email = "maintainers@prescale.dev"}
+    {name = "Mujeeb Lawal-Saka", email = "lawalsakamujeeb@gmail.com"}
 ]
 keywords = [
-    "kubernetes",
-    "machine-learning",
-    "prediction",
-    "monitoring",
-    "anomaly-detection",
-    "autoscaling"
+    "load-testing",
+    "performance",
+    "stress-test",
+    "cli",
+    "devtools",
+    "launch",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: System :: Monitoring",
-    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Testing :: Traffic Generation",
 ]
 
 dependencies = [
@@ -41,17 +39,12 @@ dependencies = [
     "httpx>=0.24.0",
     "rich>=13.0.0",
     "pyyaml>=6.0",
-    "tabulate>=0.9.0",
-    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
-agent = [
-    "prescale-agent>=0.1.0",
-]
 dev = [
     "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
@@ -61,7 +54,6 @@ prescale = "prescale_cli.main:cli"
 
 [project.urls]
 Homepage = "https://github.com/pyjeebz/prescale"
-Documentation = "https://pyjeebz.github.io/prescale"
 Repository = "https://github.com/pyjeebz/prescale"
 Issues = "https://github.com/pyjeebz/prescale/issues"
 
@@ -72,13 +64,13 @@ where = ["cli/src"]
 "" = "cli/src"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true

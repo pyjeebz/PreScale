@@ -5,206 +5,43 @@ on:
     tags:
       - 'v*'
 
-env:
-  PYTHON_VERSION: "3.11"
-  REGISTRY: ghcr.io
-  IMAGE_NAME: pyjeebz/prescale
-
 jobs:
-  release-docker:
-    name: Release Docker Images
+  pypi:
+    name: Publish CLI to PyPI
     runs-on: ubuntu-latest
     permissions:
+      id-token: write   # trusted publishing, no token needed
       contents: read
-      packages: write
-    strategy:
-      matrix:
-        service:
-          - name: inference
-            dockerfile: ./ml/inference/Dockerfile
-            context: ./ml
-          - name: cost-intelligence
-            dockerfile: ./ml/cost_intelligence/Dockerfile
-            context: ./ml
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/setup-python@v5
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          python-version: "3.11"
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.service.context }}
-          file: ${{ matrix.service.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service.name }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  release-helm:
-    name: Release Helm Chart
-    runs-on: ubuntu-latest
-    needs: release-docker
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Configure Git
+      - name: Build
+        working-directory: cli
         run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          python -m pip install --upgrade pip build
+          python -m build
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          version: v3.14.0
+          packages-dir: cli/dist
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Download chart dependencies
-        run: |
-          if [ -d "charts/prescale" ]; then
-            helm dependency update charts/prescale
-          fi
-
-      - name: Package Helm chart
-        run: |
-          if [ -d "charts/prescale" ]; then
-            helm package charts/prescale --version ${{ steps.version.outputs.VERSION }} --app-version ${{ steps.version.outputs.VERSION }}
-          fi
-
-      - name: Upload Helm chart as release asset
-        uses: softprops/action-gh-release@v1
-        with:
-          files: prescale-*.tgz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  release-pypi:
-    name: Release to PyPI
-    runs-on: ubuntu-latest
-    continue-on-error: true  # Don't block release if PyPI fails
-    permissions:
-      id-token: write
-      contents: read
-    strategy:
-      matrix:
-        package:
-          - name: prescale-platform-agent
-            path: agent
-          - name: prescale-cli
-            path: cli
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine hatchling
-
-      - name: Build ${{ matrix.package.name }}
-        working-directory: ${{ matrix.package.path }}
-        run: python -m build
-
-      - name: Publish ${{ matrix.package.name }} to PyPI
-        working-directory: ${{ matrix.package.path }}
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          twine upload dist/* --skip-existing || echo "PyPI upload failed for ${{ matrix.package.name }}, continuing..."
-
-  create-release:
+  github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [release-docker, release-helm]
+    needs: pypi
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get commits since last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -n "$LAST_TAG" ]; then
-            CHANGELOG=$(git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
-          else
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges -20)
-          fi
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Prescale v${{ steps.version.outputs.VERSION }}
-          body: |
-            ## 🚀 Prescale v${{ steps.version.outputs.VERSION }}
-
-            ### Installation
-
-            **Helm:**
-            ```bash
-            helm repo add prescale https://pyjeebz.github.io/prescale
-            helm install prescale prescale/prescale --version ${{ steps.version.outputs.VERSION }}
-            ```
-
-            **Docker:**
-            ```bash
-            docker pull ghcr.io/${{ env.IMAGE_NAME }}/inference:${{ steps.version.outputs.VERSION }}
-            docker pull ghcr.io/${{ env.IMAGE_NAME }}/cost-intelligence:${{ steps.version.outputs.VERSION }}
-            ```
-
-            **CLI:**
-            ```bash
-            pip install prescale-cli==${{ steps.version.outputs.VERSION }}
-            ```
-
-            ### Changes
-
-            ${{ steps.changelog.outputs.CHANGELOG }}
-
-            ### Docker Images
-
-            - `ghcr.io/${{ env.IMAGE_NAME }}/inference:${{ steps.version.outputs.VERSION }}`
-            - `ghcr.io/${{ env.IMAGE_NAME }}/cost-intelligence:${{ steps.version.outputs.VERSION }}`
-
-          draft: false
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
