@@ -214,6 +214,17 @@ class RunReport:
     culprit_route: str | None = None
     bottleneck: str | None = None
     latency_wall: float = 2.0
+    saturated: bool = False
+    saturation_users: int | None = None
+    peak_rps: float = 0.0
+    marginal: bool = False
+
+
+@dataclass
+class SaturationInfo:
+    saturated: bool
+    knee_users: int | None
+    peak_rps: float
 
 
 class _Sink:
@@ -280,12 +291,17 @@ async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
                      users: int, duration: float) -> StageResult:
     sink = _Sink()
     cycle = itertools.cycle(targets)  # round-robin spreads load evenly across routes
-    deadline = asyncio.get_running_loop().time() + duration
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    deadline = start + duration
     await asyncio.gather(
         *(_worker(client, method, deadline, sink, lambda: next(cycle))
           for _ in range(users))
     )
-    return sink.to_stage(users, duration)
+    # Use actual elapsed wall-time (workers finish their in-flight request after the
+    # deadline) so rps reflects true throughput instead of inflating with concurrency.
+    elapsed = loop.time() - start
+    return sink.to_stage(users, elapsed if elapsed > 0 else duration)
 
 
 async def run_loadtest(
@@ -332,16 +348,45 @@ async def run_loadtest(
     return stages, warning
 
 
-def _bottleneck_hint(stat: RouteStat, reason: str, latency_wall: float) -> str:
+def detect_saturation(stages: list[StageResult]) -> SaturationInfo:
+    """Throughput plateau: if rps stops climbing while users keep rising, the
+    target has hit a concurrency ceiling (capacity) — not just slow responses."""
+    rateable = [s for s in stages if s.duration > 0]
+    peak = max((s.rps for s in rateable), default=0.0)
+    if len(rateable) < 3 or peak <= 0:
+        return SaturationInfo(False, None, peak)
+    knee = next(s for s in rateable if s.rps >= 0.85 * peak)
+    last = rateable[-1]
+    plateaued = knee.users < last.users and last.users >= knee.users * 1.5
+    return SaturationInfo(plateaued, knee.users if plateaued else None, peak)
+
+
+def _bottleneck_hint(stat: RouteStat, reason: str, sat: SaturationInfo) -> str:
     if reason == "latency":
+        if sat.saturated:
+            return (
+                "Concurrency ceiling — once throughput maxes out, extra users just "
+                "queue, so latency climbs. Check worker/thread pool size, a "
+                "single-threaded server, or a serialized resource."
+            )
         return (
-            f"No errors yet, but p95 crosses {latency_wall:g}s — users feel it "
-            "before anything 500s. Often a slow query, N+1, or missing cache."
+            "Slow responses, not failures — p95 crosses the wall while throughput is "
+            "still climbing. Often a slow query, an N+1, or a missing cache."
         )
     kind = max(stat.error_kinds, key=stat.error_kinds.get) if stat.error_kinds else ""
+    if kind == "5xx":
+        server_errors = {c: n for c, n in stat.status_counts.items() if c >= 500}
+        if server_errors and max(server_errors, key=server_errors.get) == 503:
+            return (
+                "503 Service Unavailable under load — a proxy or load balancer shed "
+                "load, or the app signalled overload (often connection-pool or queue "
+                "limits)."
+            )
+        return (
+            "Server returned 5xx under load — likely an unhandled overload "
+            "(DB connection pool, worker queue, or an uncaught error path)."
+        )
     hints = {
-        "5xx": "Server returned 5xx under load — likely an unhandled overload "
-               "(DB connection pool, worker queue, or an uncaught error path).",
         "rate limited (429)": "A rate limiter kicked in (429). Fine if intentional; "
                               "otherwise it'll throttle real users during a spike.",
         "timeout": "Requests started timing out — the server is saturated or a "
@@ -367,15 +412,22 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
             onset, reason = stage, "latency"
             break
 
+    sat = detect_saturation(stages)
     max_tested = stages[-1].users if stages else 0
     if onset is None:
-        return RunReport(stages, max_tested, max_tested, latency_wall=latency_wall)
+        return RunReport(
+            stages=stages, survives_users=max_tested, max_tested=max_tested,
+            latency_wall=latency_wall, saturated=sat.saturated,
+            saturation_users=sat.knee_users, peak_rps=sat.peak_rps,
+        )
 
     idx = stages.index(onset)
     survives = stages[idx - 1].users if idx > 0 else 0
     worst = onset.worst_route("latency" if reason == "latency" else "errors")
     culprit = worst[0] if worst else None
-    bottleneck = _bottleneck_hint(worst[1], reason, latency_wall) if worst else None
+    bottleneck = _bottleneck_hint(worst[1], reason, sat) if worst else None
+    marginal = (onset.users == max_tested and reason == "errors"
+                and onset.error_rate < 2 * error_threshold)
     return RunReport(
         stages=stages,
         survives_users=survives,
@@ -385,4 +437,8 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
         culprit_route=culprit,
         bottleneck=bottleneck,
         latency_wall=latency_wall,
+        saturated=sat.saturated,
+        saturation_users=sat.knee_users,
+        peak_rps=sat.peak_rps,
+        marginal=marginal,
     )

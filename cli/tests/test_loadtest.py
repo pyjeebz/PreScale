@@ -6,6 +6,7 @@ from prescale_cli.loadtest import (
     analyze,
     build_targets,
     default_levels,
+    detect_saturation,
     parse_sitemap,
     percentile,
     route_label,
@@ -157,3 +158,65 @@ def test_analyze_attributes_culprit_route():
     assert report.onset_users == 50
     assert report.culprit_route == "/api/search"
     assert report.survives_users == 10
+
+
+# --- saturation + richer inference (M4) ---
+
+def _lvl(users, rps, latency=0.05, errors=0, kind="5xx"):
+    """A stage with a known rps (duration=1s) and uniform latency."""
+    rs = RouteStat(total=rps, errors=errors)
+    rs.latencies = [latency] * (rps - errors)
+    if errors:
+        rs.error_kinds = {kind: errors}
+    return StageResult(users=users, duration=1.0, routes={"/": rs})
+
+
+def test_detect_saturation_plateau():
+    stages = [_lvl(1, 100), _lvl(5, 400), _lvl(10, 440), _lvl(20, 450)]
+    info = detect_saturation(stages)
+    assert info.saturated
+    assert info.knee_users == 5
+    assert info.peak_rps == 450
+
+
+def test_detect_saturation_still_climbing():
+    stages = [_lvl(1, 100), _lvl(5, 250), _lvl(10, 500), _lvl(20, 1000)]
+    assert detect_saturation(stages).saturated is False
+
+
+def test_detect_saturation_needs_three_levels():
+    assert detect_saturation([_lvl(1, 100), _lvl(5, 400)]).saturated is False
+
+
+def test_analyze_saturation_refines_latency_hint():
+    stages = [
+        _lvl(1, 100, latency=0.05),
+        _lvl(5, 400, latency=0.1),
+        _lvl(10, 440, latency=0.5),
+        _lvl(20, 450, latency=3.0),  # p95 3s > wall -> latency onset; rps plateaued
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert report.onset_reason == "latency"
+    assert report.saturated
+    assert "ceiling" in report.bottleneck.lower()
+
+
+def test_503_refinement():
+    bad = RouteStat(total=1000, errors=200)
+    bad.latencies = [0.05] * 800
+    bad.error_kinds = {"5xx": 200}
+    bad.status_counts = {200: 800, 503: 200}
+    stages = [
+        _lvl(10, 500), _lvl(50, 500),
+        StageResult(users=100, duration=1.0, routes={"/api": bad}),
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert "503" in report.bottleneck
+
+
+def test_marginal_when_only_top_level_wobbles():
+    stages = [_lvl(10, 1000), _lvl(20, 1000, errors=30)]  # 3% errors at top only
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert report.onset_users == 20
+    assert report.max_tested == 20
+    assert report.marginal is True

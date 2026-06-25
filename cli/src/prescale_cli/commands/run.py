@@ -150,6 +150,10 @@ def _report_to_dict(report: RunReport, warning: str | None) -> dict:
         "culprit_route": report.culprit_route,
         "bottleneck": report.bottleneck,
         "latency_wall": report.latency_wall,
+        "saturated": report.saturated,
+        "saturation_users": report.saturation_users,
+        "peak_rps": round(report.peak_rps, 1),
+        "marginal": report.marginal,
         "warning": warning,
         "stages": [
             {
@@ -205,25 +209,33 @@ def _render(report: RunReport, warning: str | None, multi: bool) -> None:
 
     if report.onset_users is None:
         emoji, color = "✅", "green"
-        headline = (f"Held up through {report.max_tested} concurrent users "
-                    "(the most we tested).")
+        headline = (f"Held up through {report.max_tested} concurrent "
+                    f"{_u(report.max_tested)} (the most we tested).")
     else:
         emoji, color = "⚠️", "yellow"
         if report.survives_users == 0:
             emoji, color = "🛑", "red"
-        headline = f"Survives ~{report.survives_users} concurrent users."
+        headline = (f"Survives ~{report.survives_users} concurrent "
+                    f"{_u(report.survives_users)}.")
 
     lines = [f"[bold]Scale readiness:[/bold] {emoji} {headline}"]
     if report.onset_users is not None:
         culprit = f"{report.culprit_route}  " if (multi and report.culprit_route) else ""
         if report.onset_reason == "latency":
             lines.append(f"Latency wall  {culprit}p95 crosses "
-                         f"{report.latency_wall:g}s at ~{report.onset_users} users.")
+                         f"{report.latency_wall:g}s at ~{report.onset_users} "
+                         f"{_u(report.onset_users)}.")
         else:
             lines.append(f"First failure  {culprit}errors climb at "
-                         f"~{report.onset_users} users.")
+                         f"~{report.onset_users} {_u(report.onset_users)}.")
+    if report.saturated:
+        lines.append(f"Throughput  plateaued ~{report.peak_rps:.0f} req/s around "
+                     f"{report.saturation_users} {_u(report.saturation_users)} "
+                     "(capacity ceiling).")
     if report.bottleneck:
         lines.append(f"Likely cause  {report.bottleneck}")
+    if report.marginal:
+        lines.append("Note  only wobbled at the very top — likely some headroom.")
 
     console.print(Panel("\n".join(lines), title="📈 Readiness report", border_style=color))
 
@@ -254,6 +266,10 @@ def _render_routes(report: RunReport) -> None:
         )
     console.print()
     console.print(table)
+
+
+def _u(n: int) -> str:
+    return "user" if n == 1 else "users"
 
 
 def _err(rate: float) -> str:
