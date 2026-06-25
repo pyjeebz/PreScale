@@ -1,3 +1,0 @@
-locust>=2.20.0
-gevent>=23.9.0
-requests>=2.31.0

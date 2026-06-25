@@ -1,261 +1,110 @@
-<img width="1126" height="239" alt="Screenshot 2026-02-27 232126" src="https://github.com/user-attachments/assets/ff059c51-d44f-4b5c-b009-c558a20b9521" />
+# PreScale
 
-**Predictive Infrastructure Intelligence Platform**
+**Launch-readiness load testing for solo & indie devs — find what breaks before your users do.**
 
 [![CI](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml)
-[![Release](https://github.com/pyjeebz/prescale/actions/workflows/release.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-PreScale uses machine learning to forecast infrastructure demand, detect anomalies, and provide proactive scaling recommendations. It supports multi-cloud metrics collection, real-time dashboards, and extensible agent architecture.
+You ship to Hacker News / Product Hunt / Reddit, the traffic spikes, and your app falls over — 500s, exhausted DB connections, a surprise bill, or just dead during the one hour that mattered. PreScale tells you what breaks **before** that happens.
 
----
-
-## 🚀 Quick Start
-
-### Option 1: Docker (Easiest)
+Point it at a URL. It ramps simulated traffic until something gives, then tells you, in plain English, what failed first and at what load.
 
 ```bash
-docker run -d -p 8080:8080 ghcr.io/pyjeebz/prescale/inference:latest
-# Open http://localhost:8080
+prescale run https://staging.myapp.com
 ```
 
-### Option 2: Local Development
+```
+Scale readiness: ⚠️  Survives ~90 concurrent users
 
-**Prerequisites:** Python 3.10+, Node.js 18+
+            Load ramp
+ Users   Req/s    p50    p95    p99   Errors
+    10     520   18ms   31ms   44ms      0%
+    50     610   46ms  120ms  210ms      0%
+    90     590   80ms  240ms  900ms      0%
+   150     410  180ms   2.1s   3.4s      7%   <- breaks here
+
+First failure   errors climb at ~150 users
+Latency wall    p95 crosses 2s at ~150 users
+Likely cause    Server returned 5xx under load — likely an unhandled overload
+                (DB connection pool, worker queue, or an uncaught error path).
+```
+
+> Illustrative output — your numbers depend on your app.
+
+## Why PreScale
+
+- **Zero config.** No test scripts, no YAML, no account. One command against a URL.
+- **Stack-agnostic.** It tests a URL, so it doesn't care if you're on Vercel, Fly, Railway, a $5 VPS, Supabase, or serverless.
+- **An answer, not a histogram.** "You're good to ~90 users, your DB is the wall" — not a wall of percentiles you have to interpret.
+- **Safe by default.** It won't hammer a non-local host until you confirm you own it.
+
+## Install
+
+Requires Python 3.10+.
 
 ```bash
-# Clone and setup
-git clone https://github.com/pyjeebz/prescale.git
-cd prescale
+# From source
+git clone https://github.com/pyjeebz/PreScale.git
+cd PreScale
+pip install ./cli
 
-# Python environment
-python -m venv .venv
-.venv\Scripts\activate         # Windows
-# source .venv/bin/activate    # macOS/Linux
-pip install -r ml/inference/requirements.txt
-
-# Start backend (Terminal 1)
-python -m uvicorn ml.inference.app:app --host 0.0.0.0 --port 8080
-
-# Start frontend (Terminal 2)
-cd ml/inference/web
-npm install
-npm run dev
-# Open http://localhost:3000
+# …or in one line
+pip install "git+https://github.com/pyjeebz/PreScale.git#subdirectory=cli"
 ```
 
-### Option 3: Kubernetes (Helm)
+_(PyPI release coming soon.)_
+
+## Usage
 
 ```bash
-helm repo add prescale https://pyjeebz.github.io/prescale
-helm install prescale prescale/prescale
+prescale run <url> [options]
 ```
 
-### First Steps After Setup
-
-1. **Deployments** → Create a deployment (e.g., `my-app-prod`)
-2. **Install Agent** → Copy commands, run on your server
-3. **Dashboard** → View predictions, anomalies, recommendations
-
----
-
-## 🎯 Features
-
-| Feature | Description |
-|---------|-------------|
-| **Traffic Forecasting** | Predict CPU, memory, and request rates |
-| **Anomaly Detection** | Real-time detection using ML/statistics |
-| **Scaling Recommendations** | Proactive advice for resource scaling |
-| **Multi-Cloud Support** | GCP, AWS, Azure, Prometheus, custom sources |
-| **Web Dashboard** | Real-time charts, agent map, predictions, anomalies |
-| **CLI Tools** | `prescale` CLI for predictions, anomaly detection, recommendations |
-| **Pluggable Storage** | In-memory (dev), PostgreSQL, TimescaleDB, InfluxDB (planned) |
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Prescale Agent ──► ML Pipeline ──► Inference Service (API)  │
-│     │                │                │                     │
-│     ▼                ▼                ▼                     │
-│  Metrics         Training         Predictions/Anomalies     │
-│     │                │                │                     │
-│     └─────────────► Storage Backend (pluggable)             │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📁 Project Structure
-
-```
-prescale/
-├── agent/              # Metrics collection agent (pluggable sources)
-├── cli/                # CLI tools for predictions/anomalies/recommendations
-├── ml/                 # ML models, training, inference service (FastAPI)
-│   └── inference/web/  # Vue.js web dashboard
-├── infra/              # Kubernetes, Terraform, Docker, Helm
-├── charts/prescale/    # Helm chart
-├── docs/               # Documentation
-```
-
----
-
-## 🤖 Prescale Agent
-
-Collects metrics from:
-- System (CPU, memory, disk, network)
-- Prometheus
-- GCP Cloud Monitoring
-- AWS CloudWatch (planned)
-- Azure Monitor (planned)
-- Datadog (planned)
-
-### Installation
+| Option | Default | Description |
+|---|---|---|
+| `-u, --max-users` | `200` | Peak virtual users to ramp to |
+| `-s, --stage-seconds` | `5` | Seconds to hold each load level |
+| `--latency-wall` | `2.0` | p95 latency (s) treated as failure |
+| `--error-threshold` | `0.02` | Error rate (0–1) treated as failure |
+| `-m, --method` | `GET` | HTTP method to fire |
+| `--timeout` | `10` | Per-request timeout (s) |
+| `--i-own-this` | off | Skip the confirmation prompt for non-local targets |
+| `--json` | off | Emit the raw report as JSON |
 
 ```bash
-pip install prescale-agent
-pip install prescale-agent[gcp]      # GCP
-pip install prescale-agent[aws]      # AWS
-pip install prescale-agent[azure]    # Azure
-pip install prescale-agent[all]      # All backends
+# Local app, quick check
+prescale run http://localhost:8000
+
+# Staging, ramp harder, skip the prompt, machine-readable
+prescale run https://staging.myapp.com -u 500 --i-own-this --json
 ```
 
-### Configuration
+## How it works
 
-```yaml
-agent:
-  collection_interval: 60
-  log_level: INFO
+1. **Preflight** — one request to confirm the URL is reachable.
+2. **Ramp** — increase virtual users step by step (1 → max), holding each level briefly.
+3. **Measure** — throughput, latency percentiles, and error kinds at every level.
+4. **Report** — find the first level that crosses the error or latency threshold, and explain the likely cause in plain English.
 
-sources:
-  - type: system
-    enabled: true
-    config:
-      collect_cpu: true
-      collect_memory: true
-  - type: prometheus
-    enabled: true
-    config:
-      url: http://prometheus:9090
-      queries:
-        - name: cpu_usage
-          query: rate(container_cpu_usage_seconds_total[5m])
-prescale:
-  endpoint: http://prescale-inference:8080
-```
+It's self-contained (httpx + asyncio) — no external load tool or server required.
 
----
+## ⚠️ Use it on what you own
 
-## 🖥️ Web Dashboard
+Load testing sends real traffic and can cause real outages or bills. PreScale defaults to safe — it prompts before hitting any non-local host. Point it at a **staging / preview** URL, not production, unless you know what you're doing.
 
-The Vue.js dashboard provides AI-powered insights for your infrastructure:
+## Roadmap
 
-| Feature | Description |
-|---------|-------------|
-| **Multi-Deployment Management** | Create and switch between deployments (prod, staging, dev) |
-| **Agent Installation** | Copy-paste commands with live connection status |
-| **AI Predictions** | Forecast CPU, memory, and resource usage |
-| **Anomaly Detection** | Real-time detection of unusual patterns |
-| **Recommendations** | Proactive scaling advice with confidence scores |
+- [x] `prescale run` — ramp, error-onset detection, plain-English readiness verdict
+- [ ] Multi-route testing — `--path` and opportunistic `--from-sitemap`
+- [ ] Saturation detection (throughput plateau) + richer bottleneck inference
+- [ ] Safety rails — request-rate ceiling, robots.txt
+- [ ] `prescale audit` — static scan for scaling footguns
+- [ ] PyPI release + demo GIF
 
-### Running the Dashboard
+## Contributing
 
-```bash
-cd ml/inference/web
-npm install
-npm run dev        # Development: http://localhost:3000
-npm run build      # Production build to ../static
-```
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### User Flow
+## License
 
-1. **Create a deployment** (`/deployments`) - e.g., `ecommerce-prod`
-2. **Install the agent** (`/install`) - copy commands, run on your server
-3. **View AI insights** - predictions, anomalies, and recommendations appear automatically
-
----
-
-## 🧠 ML Training
-
-- Baseline (moving average/trend)
-- Prophet (seasonality)
-- XGBoost (anomaly detection)
-- Models train on collected metrics (manual/auto)
-
----
-
-## 🔌 API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Service health check |
-| `/api/v1/ingest` | POST | Ingest metrics from agent |
-| `/api/v1/predict` | POST | Forecast future metrics |
-| `/api/v1/detect` | POST | Anomaly detection |
-| `/api/v1/recommend` | POST | Scaling recommendations |
-| `/api/metrics` | GET | List available metric names |
-| `/api/metrics/{name}` | GET | Get time-series data |
-
----
-
-## ☸️ Kubernetes Deployment
-
-- Helm chart for easy install
-- K8s manifests for inference service, monitoring, autoscaling
-
----
-
-## 📈 Roadmap
-
-### ✅ Completed
-- Agent with pluggable backends (GCP, Prometheus, System)
-- ML pipeline (Baseline, Prophet, XGBoost)
-- Inference service (FastAPI)
-- CLI tools (predict, detect, recommend)
-- Kubernetes/Helm deployment
-- Web dashboard (Vue.js) with multi-deployment support
-- Agent installation flow
-- AI-focused insights (predictions, anomalies, recommendations)
-- **Automated model retraining** (GCP/AWS integration)
-- **Agent management controls** (pause/resume, collection interval)
-
-### 🚧 In Progress
-- Pluggable storage backend (SQLite supported, others planned)
-
-### 🔮 Future
-- Multi-cluster support
-- Deep learning models (LSTM, Transformer)
-- Alerting integrations (Slack, PagerDuty)
-- User authentication/RBAC
-- Landing page
-
----
-
-## 🧪 Testing
-
-```bash
-cd ml && pytest tests/
-cd agent && pytest
-cd cli && pytest
-```
-
----
-
-## 📝 License
-
-Apache 2.0 - See [LICENSE](LICENSE)
-
----
-
-## 🤝 Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing`)
-5. Open a Pull Request
+Apache 2.0 — see [LICENSE](LICENSE).
