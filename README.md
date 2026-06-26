@@ -86,6 +86,21 @@ prescale run https://staging.myapp.com --path /api/search --path /pricing --max-
 prescale run https://staging.myapp.com -u 500 --i-own-this --json
 ```
 
+### `prescale audit` — static hygiene check (no load)
+
+A fast, load-free check of the HTTP-level footguns that decide how you scale — compression, static-asset caching, CDN, HTTP version, cookies on assets. Cheap enough to run on every commit.
+
+```bash
+prescale audit https://myapp.com
+```
+
+```
+✓ Compression           Responses are compressed (br).
+⚠ HTTP version          Served over HTTP/1.1.
+⚠ Static asset caching  2 of 6 sampled assets have no caching headers.
+✓ CDN / edge cache      Detected (Cloudflare).
+```
+
 ## How it works
 
 1. **Preflight** — one request to confirm the URL is reachable.
@@ -105,7 +120,8 @@ Load testing sends real traffic and can cause real outages or bills. PreScale de
 - [x] Multi-route testing — `--path` and opportunistic `--from-sitemap`
 - [x] Saturation detection (throughput plateau) + richer bottleneck inference
 - [x] Safety rails — `--max-rps` ceiling, `robots.txt` awareness, identifiable User-Agent
-- [ ] `prescale audit` — static scan for scaling footguns
+- [x] `prescale audit` — static scaling-hygiene check (compression, caching, CDN, HTTP/2, cookies)
+- [ ] `--html` shareable report
 - [ ] PyPI release + demo GIF
 
 ## Contributing

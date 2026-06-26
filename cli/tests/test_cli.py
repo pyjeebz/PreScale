@@ -43,3 +43,20 @@ def test_run_help_has_key_options():
 def test_run_rejects_non_url():
     result = CliRunner().invoke(cli, ["run", "not-a-url"])
     assert result.exit_code == 1
+
+
+def test_group_help_lists_audit():
+    result = CliRunner().invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "audit" in result.output
+
+
+def test_audit_help():
+    result = CliRunner().invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "url" in result.output.lower()
+
+
+def test_audit_rejects_non_url():
+    result = CliRunner().invoke(cli, ["audit", "not-a-url"])
+    assert result.exit_code == 1
