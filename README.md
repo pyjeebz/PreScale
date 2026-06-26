@@ -1,11 +1,11 @@
 # PreScale
 
-**Launch-readiness load testing for solo & indie devs — find what breaks before your users do.**
+**Launch-readiness load testing for developers — find what breaks before your users do.**
 
 [![CI](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-You ship to Hacker News / Product Hunt / Reddit, the traffic spikes, and your app falls over — 500s, exhausted DB connections, a surprise bill, or just dead during the one hour that mattered. PreScale tells you what breaks **before** that happens.
+A launch, a marketing push, a sale, a Hacker News front page, a feature-flag flip — traffic spikes, and your app falls over: 500s, exhausted DB connections, a surprise bill, or just dead during the hour that mattered. PreScale tells you what breaks **before** that happens.
 
 Point it at a URL. It ramps simulated traffic until something gives, then tells you, in plain English, what failed first and at what load.
 
@@ -34,7 +34,7 @@ Likely cause    Server returned 5xx under load — likely an unhandled overload
 ## Why PreScale
 
 - **Zero config.** No test scripts, no YAML, no account. One command against a URL.
-- **Stack-agnostic.** It tests a URL, so it doesn't care if you're on Vercel, Fly, Railway, a $5 VPS, Supabase, or serverless.
+- **Stack-agnostic.** It tests a URL, so it doesn't care what's behind it — Vercel, Fly, Railway, Kubernetes, a VPS, serverless, anything.
 - **An answer, not a histogram.** "You're good to ~90 users, your DB is the wall" — not a wall of percentiles you have to interpret.
 - **Safe by default.** It won't hammer a non-local host until you confirm you own it.
 

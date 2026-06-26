@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "prescale-cli"
 version = "0.1.0"
-description = "Launch-readiness load testing for solo/indie devs - find what breaks before your users do"
+description = "Launch-readiness load testing for developers - find what breaks before your users do"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

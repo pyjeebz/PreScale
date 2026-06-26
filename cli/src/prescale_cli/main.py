@@ -9,7 +9,7 @@ from prescale_cli.commands import run
 @click.group()
 @click.version_option(version=__version__, prog_name="prescale")
 def cli() -> None:
-    """PreScale - launch-readiness load testing for solo/indie devs.
+    """PreScale - launch-readiness load testing for developers.
 
     Point `prescale run` at a URL and it ramps traffic until something gives,
     then tells you in plain English what breaks first and at what load -

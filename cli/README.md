@@ -1,6 +1,6 @@
 # PreScale
 
-**Launch-readiness load testing for solo & indie devs — find what breaks before your users do.**
+**Launch-readiness load testing for developers — find what breaks before your users do.**
 
 Point it at a URL. It ramps simulated traffic until something gives, then tells you, in plain English, what failed first and at what load.
 
