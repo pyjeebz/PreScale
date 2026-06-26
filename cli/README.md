@@ -5,7 +5,7 @@
 Point it at a URL. It ramps simulated traffic until something gives, then tells you, in plain English, what failed first and at what load.
 
 ```bash
-pip install prescale-cli
+pip install prescale
 prescale run https://staging.myapp.com
 ```
 

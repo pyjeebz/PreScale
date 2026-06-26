@@ -43,16 +43,14 @@ Likely cause    Server returned 5xx under load — likely an unhandled overload
 Requires Python 3.10+.
 
 ```bash
-# From source
-git clone https://github.com/pyjeebz/PreScale.git
-cd PreScale
-pip install ./cli
-
-# …or in one line
-pip install "git+https://github.com/pyjeebz/PreScale.git#subdirectory=cli"
+pip install prescale
 ```
 
-_(PyPI release coming soon.)_
+Or from source:
+
+```bash
+git clone https://github.com/pyjeebz/PreScale.git && pip install ./PreScale/cli
+```
 
 ## Usage
 

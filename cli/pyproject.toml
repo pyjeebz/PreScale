@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "prescale-cli"
+name = "prescale"
 version = "0.1.0"
 description = "Launch-readiness load testing for developers - find what breaks before your users do"
 readme = "README.md"
