@@ -38,6 +38,7 @@ def test_run_help_has_key_options():
     assert "--from-sitemap" in result.output
     assert "--max-rps" in result.output
     assert "--ignore-robots" in result.output
+    assert "--html" in result.output
 
 
 def test_run_rejects_non_url():

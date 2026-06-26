@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from urllib.parse import urlparse
 
 import click
@@ -26,6 +27,7 @@ from prescale_cli.loadtest import (
     route_label,
     run_loadtest,
 )
+from prescale_cli.report import render_html
 
 console = Console()
 
@@ -58,10 +60,12 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Skip the confirmation prompt for non-local targets.")
 @click.option("--json", "as_json", is_flag=True,
               help="Emit the raw report as JSON.")
+@click.option("--html", "html_path", type=click.Path(dir_okay=False), default=None,
+              help="Write a shareable HTML report to PATH.")
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
         method: str, timeout: float, max_rps: float | None, ignore_robots: bool,
-        yes: bool, as_json: bool) -> None:
+        yes: bool, as_json: bool, html_path: str | None) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -69,6 +73,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         prescale run http://localhost:8000
         prescale run https://staging.myapp.com --path /api/search --path /pricing
         prescale run https://staging.myapp.com --from-sitemap -u 500 --i-own-this
+        prescale run https://staging.myapp.com --i-own-this --html report.html
     """
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
@@ -152,11 +157,20 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     report = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
                      rate_capped=max_rps is not None)
 
+    if html_path:
+        Path(html_path).write_text(
+            render_html(report, url=url, targets=targets, method=method,
+                        stage_seconds=stage_seconds, max_users=max_users, warning=warning),
+            encoding="utf-8",
+        )
+
     if as_json:
         console.print(json.dumps(_report_to_dict(report, warning), indent=2))
         return
 
     _render(report, warning, multi=len(targets) > 1)
+    if html_path:
+        console.print(f"\n[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
 
 
 def _report_to_dict(report: RunReport, warning: str | None) -> dict:

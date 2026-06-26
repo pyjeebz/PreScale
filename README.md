@@ -74,6 +74,7 @@ prescale run <url> [options]
 | `--i-own-this` | off | Skip the confirmation prompt for non-local targets |
 | `--ignore-robots` | off | Skip the `robots.txt` courtesy check |
 | `--json` | off | Emit the raw report as JSON |
+| `--html PATH` | — | Write a shareable HTML report (single self-contained file) |
 
 ```bash
 # Local app, quick check
@@ -84,6 +85,9 @@ prescale run https://staging.myapp.com --path /api/search --path /pricing --max-
 
 # Ramp harder, skip the prompt, machine-readable
 prescale run https://staging.myapp.com -u 500 --i-own-this --json
+
+# Write a shareable HTML report
+prescale run https://staging.myapp.com --i-own-this --html report.html
 ```
 
 ### `prescale audit` — static hygiene check (no load)
@@ -121,7 +125,7 @@ Load testing sends real traffic and can cause real outages or bills. PreScale de
 - [x] Saturation detection (throughput plateau) + richer bottleneck inference
 - [x] Safety rails — `--max-rps` ceiling, `robots.txt` awareness, identifiable User-Agent
 - [x] `prescale audit` — static scaling-hygiene check (compression, caching, CDN, HTTP/2, cookies)
-- [ ] `--html` shareable report
+- [x] `--html` shareable report — single self-contained Linear-styled file
 - [ ] PyPI release + demo GIF
 
 ## Contributing
