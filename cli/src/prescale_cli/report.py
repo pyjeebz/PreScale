@@ -1,16 +1,14 @@
-"""Self-contained HTML readiness report for `prescale run --html`.
+"""Self-contained HTML readiness report for `prescale run --html` and `show`.
 
-Linear-styled (dark canvas, lavender accent, hairline borders), built from the
-RunReport with no external dependencies — inline CSS, system font stack, an
+Linear-styled (dark canvas, lavender accent, hairline borders), built from a
+Result with no external dependencies — inline CSS, system font stack, an
 inline-SVG chart. One file you can open offline, email, or attach to a PR.
 """
 
 from __future__ import annotations
 
 import html
-from datetime import datetime, timezone
-
-from prescale_cli.loadtest import RunReport
+from datetime import datetime
 
 _CSS = """
 :root{
@@ -96,22 +94,26 @@ def _esc(text: str) -> str:
     return html.escape(str(text), quote=True)
 
 
-def _ms(seconds: float) -> str:
-    return "-" if seconds <= 0 else f"{seconds * 1000:.0f}ms"
+def _ms(ms: float) -> str:
+    return "-" if ms <= 0 else f"{ms:.0f}ms"
 
 
 def _err_td(rate: float) -> str:
     return '<td class="ok">0%</td>' if rate == 0 else f"<td>{rate:.0%}</td>"
 
 
-def _svg_chart(report: RunReport) -> str:
-    stages = report.stages
-    pts = [(s.users, s.pct(0.95)) for s in stages]
+def _svg_chart(result: dict) -> str:
+    stages = result["stages"]
+    verdict = result["verdict"]
+    latency_wall = result["config"]["latency_wall_s"]
+    onset_users = verdict["onset_users"]
+    survives_users = verdict["survives_users"]
+    pts = [(s["users"], s["p95_ms"] / 1000.0) for s in stages]
     if not pts:
         return ""
     w, h, pl, pr, pb = 600, 180, 40, 40, 24
     pt = 24
-    ymax = max(max(v for _, v in pts), report.latency_wall * 1.2) or 1.0
+    ymax = max(max(v for _, v in pts), latency_wall * 1.2) or 1.0
     n = len(pts)
     plot_w, plot_h = w - pl - pr, h - pt - pb
 
@@ -122,12 +124,12 @@ def _svg_chart(report: RunReport) -> str:
         return h - pb - (v / ymax) * plot_h
 
     poly = " ".join(f"{x(i):.0f},{y(v):.0f}" for i, (_, v) in enumerate(pts))
-    wall_y = y(report.latency_wall)
+    wall_y = y(latency_wall)
     dots, labels = [], []
     for i, (users, v) in enumerate(pts):
-        if users == report.onset_users:
+        if users == onset_users:
             color, lc, r = "#eb5757", "#eb5757", 4
-        elif users == report.survives_users and report.onset_users is not None:
+        elif users == survives_users and onset_users is not None:
             color, lc, r = "#27a644", "#3fbf5f", 3.5
         else:
             color, lc, r = "#5e6ad2", "#62666d", 3
@@ -142,7 +144,7 @@ def _svg_chart(report: RunReport) -> str:
         f'<line x1="{pl}" y1="{wall_y:.0f}" x2="{w - pr}" y2="{wall_y:.0f}" stroke="#eb5757" '
         f'stroke-width="1" stroke-dasharray="4 4" opacity=".55"/>'
         f'<text x="{pl + 4}" y="{wall_y - 4:.0f}" font-family="monospace" font-size="9" '
-        f'fill="#eb5757">latency wall {MIDDOT} {report.latency_wall:g}s</text>'
+        f'fill="#eb5757">latency wall {MIDDOT} {latency_wall:g}s</text>'
         f'<line x1="{pl}" y1="{h - pb}" x2="{w - pr}" y2="{h - pb}" '
         f'stroke="#23252a" stroke-width="1"/>'
         f'<polyline points="{poly}" fill="none" stroke="#5e6ad2" stroke-width="2" '
@@ -151,49 +153,54 @@ def _svg_chart(report: RunReport) -> str:
     )
 
 
-def _verdict(report: RunReport) -> tuple[str, str, str, str]:
-    if report.onset_users is None:
+def _verdict(result: dict) -> tuple[str, str, str, str]:
+    v = result["verdict"]
+    if v["onset_users"] is None:
         return ("green", "READY",
-                f"Held up through {report.max_tested} concurrent users",
+                f"Held up through {v['max_tested']} concurrent users",
                 "No failures up to the most we tested.")
-    if report.survives_users == 0:
+    if v["survives_users"] == 0:
         return ("red", "AT RISK",
-                f"Struggles from ~{report.onset_users} concurrent users",
+                f"Struggles from ~{v['onset_users']} concurrent users",
                 "It buckles almost immediately under load.")
     return ("amber", "NEEDS ATTENTION",
-            f"Survives ~{report.survives_users} concurrent users",
-            f"First failure at ~{report.onset_users} users.")
+            f"Survives ~{v['survives_users']} concurrent users",
+            f"First failure at ~{v['onset_users']} users.")
 
 
-def _stats(report: RunReport) -> str:
-    onset = report.onset_users is not None
-    survives = report.survives_users if onset else report.max_tested
-    onset_stage = next((s for s in report.stages if s.users == report.onset_users), None)
-    wall_p95 = onset_stage.pct(0.95) if onset_stage else max(
-        (s.pct(0.95) for s in report.stages), default=0.0)
-    p95_val = f"{wall_p95:.1f}" if wall_p95 >= 1 else f"{wall_p95 * 1000:.0f}"
-    p95_unit = "s" if wall_p95 >= 1 else "ms"
+def _stats(result: dict) -> str:
+    v = result["verdict"]
+    stages = result["stages"]
+    onset_users = v["onset_users"]
+    onset = onset_users is not None
+    survives = v["survives_users"] if onset else v["max_tested"]
+    onset_stage = next((s for s in stages if s["users"] == onset_users), None)
+    wall_ms = onset_stage["p95_ms"] if onset_stage else max(
+        (s["p95_ms"] for s in stages), default=0)
+    p95_val = f"{wall_ms / 1000:.1f}" if wall_ms >= 1000 else f"{wall_ms:.0f}"
+    p95_unit = "s" if wall_ms >= 1000 else "ms"
     cards = [
         ("Survives", str(survives), "users"),
-        ("Peak throughput", f"{report.peak_rps:.0f}", "req/s"),
-        ("Breaks at", str(report.onset_users) if onset else "none", "users" if onset else ""),
+        ("Peak throughput", f"{v['peak_rps']:.0f}", "req/s"),
+        ("Breaks at", str(onset_users) if onset else "none", "users" if onset else ""),
         ("p95 at the wall" if onset else "Peak p95", p95_val, p95_unit),
     ]
     return "".join(
         f'<div class="panel stat"><div class="k">{k}</div>'
-        f'<div class="v">{v}<span class="u">{u}</span></div></div>'
-        for k, v, u in cards
+        f'<div class="v">{val}<span class="u">{u}</span></div></div>'
+        for k, val, u in cards
     )
 
 
-def _ramp_table(report: RunReport) -> str:
+def _ramp_table(result: dict) -> str:
+    onset_users = result["verdict"]["onset_users"]
     rows = []
-    for s in report.stages:
-        cls = ' class="onset"' if s.users == report.onset_users else ""
+    for s in result["stages"]:
+        cls = ' class="onset"' if s["users"] == onset_users else ""
         rows.append(
-            f"<tr{cls}><td>{s.users}</td><td>{s.rps:.0f}</td>"
-            f"<td>{_ms(s.pct(0.50))}</td><td>{_ms(s.pct(0.95))}</td>"
-            f"<td>{_ms(s.pct(0.99))}</td>{_err_td(s.error_rate)}</tr>"
+            f"<tr{cls}><td>{s['users']}</td><td>{s['rps']:.0f}</td>"
+            f"<td>{_ms(s['p50_ms'])}</td><td>{_ms(s['p95_ms'])}</td>"
+            f"<td>{_ms(s['p99_ms'])}</td>{_err_td(s['error_rate'])}</tr>"
         )
     return (
         "<table><thead><tr><th>Users</th><th>Req/s</th><th>p50</th><th>p95</th>"
@@ -202,39 +209,44 @@ def _ramp_table(report: RunReport) -> str:
     )
 
 
-def _route_table(report: RunReport) -> str:
-    decisive = next((s for s in report.stages if s.users == report.onset_users),
-                    report.stages[-1] if report.stages else None)
-    if decisive is None or len(decisive.routes) <= 1:
+def _route_table(result: dict) -> str:
+    v = result["verdict"]
+    stages = result["stages"]
+    if not stages:
         return ""
-    ranked = sorted(decisive.routes.items(),
-                    key=lambda kv: (kv[1].error_rate, kv[1].pct(0.95)), reverse=True)
+    decisive = next((s for s in stages if s["users"] == v["onset_users"]), stages[-1])
+    routes = decisive["routes"]
+    if len(routes) <= 1:
+        return ""
+    ranked = sorted(routes.items(),
+                    key=lambda kv: (kv[1]["error_rate"], kv[1]["p95_ms"]), reverse=True)
     rows = []
     for label, stat in ranked:
-        cls = ' class="onset"' if label == report.culprit_route else ""
+        cls = ' class="onset"' if label == v["culprit_route"] else ""
         rows.append(
-            f"<tr{cls}><td>{_esc(label)}</td><td>{stat.total / decisive.duration:.0f}</td>"
-            f"<td>{_ms(stat.pct(0.95))}</td>{_err_td(stat.error_rate)}</tr>"
+            f"<tr{cls}><td>{_esc(label)}</td><td>{stat['rps']:.0f}</td>"
+            f"<td>{_ms(stat['p95_ms'])}</td>{_err_td(stat['error_rate'])}</tr>"
         )
     return (
-        f'<div class="section"><h3>Per route {MIDDOT} at {decisive.users} users</h3>'
+        f'<div class="section"><h3>Per route {MIDDOT} at {decisive["users"]} users</h3>'
         '<div class="panel clip"><table><thead><tr><th>Route</th><th>Req/s</th>'
         "<th>p95</th><th>Errors</th></tr></thead><tbody>"
         + "".join(rows) + "</tbody></table></div></div>"
     )
 
 
-def _cause(report: RunReport) -> str:
+def _cause(result: dict) -> str:
+    v = result["verdict"]
     paras = []
-    if report.bottleneck:
-        culprit = f"<b>{_esc(report.culprit_route)}</b> — " if report.culprit_route else ""
-        paras.append(f"<p>{culprit}{_esc(report.bottleneck)}</p>")
-    if report.saturated and report.saturation_users:
+    if v["bottleneck"]:
+        culprit = f"<b>{_esc(v['culprit_route'])}</b> — " if v["culprit_route"] else ""
+        paras.append(f"<p>{culprit}{_esc(v['bottleneck'])}</p>")
+    if v["saturated"] and v["saturation_users"]:
         paras.append(
-            f"<p>Throughput plateaued ~{report.peak_rps:.0f} req/s around "
-            f"{report.saturation_users} users (capacity ceiling).</p>"
+            f"<p>Throughput plateaued ~{v['peak_rps']:.0f} req/s around "
+            f"{v['saturation_users']} users (capacity ceiling).</p>"
         )
-    if report.marginal:
+    if v["marginal"]:
         paras.append("<p>Only wobbled at the very top of the ramp — you likely have "
                      "some headroom.</p>")
     if not paras:
@@ -242,13 +254,19 @@ def _cause(report: RunReport) -> str:
     return f'<div class="cause"><div class="lbl">Likely cause</div>{"".join(paras)}</div>'
 
 
-def render_html(report: RunReport, *, url: str, targets: list[str], method: str,
-                stage_seconds: float, max_users: int, warning: str | None = None) -> str:
-    dot, pill, headline, sub = _verdict(report)
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    routes = f"{len(targets)} route{'s' if len(targets) != 1 else ''}"
-    warn_html = (f'<div class="cause"><p>{_esc(warning)}</p></div>') if warning else ""
-    meta = f"{_esc(method)} {MIDDOT} {stage_seconds:g}s per level {MIDDOT} max {max_users} users"
+def render_html(result: dict) -> str:
+    target = result["target"]
+    config = result["config"]
+    dot, pill, headline, sub = _verdict(result)
+    ts = datetime.strptime(result["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime(
+        "%Y-%m-%d %H:%M UTC")
+    n_routes = len(target["routes"])
+    routes = f"{n_routes} route{'s' if n_routes != 1 else ''}"
+    warn_html = (f'<div class="cause"><p>{_esc(result["warning"])}</p></div>'
+                 if result.get("warning") else "")
+    max_users = config["max_users"]
+    meta = (f"{_esc(config['method'])} {MIDDOT} {config['stage_seconds']:g}s per level "
+            f"{MIDDOT} max {max_users} users")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -260,7 +278,7 @@ def render_html(report: RunReport, *, url: str, targets: list[str], method: str,
     <div class="meta">prescale run {MIDDOT} {ts}</div>
   </div>
   <h1>Readiness report</h1>
-  <div class="sub"><span class="url">{_esc(url)}</span>
+  <div class="sub"><span class="url">{_esc(target["url"])}</span>
     <span>{MIDDOT} {routes} {MIDDOT} ramped 1 {RARROW} {max_users} users</span></div>
   <div class="panel verdict">
     <span class="dot {dot}"></span>
@@ -268,16 +286,16 @@ def render_html(report: RunReport, *, url: str, targets: list[str], method: str,
     <span class="pill {dot}">{pill}</span>
   </div>
   {warn_html}
-  <div class="grid">{_stats(report)}</div>
+  <div class="grid">{_stats(result)}</div>
   <div class="section"><h3>Load ramp</h3>
     <div class="panel clip">
-      <div class="chart">{_svg_chart(report)}</div>
-      {_ramp_table(report)}
+      <div class="chart">{_svg_chart(result)}</div>
+      {_ramp_table(result)}
     </div>
-    {_cause(report)}
+    {_cause(result)}
   </div>
-  {_route_table(report)}
-  <footer><span>Generated by prescale 0.1.0</span>
+  {_route_table(result)}
+  <footer><span>Generated by prescale {result["tool_version"]}</span>
     <span>{meta}</span></footer>
 </div></body></html>
 """

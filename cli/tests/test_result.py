@@ -1,6 +1,7 @@
 """Tests for the Result contract and its on-disk store."""
 
 import pytest
+
 from prescale_cli.loadtest import RouteStat, RunReport, StageResult
 from prescale_cli.result import (
     SCHEMA_VERSION,

@@ -2,6 +2,7 @@
 
 from prescale_cli.loadtest import RouteStat, StageResult, analyze
 from prescale_cli.report import render_html
+from prescale_cli.result import build_result, load_result, write_result
 
 
 def _stage(users, total, errors, latency):
@@ -15,8 +16,13 @@ def _stage(users, total, errors, latency):
 
 def _render(stages, url="https://app.com"):
     report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
-    return render_html(report, url=url, targets=["https://app.com/"], method="GET",
-                       stage_seconds=5.0, max_users=200)
+    result = build_result(
+        report, url=url, targets=["https://app.com/"],
+        config={"method": "GET", "stage_seconds": 5.0, "max_users": 200,
+                "latency_wall_s": 2.0, "error_threshold": 0.02, "max_rps": None},
+        warning=None,
+    )
+    return render_html(result)
 
 
 def test_render_html_is_self_contained_document():
@@ -52,3 +58,19 @@ def test_render_html_escapes_url():
                   url="https://app.com/<script>x")
     assert "<script>" not in out
     assert "&lt;script&gt;" in out
+
+
+def test_render_html_is_pure_function_of_result(tmp_path):
+    # Rendering depends only on the stored Result: a reloaded run renders
+    # identically to the in-memory one (the basis for `run`/`show` parity).
+    report = analyze([_stage(10, 1000, 0, 0.05), _stage(50, 1000, 200, 0.05)],
+                     latency_wall=2.0, error_threshold=0.02)
+    result = build_result(
+        report, url="https://app.com", targets=["https://app.com/"],
+        config={"method": "GET", "stage_seconds": 5.0, "max_users": 200,
+                "latency_wall_s": 2.0, "error_threshold": 0.02, "max_rps": None},
+        warning=None,
+    )
+    write_result(result, store=tmp_path)
+    reloaded = load_result(result["id"], store=tmp_path)
+    assert render_html(reloaded) == render_html(result)

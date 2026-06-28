@@ -70,6 +70,9 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["prescale_cli"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true

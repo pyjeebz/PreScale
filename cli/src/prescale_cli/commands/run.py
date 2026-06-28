@@ -14,11 +14,9 @@ from urllib.parse import urlparse
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from prescale_cli.loadtest import (
     LoadError,
-    RunReport,
     analyze,
     build_targets,
     check_robots,
@@ -27,6 +25,7 @@ from prescale_cli.loadtest import (
     route_label,
     run_loadtest,
 )
+from prescale_cli.render import render_terminal
 from prescale_cli.report import render_html
 from prescale_cli.result import build_result, write_result
 
@@ -175,123 +174,16 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     saved_path = None if no_save else write_result(result, store=store)
 
     if html_path:
-        Path(html_path).write_text(
-            render_html(report, url=url, targets=targets, method=method,
-                        stage_seconds=stage_seconds, max_users=max_users, warning=warning),
-            encoding="utf-8",
-        )
+        Path(html_path).write_text(render_html(result), encoding="utf-8")
 
     if as_json:
         console.print(json.dumps(result, indent=2))
         return
 
-    _render(report, warning, multi=len(targets) > 1)
+    render_terminal(result)
     if saved_path or html_path:
         console.print()
     if saved_path:
         console.print(f"[green]✓[/green] Saved run to [cyan]{saved_path}[/cyan]")
     if html_path:
         console.print(f"[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
-
-
-def _render(report: RunReport, warning: str | None, multi: bool) -> None:
-    console.print()
-    if warning:
-        console.print(f"[yellow]⚠ {warning}[/yellow]\n")
-
-    table = Table(show_header=True, header_style="bold magenta", title="Load ramp")
-    table.add_column("Users", justify="right")
-    table.add_column("Req/s", justify="right")
-    table.add_column("p50", justify="right")
-    table.add_column("p95", justify="right")
-    table.add_column("p99", justify="right")
-    table.add_column("Errors", justify="right")
-
-    for stage in report.stages:
-        is_onset = stage.users == report.onset_users
-        table.add_row(
-            str(stage.users),
-            f"{stage.rps:.0f}",
-            _ms(stage.pct(0.50)),
-            _ms(stage.pct(0.95)),
-            _ms(stage.pct(0.99)),
-            _err(stage.error_rate),
-            style="bold red" if is_onset else None,
-        )
-    console.print(table)
-    console.print()
-
-    if report.onset_users is None:
-        emoji, color = "✅", "green"
-        headline = (f"Held up through {report.max_tested} concurrent "
-                    f"{_u(report.max_tested)} (the most we tested).")
-    else:
-        emoji, color = "⚠️", "yellow"
-        if report.survives_users == 0:
-            emoji, color = "🛑", "red"
-        headline = (f"Survives ~{report.survives_users} concurrent "
-                    f"{_u(report.survives_users)}.")
-
-    lines = [f"[bold]Scale readiness:[/bold] {emoji} {headline}"]
-    if report.onset_users is not None:
-        culprit = f"{report.culprit_route}  " if (multi and report.culprit_route) else ""
-        if report.onset_reason == "latency":
-            lines.append(f"Latency wall  {culprit}p95 crosses "
-                         f"{report.latency_wall:g}s at ~{report.onset_users} "
-                         f"{_u(report.onset_users)}.")
-        else:
-            lines.append(f"First failure  {culprit}errors climb at "
-                         f"~{report.onset_users} {_u(report.onset_users)}.")
-    if report.saturated:
-        lines.append(f"Throughput  plateaued ~{report.peak_rps:.0f} req/s around "
-                     f"{report.saturation_users} {_u(report.saturation_users)} "
-                     "(capacity ceiling).")
-    if report.bottleneck:
-        lines.append(f"Likely cause  {report.bottleneck}")
-    if report.marginal:
-        lines.append("Note  only wobbled at the very top — likely some headroom.")
-
-    console.print(Panel("\n".join(lines), title="📈 Readiness report", border_style=color))
-
-    if multi and report.stages:
-        _render_routes(report)
-
-
-def _render_routes(report: RunReport) -> None:
-    decisive = next((s for s in report.stages if s.users == report.onset_users),
-                    report.stages[-1])
-    table = Table(show_header=True, header_style="bold magenta",
-                  title=f"Per route @ {decisive.users} users")
-    table.add_column("Route")
-    table.add_column("Req/s", justify="right")
-    table.add_column("p95", justify="right")
-    table.add_column("Errors", justify="right")
-
-    ranked = sorted(decisive.routes.items(),
-                    key=lambda kv: (kv[1].error_rate, kv[1].pct(0.95)), reverse=True)
-    for label, stat in ranked:
-        is_culprit = label == report.culprit_route
-        shown = f"[bold red]{label}[/bold red]" if is_culprit else label
-        table.add_row(
-            shown,
-            f"{stat.total / decisive.duration:.0f}",
-            _ms(stat.pct(0.95)),
-            _err(stat.error_rate),
-        )
-    console.print()
-    console.print(table)
-
-
-def _u(n: int) -> str:
-    return "user" if n == 1 else "users"
-
-
-def _err(rate: float) -> str:
-    color = "red" if rate >= 0.02 else "yellow" if rate > 0 else "green"
-    return f"[{color}]{rate:.0%}[/{color}]"
-
-
-def _ms(seconds: float) -> str:
-    if seconds <= 0:
-        return "-"
-    return f"{seconds * 1000:.0f}ms"

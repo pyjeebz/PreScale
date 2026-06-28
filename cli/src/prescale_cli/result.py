@@ -93,6 +93,7 @@ def _stage_dict(stage: StageResult) -> dict:
                 "total": r.total,
                 "errors": r.errors,
                 "error_rate": round(r.error_rate, 4),
+                "rps": round(r.total / stage.duration, 1) if stage.duration else 0.0,
                 "p50_ms": round(r.pct(0.50) * 1000),
                 "p95_ms": round(r.pct(0.95) * 1000),
                 "p99_ms": round(r.pct(0.99) * 1000),
