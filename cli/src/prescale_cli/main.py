@@ -3,7 +3,7 @@
 import click
 
 from prescale_cli import __version__
-from prescale_cli.commands import audit, run
+from prescale_cli.commands import audit, history, run, show
 
 
 @click.group()
@@ -19,11 +19,15 @@ def cli() -> None:
     Quick start:
         prescale run http://localhost:8000      # load test: what breaks first
         prescale audit https://myapp.com        # static scaling-hygiene check
+        prescale history                        # list saved runs
+        prescale show                           # re-render the latest saved run
     """
 
 
 cli.add_command(run.run)
 cli.add_command(audit.audit)
+cli.add_command(history.history)
+cli.add_command(show.show)
 
 
 def main() -> None:

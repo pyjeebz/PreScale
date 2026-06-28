@@ -50,7 +50,7 @@ def audit(url: str, timeout: float, as_json: bool) -> None:
         raise SystemExit(1)
 
     if as_json:
-        console.print(json.dumps(
+        click.echo(json.dumps(
             [{"name": f.name, "status": f.status, "detail": f.detail, "fix": f.fix}
              for f in findings],
             indent=2,

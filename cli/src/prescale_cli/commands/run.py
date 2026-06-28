@@ -177,7 +177,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         Path(html_path).write_text(render_html(result), encoding="utf-8")
 
     if as_json:
-        console.print(json.dumps(result, indent=2))
+        click.echo(json.dumps(result, indent=2))
         return
 
     render_terminal(result)
