@@ -28,6 +28,7 @@ from prescale_cli.loadtest import (
     run_loadtest,
 )
 from prescale_cli.report import render_html
+from prescale_cli.result import build_result, write_result
 
 console = Console()
 
@@ -62,10 +63,15 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Emit the raw report as JSON.")
 @click.option("--html", "html_path", type=click.Path(dir_okay=False), default=None,
               help="Write a shareable HTML report to PATH.")
+@click.option("--store", "store", type=click.Path(file_okay=False), default=None,
+              help="Directory for saved runs (default: ./.prescale).")
+@click.option("--no-save", "no_save", is_flag=True,
+              help="Don't save this run to .prescale/runs/.")
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
         method: str, timeout: float, max_rps: float | None, ignore_robots: bool,
-        yes: bool, as_json: bool, html_path: str | None) -> None:
+        yes: bool, as_json: bool, html_path: str | None,
+        store: str | None, no_save: bool) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -157,6 +163,17 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     report = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
                      rate_capped=max_rps is not None)
 
+    config = {
+        "method": method,
+        "max_users": max_users,
+        "stage_seconds": stage_seconds,
+        "latency_wall_s": latency_wall,
+        "error_threshold": error_threshold,
+        "max_rps": max_rps,
+    }
+    result = build_result(report, url=url, targets=targets, config=config, warning=warning)
+    saved_path = None if no_save else write_result(result, store=store)
+
     if html_path:
         Path(html_path).write_text(
             render_html(report, url=url, targets=targets, method=method,
@@ -165,51 +182,16 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         )
 
     if as_json:
-        console.print(json.dumps(_report_to_dict(report, warning), indent=2))
+        console.print(json.dumps(result, indent=2))
         return
 
     _render(report, warning, multi=len(targets) > 1)
+    if saved_path or html_path:
+        console.print()
+    if saved_path:
+        console.print(f"[green]✓[/green] Saved run to [cyan]{saved_path}[/cyan]")
     if html_path:
-        console.print(f"\n[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
-
-
-def _report_to_dict(report: RunReport, warning: str | None) -> dict:
-    return {
-        "survives_users": report.survives_users,
-        "max_tested": report.max_tested,
-        "onset_users": report.onset_users,
-        "onset_reason": report.onset_reason,
-        "culprit_route": report.culprit_route,
-        "bottleneck": report.bottleneck,
-        "latency_wall": report.latency_wall,
-        "saturated": report.saturated,
-        "saturation_users": report.saturation_users,
-        "peak_rps": round(report.peak_rps, 1),
-        "marginal": report.marginal,
-        "warning": warning,
-        "stages": [
-            {
-                "users": s.users,
-                "rps": round(s.rps, 1),
-                "p50_ms": round(s.pct(0.50) * 1000),
-                "p95_ms": round(s.pct(0.95) * 1000),
-                "p99_ms": round(s.pct(0.99) * 1000),
-                "error_rate": round(s.error_rate, 4),
-                "errors": s.errors,
-                "total": s.total,
-                "routes": {
-                    label: {
-                        "total": r.total,
-                        "errors": r.errors,
-                        "error_rate": round(r.error_rate, 4),
-                        "p95_ms": round(r.pct(0.95) * 1000),
-                    }
-                    for label, r in s.routes.items()
-                },
-            }
-            for s in report.stages
-        ],
-    }
+        console.print(f"[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
 
 
 def _render(report: RunReport, warning: str | None, multi: bool) -> None:

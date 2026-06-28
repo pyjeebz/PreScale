@@ -122,3 +122,5 @@ openapi_response.json
 prometheus-local.yaml
 helios-agent.yaml
 !helios-agent.yaml.example
+# PreScale local run store
+.prescale/
