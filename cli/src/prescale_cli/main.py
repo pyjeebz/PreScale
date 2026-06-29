@@ -3,7 +3,7 @@
 import click
 
 from prescale_cli import __version__
-from prescale_cli.commands import audit, history, run, show
+from prescale_cli.commands import audit, history, run, schema, show
 
 
 @click.group()
@@ -28,6 +28,7 @@ cli.add_command(run.run)
 cli.add_command(audit.audit)
 cli.add_command(history.history)
 cli.add_command(show.show)
+cli.add_command(schema.schema)
 
 
 def main() -> None:

@@ -11,6 +11,7 @@ machine and are never uploaded.
 
 from __future__ import annotations
 
+import importlib.resources
 import json
 import os
 import secrets
@@ -218,6 +219,12 @@ def schema_warning(result: dict) -> str | None:
             f"(supports {SCHEMA_VERSION}); some fields may not render."
         )
     return None
+
+
+def schema_json() -> str:
+    """The packaged JSON Schema for the Result envelope, as a string."""
+    return (importlib.resources.files("prescale_cli.schema")
+            .joinpath("result.schema.json").read_text(encoding="utf-8"))
 
 
 def _read(path: Path) -> dict:

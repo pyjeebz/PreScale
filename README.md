@@ -73,6 +73,8 @@ prescale run <url> [options]
 | `--ignore-robots` | off | Skip the `robots.txt` courtesy check |
 | `--json` | off | Emit the raw report as JSON |
 | `--html PATH` | — | Write a shareable HTML report (single self-contained file) |
+| `--store DIR` | `./.prescale` | Directory for saved runs |
+| `--no-save` | off | Don't save this run to `.prescale/runs/` |
 
 ```bash
 # Local app, quick check
@@ -87,6 +89,19 @@ prescale run https://staging.myapp.com -u 500 --i-own-this --json
 # Write a shareable HTML report
 prescale run https://staging.myapp.com --i-own-this --html report.html
 ```
+
+### Saved runs — `history` and `show`
+
+Every run is saved to `./.prescale/runs/<id>.json` — a single versioned record of the run (config, verdict, and per-level/per-route metrics). Re-open or share past runs without re-testing:
+
+```bash
+prescale history                  # list saved runs, newest first
+prescale show                     # re-render the most recent run
+prescale show <id> --html r.html  # re-render a specific run to HTML
+prescale schema                   # print the JSON Schema for a saved run
+```
+
+`prescale run --json` and the saved `.json` are the same shape, so a result is easy to script against or hand to another tool. Use `--store DIR` to change where runs are kept, `--no-save` to skip saving, and gitignore `.prescale/`.
 
 ### `prescale audit` — static hygiene check (no load)
 

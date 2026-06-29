@@ -1,5 +1,7 @@
 """Tests for the PreScale CLI surface."""
 
+import json
+
 from click.testing import CliRunner
 
 from prescale_cli.main import cli, main
@@ -61,3 +63,11 @@ def test_audit_help():
 def test_audit_rejects_non_url():
     result = CliRunner().invoke(cli, ["audit", "not-a-url"])
     assert result.exit_code == 1
+
+
+def test_schema_command_outputs_valid_json():
+    result = CliRunner().invoke(cli, ["schema"])
+    assert result.exit_code == 0
+    doc = json.loads(result.output)
+    assert doc["title"] == "PreScale Result"
+    assert doc["properties"]["schema_version"]["const"] == 1

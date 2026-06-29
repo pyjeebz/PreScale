@@ -1,5 +1,7 @@
 """Tests for the Result contract and its on-disk store."""
 
+import json
+
 import pytest
 
 from prescale_cli.loadtest import RouteStat, RunReport, StageResult
@@ -11,6 +13,7 @@ from prescale_cli.result import (
     latest_id,
     list_results,
     load_result,
+    schema_json,
     schema_warning,
     write_result,
 )
@@ -93,3 +96,23 @@ def test_schema_warning():
     assert schema_warning(_result()) is None
     assert schema_warning({"schema_version": SCHEMA_VERSION + 1}) is not None
     assert schema_warning({}) is not None
+
+
+def test_schema_json_matches_built_result():
+    # The packaged schema and what build_result emits must not drift.
+    schema = json.loads(schema_json())
+    assert schema["title"] == "PreScale Result"
+    full_config = {"method": "GET", "max_users": 10, "stage_seconds": 5.0,
+                   "latency_wall_s": 2.0, "error_threshold": 0.02, "max_rps": None}
+    r = build_result(_report(), url="http://localhost:8000",
+                     targets=["http://localhost:8000/"], config=full_config, warning=None)
+    for key in schema["required"]:
+        assert key in r
+    for key in schema["properties"]["verdict"]["required"]:
+        assert key in r["verdict"]
+    for key in schema["properties"]["config"]["required"]:
+        assert key in r["config"]
+    for key in schema["$defs"]["stage"]["required"]:
+        assert key in r["stages"][0]
+    for key in schema["$defs"]["route"]["required"]:
+        assert key in r["stages"][0]["routes"]["/"]

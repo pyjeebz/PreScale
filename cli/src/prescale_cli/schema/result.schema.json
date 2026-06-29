@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pyjeebz/prescale/result.schema.json",
+  "title": "PreScale Result",
+  "description": "The versioned envelope produced by `prescale run` and stored under .prescale/runs/ (schema_version 1). Additive fields may appear without bumping the version, so consumers should ignore unknown properties.",
+  "type": "object",
+  "required": [
+    "schema_version", "kind", "id", "tool_version", "created_at",
+    "target", "config", "verdict", "stages"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "enum": ["run", "audit"] },
+    "id": { "type": "string", "description": "Filename stem; sorts chronologically." },
+    "tool_version": { "type": "string" },
+    "created_at": { "type": "string", "description": "UTC ISO-8601, e.g. 2026-06-28T17:36:48Z." },
+    "warning": { "type": ["string", "null"] },
+    "target": {
+      "type": "object",
+      "required": ["url", "host", "routes"],
+      "properties": {
+        "url": { "type": "string" },
+        "host": { "type": "string" },
+        "routes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "config": {
+      "type": "object",
+      "required": [
+        "method", "max_users", "stage_seconds",
+        "latency_wall_s", "error_threshold", "max_rps"
+      ],
+      "properties": {
+        "method": { "type": "string" },
+        "max_users": { "type": "integer" },
+        "stage_seconds": { "type": "number" },
+        "latency_wall_s": { "type": "number" },
+        "error_threshold": { "type": "number" },
+        "max_rps": { "type": ["number", "null"] }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": [
+        "survives_users", "max_tested", "onset_users", "onset_reason",
+        "culprit_route", "bottleneck", "saturated", "saturation_users",
+        "peak_rps", "marginal"
+      ],
+      "properties": {
+        "survives_users": { "type": "integer" },
+        "max_tested": { "type": "integer" },
+        "onset_users": { "type": ["integer", "null"] },
+        "onset_reason": { "type": ["string", "null"], "enum": ["errors", "latency", null] },
+        "culprit_route": { "type": ["string", "null"] },
+        "bottleneck": { "type": ["string", "null"] },
+        "saturated": { "type": "boolean" },
+        "saturation_users": { "type": ["integer", "null"] },
+        "peak_rps": { "type": "number" },
+        "marginal": { "type": "boolean" }
+      }
+    },
+    "stages": { "type": "array", "items": { "$ref": "#/$defs/stage" } },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "git_commit": { "type": ["string", "null"] },
+        "git_branch": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "required": [
+        "users", "rps", "p50_ms", "p95_ms", "p99_ms",
+        "error_rate", "errors", "total", "routes"
+      ],
+      "properties": {
+        "users": { "type": "integer" },
+        "rps": { "type": "number" },
+        "p50_ms": { "type": "integer" },
+        "p95_ms": { "type": "integer" },
+        "p99_ms": { "type": "integer" },
+        "error_rate": { "type": "number" },
+        "errors": { "type": "integer" },
+        "total": { "type": "integer" },
+        "routes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/route" } }
+      }
+    },
+    "route": {
+      "type": "object",
+      "required": ["total", "errors", "error_rate", "rps", "p50_ms", "p95_ms", "p99_ms"],
+      "properties": {
+        "total": { "type": "integer" },
+        "errors": { "type": "integer" },
+        "error_rate": { "type": "number" },
+        "rps": { "type": "number" },
+        "p50_ms": { "type": "integer" },
+        "p95_ms": { "type": "integer" },
+        "p99_ms": { "type": "integer" }
+      }
+    }
+  }
+}
