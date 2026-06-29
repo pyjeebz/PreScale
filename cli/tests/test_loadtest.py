@@ -339,3 +339,32 @@ def test_confidence_band_widens_when_onset_is_marginal():
     assert report.survives_users == 10
     assert (report.survives_low, report.survives_high) == (10, 50)
     assert report.stable is False
+
+
+# --- repeat + think-time + repeatability (M1.3–M1.5) ---
+
+def test_repeat_pools_samples_per_level():
+    counter = []
+    stages, _ = asyncio.run(run_loadtest(
+        ["http://t/"], levels=[2], stage_seconds=0.02, warmup=False, repeat=3,
+        transport=_counting_transport(counter)))
+    assert len(stages) == 1
+    assert stages[0].samples == 3        # three ramps pooled into the one level
+
+
+def test_think_time_throttles_a_worker():
+    fast, slow = [], []
+    asyncio.run(run_loadtest(["http://t/"], levels=[1], stage_seconds=0.1, warmup=False,
+                             transport=_counting_transport(fast)))
+    asyncio.run(run_loadtest(["http://t/"], levels=[1], stage_seconds=0.1, warmup=False,
+                             think_time=0.05, transport=_counting_transport(slow)))
+    assert len(slow) < len(fast)
+
+
+def test_verdict_is_deterministic():
+    stages = [_stage(10, {"/": _route(200, 0, 0.05)}),
+              _stage(50, {"/": _route(200, 6, 0.05)})]
+    a = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    b = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert (a.survives_users, a.survives_low, a.survives_high, a.stable) == \
+           (b.survives_users, b.survives_low, b.survives_high, b.stable)

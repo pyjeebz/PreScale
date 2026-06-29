@@ -94,6 +94,7 @@ def _stage_dict(stage: StageResult) -> dict:
         "error_rate": round(stage.error_rate, 4),
         "errors": stage.errors,
         "total": stage.total,
+        "samples": stage.samples,
         "routes": {
             label: {
                 "total": r.total,

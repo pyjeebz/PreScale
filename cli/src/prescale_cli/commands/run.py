@@ -56,6 +56,10 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Cap aggregate requests/sec (default: unlimited). A safety ceiling.")
 @click.option("--warmup/--no-warmup", "warmup", default=True,
               help="Run a brief warmup before measuring (default: on).")
+@click.option("--repeat", default=1, type=int,
+              help="Run the whole ramp N times and pool results (default: 1).")
+@click.option("--think-time", "think_time", default=0.0, type=float,
+              help="Seconds each virtual user pauses between requests (default: 0).")
 @click.option("--ignore-robots", "ignore_robots", is_flag=True,
               help="Skip the robots.txt courtesy check.")
 @click.option("--i-own-this", "yes", is_flag=True,
@@ -71,6 +75,7 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
         method: str, timeout: float, max_rps: float | None, warmup: bool,
+        repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
         store: str | None, no_save: bool) -> None:
     """Load test URL and report what breaks first.
@@ -149,12 +154,14 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
             stages, warning = asyncio.run(run_loadtest(
                 targets, levels=levels, stage_seconds=stage_seconds,
                 method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
+                repeat=repeat, think_time=think_time,
             ))
         else:
             with console.status("[bold blue]Warming up…") as status:
                 stages, warning = asyncio.run(run_loadtest(
                     targets, levels=levels, stage_seconds=stage_seconds,
                     method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
+                    repeat=repeat, think_time=think_time,
                     progress_cb=render_progress(status),
                 ))
     except LoadError as exc:
@@ -172,6 +179,8 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         "error_threshold": error_threshold,
         "max_rps": max_rps,
         "warmup": warmup,
+        "repeat": repeat,
+        "think_time_s": think_time,
     }
     result = build_result(report, url=url, targets=targets, config=config, warning=warning)
     saved_path = None if no_save else write_result(result, store=store)

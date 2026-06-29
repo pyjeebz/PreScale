@@ -14,7 +14,7 @@ prescale run https://staging.myapp.com
 ```
 
 ```
-Scale readiness: ⚠️  Survives ~90 concurrent users
+Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
 
             Load ramp
  Users   Req/s    p50    p95    p99   Errors
@@ -69,6 +69,9 @@ prescale run <url> [options]
 | `-m, --method` | `GET` | HTTP method to fire |
 | `--timeout` | `10` | Per-request timeout (s) |
 | `--max-rps` | — | Cap aggregate requests/sec (a safety ceiling) |
+| `--no-warmup` | (warmup on) | Skip the brief warmup before measuring |
+| `--repeat N` | `1` | Run the whole ramp N times and pool results (tightens the band) |
+| `--think-time S` | `0` | Seconds each virtual user pauses between requests |
 | `--i-own-this` | off | Skip the confirmation prompt for non-local targets |
 | `--ignore-robots` | off | Skip the `robots.txt` courtesy check |
 | `--json` | off | Emit the raw report as JSON |

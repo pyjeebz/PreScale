@@ -202,6 +202,7 @@ class StageResult:
     users: int
     duration: float
     routes: dict[str, RouteStat] = field(default_factory=dict)
+    samples: int = 1
 
     @property
     def total(self) -> int:
@@ -330,9 +331,10 @@ class _RateGate:
 
 
 async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
-                  sink: _Sink, pick, gate: _RateGate | None = None) -> None:
-    """Closed-loop VU: pick a route and fire requests back-to-back until the
-    stage deadline (respecting the optional rate gate)."""
+                  sink: _Sink, pick, gate: _RateGate | None = None,
+                  think_time: float = 0.0) -> None:
+    """Closed-loop VU: pick a route and fire requests until the stage deadline
+    (respecting the optional rate gate and any think-time between requests)."""
     loop = asyncio.get_running_loop()
     while loop.time() < deadline:
         if gate is not None and not await gate.wait(deadline):
@@ -348,24 +350,46 @@ async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
             sink.record_error(target, "connection refused")
         except httpx.HTTPError:
             sink.record_error(target, "network")
+        if think_time and loop.time() < deadline:
+            await asyncio.sleep(think_time)
 
 
 async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
-                     users: int, duration: float,
-                     gate: _RateGate | None = None) -> StageResult:
+                     users: int, duration: float, gate: _RateGate | None = None,
+                     think_time: float = 0.0) -> StageResult:
     sink = _Sink()
     cycle = itertools.cycle(targets)  # round-robin spreads load evenly across routes
     loop = asyncio.get_running_loop()
     start = loop.time()
     deadline = start + duration
     await asyncio.gather(
-        *(_worker(client, method, deadline, sink, lambda: next(cycle), gate)
+        *(_worker(client, method, deadline, sink, lambda: next(cycle), gate, think_time)
           for _ in range(users))
     )
     # Use actual elapsed wall-time (workers finish their in-flight request after the
     # deadline) so rps reflects true throughput instead of inflating with concurrency.
     elapsed = loop.time() - start
     return sink.to_stage(users, elapsed if elapsed > 0 else duration)
+
+
+def _merge_stages(group: list[StageResult]) -> StageResult:
+    """Pool several runs of the same level into one StageResult (used by --repeat)."""
+    merged: dict[str, RouteStat] = {}
+    for stage in group:
+        for label, rs in stage.routes.items():
+            m = merged.get(label)
+            if m is None:
+                m = RouteStat()
+                merged[label] = m
+            m.total += rs.total
+            m.errors += rs.errors
+            m.latencies.extend(rs.latencies)
+            for code, n in rs.status_counts.items():
+                m.status_counts[code] = m.status_counts.get(code, 0) + n
+            for kind, n in rs.error_kinds.items():
+                m.error_kinds[kind] = m.error_kinds.get(kind, 0) + n
+    return StageResult(users=group[0].users, duration=sum(s.duration for s in group),
+                       routes=merged, samples=len(group))
 
 
 def _warmup_plan(levels: list[int], stage_seconds: float) -> tuple[int, float]:
@@ -384,6 +408,8 @@ async def run_loadtest(
     max_rps: float | None = None,
     hard_stop_rate: float = 0.5,
     warmup: bool = True,
+    repeat: int = 1,
+    think_time: float = 0.0,
     progress_cb=None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> tuple[list[StageResult], str | None]:
@@ -415,17 +441,23 @@ async def run_loadtest(
             # Discarded: warms caches/JIT/connection pools so the first measured
             # level isn't cold. Still rate-gated, since it's real traffic.
             warmup_users, warmup_seconds = _warmup_plan(levels, stage_seconds)
-            await _run_stage(client, targets, method, warmup_users, warmup_seconds, gate)
+            await _run_stage(client, targets, method, warmup_users, warmup_seconds,
+                             gate, think_time)
 
-        stages: list[StageResult] = []
-        for users in levels:
-            if progress_cb:
-                progress_cb(users)
-            stage = await _run_stage(client, targets, method, users, stage_seconds, gate)
-            stages.append(stage)
-            if stage.error_rate >= hard_stop_rate:
-                break
+        # --repeat pools several ramps per level, so run-to-run variance (cache
+        # state, GC, noisy neighbours) widens the confidence band honestly.
+        by_level: dict[int, list[StageResult]] = {}
+        for _ in range(max(1, repeat)):
+            for users in levels:
+                if progress_cb:
+                    progress_cb(users)
+                stage = await _run_stage(client, targets, method, users, stage_seconds,
+                                         gate, think_time)
+                by_level.setdefault(users, []).append(stage)
+                if stage.error_rate >= hard_stop_rate:
+                    break
 
+    stages = [_merge_stages(by_level[u]) for u in sorted(by_level)]
     return stages, warning
 
 
