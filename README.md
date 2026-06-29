@@ -93,6 +93,28 @@ prescale run https://staging.myapp.com -u 500 --i-own-this --json
 prescale run https://staging.myapp.com --i-own-this --html report.html
 ```
 
+### Why it breaks — `prescale investigate`
+
+`run` tells you *what* breaks; `investigate` tells you *why* and *how to fix it*. It finds the culprit route, then probes it — baseline vs loaded latency, a static-vs-dynamic comparison, error/header forensics — to classify the bottleneck and prescribe a fix. Fully local, deterministic, no LLM.
+
+```bash
+prescale investigate http://localhost:8000
+prescale investigate          # re-investigate the latest saved run
+```
+
+```
+🔬 Diagnosis
+Likely cause: 5xx under load while static assets held — the app/backend is the wall (often a DB or upstream pool).
+Bottleneck  connection_pool (high confidence)  ·  culprit /api/search
+Evidence
+  • culprit p95 28ms at 1 user vs 2100ms at 150 users
+  • static /assets/app.js held at 150 users
+  • errors under load: 5xx (180)
+Try this
+  → Increase the DB/upstream connection-pool size.
+  → Add a pooler (e.g. pgbouncer) and check the pool checkout timeout.
+```
+
 ### Saved runs — `history` and `show`
 
 Every run is saved to `./.prescale/runs/<id>.json` — a single versioned record of the run (config, verdict, and per-level/per-route metrics). Re-open or share past runs without re-testing:

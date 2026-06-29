@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import httpx
 
 from prescale_cli.audit import run_audit
+from prescale_cli.investigate import investigate
 from prescale_cli.loadtest import analyze, build_targets, default_levels, run_loadtest
 from prescale_cli.result import build_result, list_results, load_result, write_result
 
@@ -39,6 +40,21 @@ def host_allowed(host: str, allow: set[str]) -> bool:
     """Local hosts are always allowed; others only if listed (or `*`)."""
     host = (host or "").lower()
     return host in _LOCAL_HOSTS or "*" in allow or host in allow
+
+
+def _gate(url: str, allow: set[str]) -> str:
+    """Validate the URL and enforce the host allowlist; return the lowercased host."""
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f"'{url}' is not a URL (expected e.g. http://localhost:8000).")
+    host = (parsed.hostname or "").lower()
+    if not host_allowed(host, allow):
+        raise HostNotAllowedError(
+            f"Refusing to load-test non-local host '{host}'. Set "
+            f"PRESCALE_MCP_ALLOW={host} (or pass --allow {host} to `prescale mcp`) "
+            "if you own it."
+        )
+    return host
 
 
 def summarize_result(result: dict) -> dict:
@@ -84,16 +100,7 @@ async def run_summary(url: str, *, allow: set[str], max_users: int = MCP_DEFAULT
                       transport: httpx.AsyncBaseTransport | None = None) -> dict:
     """Load-test `url` (host must be local or allowlisted), persist the Result,
     and return a compact summary. Non-local targets get a default rate ceiling."""
-    parsed = urlparse(url)
-    if not parsed.scheme or not parsed.netloc:
-        raise ValueError(f"'{url}' is not a URL (expected e.g. http://localhost:8000).")
-    host = (parsed.hostname or "").lower()
-    if not host_allowed(host, allow):
-        raise HostNotAllowedError(
-            f"Refusing to load-test non-local host '{host}'. Set "
-            f"PRESCALE_MCP_ALLOW={host} (or pass --allow {host} to `prescale mcp`) "
-            "if you own it."
-        )
+    host = _gate(url, allow)
     if max_rps is None and host not in _LOCAL_HOSTS:
         max_rps = MCP_DEFAULT_MAX_RPS  # safety ceiling for non-local hosts
 
@@ -113,6 +120,25 @@ async def run_summary(url: str, *, allow: set[str], max_users: int = MCP_DEFAULT
     result = build_result(report, url=url, targets=targets, config=config, warning=warning)
     write_result(result, store=store)
     return summarize_result(result)
+
+
+async def investigate_summary(url: str, *, allow: set[str],
+                              max_users: int = MCP_DEFAULT_MAX_USERS,
+                              paths: tuple[str, ...] = (),
+                              stage_seconds: float = MCP_DEFAULT_STAGE_SECONDS,
+                              max_rps: float | None = None, store=None,
+                              transport: httpx.AsyncBaseTransport | None = None) -> dict:
+    """Load-test, find the culprit, probe it, and return the verdict summary plus the
+    `investigation` block (bottleneck class, confidence, evidence, fix)."""
+    host = _gate(url, allow)
+    if max_rps is None and host not in _LOCAL_HOSTS:
+        max_rps = MCP_DEFAULT_MAX_RPS
+    result = await investigate(
+        url, max_users=max_users, paths=tuple(paths), stage_seconds=stage_seconds,
+        max_rps=max_rps, store=store, transport=transport)
+    summary = summarize_result(result)
+    summary["investigation"] = result.get("investigation")
+    return summary
 
 
 async def audit_summary(url: str) -> dict:

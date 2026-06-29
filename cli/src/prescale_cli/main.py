@@ -3,7 +3,7 @@
 import click
 
 from prescale_cli import __version__
-from prescale_cli.commands import audit, history, mcp, run, schema, show
+from prescale_cli.commands import audit, history, investigate, mcp, run, schema, show
 
 
 @click.group()
@@ -17,15 +17,17 @@ def cli() -> None:
 
     \b
     Quick start:
-        prescale run http://localhost:8000      # load test: what breaks first
-        prescale audit https://myapp.com        # static scaling-hygiene check
-        prescale history                        # list saved runs
-        prescale show                           # re-render the latest saved run
-        prescale mcp                            # MCP server for coding agents
+        prescale run http://localhost:8000          # load test: what breaks first
+        prescale investigate http://localhost:8000  # ...and why, plus how to fix it
+        prescale audit https://myapp.com            # static scaling-hygiene check
+        prescale history                            # list saved runs
+        prescale show                               # re-render the latest saved run
+        prescale mcp                                # MCP server for coding agents
     """
 
 
 cli.add_command(run.run)
+cli.add_command(investigate.investigate)
 cli.add_command(audit.audit)
 cli.add_command(history.history)
 cli.add_command(show.show)

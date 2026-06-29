@@ -11,6 +11,7 @@ from prescale_cli.mcp_tools import (
     audit_summary,
     get_run,
     host_allowed,
+    investigate_summary,
     list_runs,
     parse_allow,
     run_summary,
@@ -101,6 +102,20 @@ def test_get_run_roundtrips(tmp_path):
 def test_audit_summary_rejects_non_url():
     with pytest.raises(ValueError):
         asyncio.run(audit_summary("not-a-url"))
+
+
+def test_investigate_summary_refuses_non_local():
+    with pytest.raises(HostNotAllowedError):
+        asyncio.run(investigate_summary("https://evil.com/", allow=set()))
+
+
+def test_investigate_summary_local_includes_diagnosis(tmp_path):
+    transport = httpx.MockTransport(lambda req: httpx.Response(500, text="x"))
+    s = asyncio.run(investigate_summary(
+        "http://localhost:9/", allow=set(), max_users=2, stage_seconds=0.02,
+        store=tmp_path, transport=transport))
+    assert s["investigation"] is not None
+    assert s["investigation"]["bottleneck_class"] == "connection_pool"
 
 
 # --- server wiring (needs the optional extra) ---

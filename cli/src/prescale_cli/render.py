@@ -110,6 +110,29 @@ def _render_routes(result: dict) -> None:
     console.print(table)
 
 
+def render_investigation(result: dict) -> None:
+    """Print the Diagnosis panel for an investigated Result (no-op if absent)."""
+    inv = result.get("investigation")
+    if not inv:
+        return
+    color = {"high": "red", "medium": "yellow", "low": "blue"}.get(inv["confidence"], "yellow")
+    lines = [
+        f"[bold]Likely cause:[/bold] {inv['summary']}",
+        f"Bottleneck  [bold]{inv['bottleneck_class']}[/bold] "
+        f"([{color}]{inv['confidence']} confidence[/{color}])  ·  culprit {inv['culprit_route']}",
+    ]
+    if inv.get("evidence"):
+        lines.append("")
+        lines.append("[bold]Evidence[/bold]")
+        lines += [f"  • {e}" for e in inv["evidence"]]
+    if inv.get("remediation"):
+        lines.append("")
+        lines.append("[bold]Try this[/bold]")
+        lines += [f"  → {r}" for r in inv["remediation"]]
+    console.print()
+    console.print(Panel("\n".join(lines), title="🔬 Diagnosis", border_style=color))
+
+
 def _band(verdict: dict) -> str:
     conf = verdict.get("confidence") or {}
     lo, hi = conf.get("survives_low"), conf.get("survives_high")

@@ -77,6 +77,19 @@
         "git_commit": { "type": ["string", "null"] },
         "git_branch": { "type": ["string", "null"] }
       }
+    },
+    "investigation": {
+      "type": "object",
+      "description": "Present when `prescale investigate` diagnosed a failure.",
+      "properties": {
+        "culprit_route": { "type": "string" },
+        "bottleneck_class": { "type": "string" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+        "summary": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "remediation": { "type": "array", "items": { "type": "string" } },
+        "stack": { "type": "object" }
+      }
     }
   },
   "$defs": {

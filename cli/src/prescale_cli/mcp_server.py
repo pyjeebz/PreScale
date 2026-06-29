@@ -28,6 +28,16 @@ def build_server(allow: set[str]) -> FastMCP:
             stage_seconds=stage_seconds, max_rps=max_rps)
 
     @server.tool()
+    async def investigate(url: str, max_users: int = 100, paths: list[str] | None = None,
+                          stage_seconds: float = 3.0, max_rps: float | None = None) -> dict:
+        """Load-test a URL, then probe the route that breaks first to diagnose WHY —
+        a bottleneck class with confidence and evidence — and prescribe a fix. Returns
+        the verdict plus an `investigation` block. Local hosts only unless allowlisted."""
+        return await mcp_tools.investigate_summary(
+            url, allow=allow, max_users=max_users, paths=tuple(paths or ()),
+            stage_seconds=stage_seconds, max_rps=max_rps)
+
+    @server.tool()
     async def audit(url: str) -> dict:
         """Fast, load-free scaling-hygiene check for a URL: compression, static-asset
         caching, CDN/edge, HTTP version, cookies on assets. Returns pass/warn/fail

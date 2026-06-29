@@ -461,6 +461,20 @@ async def run_loadtest(
     return stages, warning
 
 
+def open_client(*, timeout: float = 10.0, max_conns: int = 64,
+                transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+    """A client with PreScale's standard headers/limits — for `investigate` probes."""
+    limits = httpx.Limits(max_connections=max_conns, max_keepalive_connections=max_conns)
+    return httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True,
+                             headers={"User-Agent": _USER_AGENT}, transport=transport)
+
+
+async def measure_route(client: httpx.AsyncClient, url: str, *, users: int,
+                        seconds: float, method: str = "GET") -> StageResult:
+    """Hold `users` VUs against a single URL for `seconds`; return the stage."""
+    return await _run_stage(client, [url], method, users, seconds)
+
+
 def detect_saturation(stages: list[StageResult]) -> SaturationInfo:
     """Throughput plateau: if rps stops climbing while users keep rising, the
     target has hit a concurrency ceiling (capacity) — not just slow responses."""
