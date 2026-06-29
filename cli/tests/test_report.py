@@ -60,6 +60,12 @@ def test_render_html_escapes_url():
     assert "&lt;script&gt;" in out
 
 
+def test_render_html_shows_confidence_band():
+    # marginal onset (3% errors on n=200) → an uncertain, visible band
+    out = _render([_stage(10, 200, 0, 0.05), _stage(50, 200, 6, 0.05)])
+    assert "Survives ~10 (10–50)" in out
+
+
 def test_render_html_is_pure_function_of_result(tmp_path):
     # Rendering depends only on the stored Result: a reloaded run renders
     # identically to the in-memory one (the basis for `run`/`show` parity).

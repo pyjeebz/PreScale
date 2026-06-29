@@ -102,6 +102,14 @@ def _err_td(rate: float) -> str:
     return '<td class="ok">0%</td>' if rate == 0 else f"<td>{rate:.0%}</td>"
 
 
+def _band(v: dict) -> str:
+    conf = v.get("confidence") or {}
+    lo, hi = conf.get("survives_low"), conf.get("survives_high")
+    if lo is None or hi is None or (lo == v["survives_users"] and hi == v["survives_users"]):
+        return ""
+    return f" ({lo}–{hi})"
+
+
 def _svg_chart(result: dict) -> str:
     stages = result["stages"]
     verdict = result["verdict"]
@@ -164,7 +172,7 @@ def _verdict(result: dict) -> tuple[str, str, str, str]:
                 f"Struggles from ~{v['onset_users']} concurrent users",
                 "It buckles almost immediately under load.")
     return ("amber", "NEEDS ATTENTION",
-            f"Survives ~{v['survives_users']} concurrent users",
+            f"Survives ~{v['survives_users']}{_band(v)} concurrent users",
             f"First failure at ~{v['onset_users']} users.")
 
 

@@ -16,8 +16,10 @@ from prescale_cli.loadtest import (
     disallowed_targets,
     parse_sitemap,
     percentile,
+    quantile_bounds,
     route_label,
     run_loadtest,
+    wilson_bounds,
 )
 
 
@@ -295,3 +297,45 @@ def test_warmup_sends_extra_traffic_but_is_discarded():
         transport=_counting_transport(without)))
     assert len(s1) == 1 and len(s2) == 1        # warmup is never a returned stage
     assert len(with_warmup) > len(without)      # but it did send extra traffic
+
+
+# --- confidence band (M1.2) ---
+
+def test_wilson_bounds_bracket_proportion():
+    lo, hi = wilson_bounds(50, 100)
+    assert lo < 0.5 < hi
+    lo0, hi0 = wilson_bounds(0, 100)
+    assert lo0 < 1e-6 and hi0 > 0
+    assert wilson_bounds(0, 0) == (0.0, 0.0)
+
+
+def test_quantile_bounds_bracket_point():
+    vals = [float(i) for i in range(100)]
+    lo, hi = quantile_bounds(vals, 0.95)
+    assert lo <= 95 <= hi
+    assert quantile_bounds([], 0.95) == (0.0, 0.0)
+    assert quantile_bounds([7.0], 0.95) == (7.0, 7.0)
+
+
+def test_confidence_band_tight_when_failure_is_decisive():
+    stages = [
+        _stage(10, {"/": _route(2000, 0, 0.05)}),
+        _stage(50, {"/": _route(2000, 0, 0.05)}),
+        _stage(100, {"/": _route(2000, 1000, 0.05)}),  # 50% errors — unambiguous
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert report.survives_users == 50
+    assert (report.survives_low, report.survives_high) == (50, 50)
+    assert report.stable is True
+
+
+def test_confidence_band_widens_when_onset_is_marginal():
+    stages = [
+        _stage(10, {"/": _route(200, 0, 0.05)}),
+        _stage(50, {"/": _route(200, 6, 0.05)}),  # 3% on n=200 — CI straddles 2%
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert report.onset_users == 50
+    assert report.survives_users == 10
+    assert (report.survives_low, report.survives_high) == (10, 50)
+    assert report.stable is False

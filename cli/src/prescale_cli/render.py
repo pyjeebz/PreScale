@@ -53,7 +53,7 @@ def render_terminal(result: dict) -> None:
         emoji, color = "⚠️", "yellow"
         if verdict["survives_users"] == 0:
             emoji, color = "🛑", "red"
-        headline = (f"Survives ~{verdict['survives_users']} concurrent "
+        headline = (f"Survives ~{verdict['survives_users']}{_band(verdict)} concurrent "
                     f"{_u(verdict['survives_users'])}.")
 
     lines = [f"[bold]Scale readiness:[/bold] {emoji} {headline}"]
@@ -73,6 +73,10 @@ def render_terminal(result: dict) -> None:
         lines.append(f"Likely cause  {verdict['bottleneck']}")
     if verdict["marginal"]:
         lines.append("Note  only wobbled at the very top — likely some headroom.")
+    conf = verdict.get("confidence") or {}
+    if onset_users is not None and conf.get("stable") is False:
+        lines.append(f"Confidence  likely {conf['survives_low']}–{conf['survives_high']} "
+                     f"users; treat ~{verdict['survives_users']} as a ballpark.")
 
     console.print(Panel("\n".join(lines), title="📈 Readiness report", border_style=color))
 
@@ -104,6 +108,15 @@ def _render_routes(result: dict) -> None:
         )
     console.print()
     console.print(table)
+
+
+def _band(verdict: dict) -> str:
+    conf = verdict.get("confidence") or {}
+    lo, hi = conf.get("survives_low"), conf.get("survives_high")
+    point = verdict["survives_users"]
+    if lo is None or hi is None or (lo == point and hi == point):
+        return ""
+    return f" ({lo}–{hi})"
 
 
 def _u(n: int) -> str:

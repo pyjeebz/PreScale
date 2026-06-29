@@ -57,7 +57,15 @@
         "saturated": { "type": "boolean" },
         "saturation_users": { "type": ["integer", "null"] },
         "peak_rps": { "type": "number" },
-        "marginal": { "type": "boolean" }
+        "marginal": { "type": "boolean" },
+        "confidence": {
+          "type": "object",
+          "properties": {
+            "survives_low": { "type": ["integer", "null"] },
+            "survives_high": { "type": ["integer", "null"] },
+            "stable": { "type": "boolean" }
+          }
+        }
       }
     },
     "stages": { "type": "array", "items": { "$ref": "#/$defs/stage" } },

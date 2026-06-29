@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import math
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -251,6 +252,9 @@ class RunReport:
     saturation_users: int | None = None
     peak_rps: float = 0.0
     marginal: bool = False
+    survives_low: int | None = None
+    survives_high: int | None = None
+    stable: bool = True
 
 
 @dataclass
@@ -475,6 +479,83 @@ def _bottleneck_hint(stat: RouteStat, reason: str, sat: SaturationInfo) -> str:
     return hints.get(kind, "The target started failing under load.")
 
 
+# z for an ~80% central band (10th–90th-percentile edges).
+_BAND_Z = 1.2816
+
+
+def wilson_bounds(successes: int, n: int, z: float = _BAND_Z) -> tuple[float, float]:
+    """Wilson score interval for a binomial proportion (e.g. an error rate)."""
+    if n == 0:
+        return 0.0, 0.0
+    p = successes / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return max(0.0, center - half), min(1.0, center + half)
+
+
+def quantile_bounds(sorted_vals: list[float], q: float,
+                    z: float = _BAND_Z) -> tuple[float, float]:
+    """Approximate CI for the q-quantile via order statistics (normal approx)."""
+    n = len(sorted_vals)
+    if n == 0:
+        return 0.0, 0.0
+    if n == 1:
+        return sorted_vals[0], sorted_vals[0]
+    mean = n * q
+    sd = math.sqrt(n * q * (1 - q))
+    lo = max(0, math.floor(mean - z * sd))
+    hi = min(n - 1, math.ceil(mean + z * sd))
+    return sorted_vals[lo], sorted_vals[hi]
+
+
+def _onset_with(stages, err_of, p95_of, *, latency_wall, error_threshold):
+    """First stage that crosses a threshold, using custom error-rate / p95
+    accessors (so we can re-find onset under pessimistic vs optimistic bounds)."""
+    for stage in stages:
+        if stage.total and err_of(stage) >= error_threshold:
+            return stage
+        lat = p95_of(stage)
+        if lat is not None and lat >= latency_wall:
+            return stage
+    return None
+
+
+def _survives_before(stages, onset, max_tested):
+    if onset is None:
+        return max_tested
+    idx = stages.index(onset)
+    return stages[idx - 1].users if idx > 0 else 0
+
+
+def confidence_band(stages, *, latency_wall, error_threshold, survives_point,
+                    max_tested) -> tuple[int, int, bool]:
+    """A band on survives_users from within-run uncertainty: re-find onset using
+    pessimistic (upper-bound) and optimistic (lower-bound) estimates of each
+    level's error rate and p95. Deterministic — same data, same band."""
+    def err_hi(s):
+        return wilson_bounds(s.errors, s.total)[1] if s.total else 0.0
+
+    def err_lo(s):
+        return wilson_bounds(s.errors, s.total)[0] if s.total else 0.0
+
+    def p95_hi(s):
+        lats = sorted(s._merged_latencies())
+        return quantile_bounds(lats, 0.95)[1] if lats else None
+
+    def p95_lo(s):
+        lats = sorted(s._merged_latencies())
+        return quantile_bounds(lats, 0.95)[0] if lats else None
+
+    onset_lo = _onset_with(stages, err_hi, p95_hi,
+                           latency_wall=latency_wall, error_threshold=error_threshold)
+    onset_hi = _onset_with(stages, err_lo, p95_lo,
+                           latency_wall=latency_wall, error_threshold=error_threshold)
+    low = min(_survives_before(stages, onset_lo, max_tested), survives_point)
+    high = max(_survives_before(stages, onset_hi, max_tested), survives_point)
+    return low, high, low == high
+
+
 def analyze(stages: list[StageResult], *, latency_wall: float,
             error_threshold: float, rate_capped: bool = False) -> RunReport:
     """Find the first level that crosses the error or latency threshold, and the
@@ -494,10 +575,14 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
         sat = SaturationInfo(False, None, sat.peak_rps)
     max_tested = stages[-1].users if stages else 0
     if onset is None:
+        low, high, stable = confidence_band(
+            stages, latency_wall=latency_wall, error_threshold=error_threshold,
+            survives_point=max_tested, max_tested=max_tested)
         return RunReport(
             stages=stages, survives_users=max_tested, max_tested=max_tested,
             latency_wall=latency_wall, saturated=sat.saturated,
             saturation_users=sat.knee_users, peak_rps=sat.peak_rps,
+            survives_low=low, survives_high=high, stable=stable,
         )
 
     idx = stages.index(onset)
@@ -507,6 +592,9 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
     bottleneck = _bottleneck_hint(worst[1], reason, sat) if worst else None
     marginal = (onset.users == max_tested and reason == "errors"
                 and onset.error_rate < 2 * error_threshold)
+    low, high, stable = confidence_band(
+        stages, latency_wall=latency_wall, error_threshold=error_threshold,
+        survives_point=survives, max_tested=max_tested)
     return RunReport(
         stages=stages,
         survives_users=survives,
@@ -520,4 +608,5 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
         saturation_users=sat.knee_users,
         peak_rps=sat.peak_rps,
         marginal=marginal,
+        survives_low=low, survives_high=high, stable=stable,
     )
