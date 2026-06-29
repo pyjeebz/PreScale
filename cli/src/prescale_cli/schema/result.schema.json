@@ -39,7 +39,8 @@
         "max_rps": { "type": ["number", "null"] },
         "warmup": { "type": "boolean" },
         "repeat": { "type": "integer" },
-        "think_time_s": { "type": "number" }
+        "think_time_s": { "type": "number" },
+        "fail_under": { "type": ["integer", "null"] }
       }
     },
     "verdict": {

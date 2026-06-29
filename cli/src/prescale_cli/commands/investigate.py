@@ -33,9 +33,11 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 @click.option("--json", "as_json", is_flag=True, help="Emit the full Result as JSON.")
 @click.option("--store", "store", type=click.Path(file_okay=False), default=None,
               help="Directory for saved runs (default: ./.prescale).")
+@click.option("--fail-under", "fail_under", default=None, type=int,
+              help="Exit non-zero if it survives fewer than N users (a CI gate).")
 def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                 stage_seconds: float, max_rps: float | None, yes: bool,
-                as_json: bool, store: str | None) -> None:
+                as_json: bool, store: str | None, fail_under: int | None) -> None:
     """Find what breaks first, then probe it to explain WHY - and how to fix it.
 
     With no URL, re-investigates the latest saved run's target.
@@ -95,10 +97,15 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
 
     if as_json:
         click.echo(json.dumps(result, indent=2))
-        return
+    else:
+        render_terminal(result)
+        render_investigation(result)
+        if result.get("investigation") is None:
+            console.print("\n[green]✓[/green] Held up — nothing to diagnose.")
+        console.print(f"[dim]saved as {result['id']}[/dim]")
 
-    render_terminal(result)
-    render_investigation(result)
-    if result.get("investigation") is None:
-        console.print("\n[green]✓[/green] Held up — nothing to diagnose.")
-    console.print(f"[dim]saved as {result['id']}[/dim]")
+    survives = result["verdict"]["survives_users"]
+    if fail_under is not None and survives < fail_under:
+        Console(stderr=True).print(
+            f"[red]✗ fail-under:[/red] survives ~{survives} < {fail_under}")
+        raise SystemExit(1)

@@ -72,12 +72,14 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Directory for saved runs (default: ./.prescale).")
 @click.option("--no-save", "no_save", is_flag=True,
               help="Don't save this run to .prescale/runs/.")
+@click.option("--fail-under", "fail_under", default=None, type=int,
+              help="Exit non-zero if it survives fewer than N users (a CI gate).")
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
         method: str, timeout: float, max_rps: float | None, warmup: bool,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
-        store: str | None, no_save: bool) -> None:
+        store: str | None, no_save: bool, fail_under: int | None) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -181,6 +183,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         "warmup": warmup,
         "repeat": repeat,
         "think_time_s": think_time,
+        "fail_under": fail_under,
     }
     result = build_result(report, url=url, targets=targets, config=config, warning=warning)
     saved_path = None if no_save else write_result(result, store=store)
@@ -190,12 +193,16 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
 
     if as_json:
         click.echo(json.dumps(result, indent=2))
-        return
+    else:
+        render_terminal(result)
+        if saved_path or html_path:
+            console.print()
+        if saved_path:
+            console.print(f"[green]✓[/green] Saved run to [cyan]{saved_path}[/cyan]")
+        if html_path:
+            console.print(f"[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
 
-    render_terminal(result)
-    if saved_path or html_path:
-        console.print()
-    if saved_path:
-        console.print(f"[green]✓[/green] Saved run to [cyan]{saved_path}[/cyan]")
-    if html_path:
-        console.print(f"[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
+    if fail_under is not None and report.survives_users < fail_under:
+        Console(stderr=True).print(
+            f"[red]✗ fail-under:[/red] survives ~{report.survives_users} < {fail_under}")
+        raise SystemExit(1)

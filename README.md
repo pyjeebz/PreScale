@@ -177,6 +177,31 @@ Load testing sends real traffic and can cause real outages or bills. PreScale de
 - [x] `--html` shareable report — single self-contained Linear-styled file
 - [ ] PyPI release + demo GIF
 
+## CI — gate on capacity
+
+Fail a build if capacity drops below a floor:
+
+```yaml
+- run: pip install prescale
+- run: prescale run https://staging.myapp.com --i-own-this --fail-under 100
+```
+
+Or catch regressions against a committed baseline (just a saved Result JSON):
+
+```yaml
+# on main — refresh and commit the baseline
+- run: prescale run https://staging.myapp.com --i-own-this --json > prescale-baseline.json
+
+# on PRs — run, compare, and comment
+- run: prescale run https://staging.myapp.com --i-own-this
+- run: prescale compare --baseline prescale-baseline.json --fail-on-regression --markdown > cmp.md
+- run: gh pr comment "${{ github.event.number }}" --body-file cmp.md
+  env:
+    GH_TOKEN: ${{ github.token }}
+```
+
+`compare` diffs the latest saved run against the baseline; the regression check uses the M1 confidence band, so it won't fail the build on noise.
+
 ## Contributing
 
 Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
