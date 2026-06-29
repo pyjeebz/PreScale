@@ -364,6 +364,12 @@ async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
     return sink.to_stage(users, elapsed if elapsed > 0 else duration)
 
 
+def _warmup_plan(levels: list[int], stage_seconds: float) -> tuple[int, float]:
+    """A modest, brief warmup: a low concurrency held for up to ~2s, and never
+    longer than a real measured stage."""
+    return min(10, max(levels)), min(2.0, stage_seconds)
+
+
 async def run_loadtest(
     targets: list[str],
     *,
@@ -373,7 +379,9 @@ async def run_loadtest(
     timeout: float = 10.0,
     max_rps: float | None = None,
     hard_stop_rate: float = 0.5,
+    warmup: bool = True,
     progress_cb=None,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> tuple[list[StageResult], str | None]:
     """Preflight the target, then ramp through `levels`, spreading each stage's
     load across `targets`. Stops early once a stage is more than `hard_stop_rate`
@@ -387,7 +395,7 @@ async def run_loadtest(
     gate = _RateGate(max_rps) if max_rps else None
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, follow_redirects=True,
-        headers={"User-Agent": _USER_AGENT},
+        headers={"User-Agent": _USER_AGENT}, transport=transport,
     ) as client:
         try:
             preflight = await client.request(method, targets[0])
@@ -398,6 +406,12 @@ async def run_loadtest(
                 f"First request returned HTTP {preflight.status_code} — "
                 "results may reflect a broken endpoint, not a load limit."
             )
+
+        if warmup:
+            # Discarded: warms caches/JIT/connection pools so the first measured
+            # level isn't cold. Still rate-gated, since it's real traffic.
+            warmup_users, warmup_seconds = _warmup_plan(levels, stage_seconds)
+            await _run_stage(client, targets, method, warmup_users, warmup_seconds, gate)
 
         stages: list[StageResult] = []
         for users in levels:

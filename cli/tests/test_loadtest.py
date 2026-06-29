@@ -2,10 +2,13 @@
 
 import asyncio
 
+import httpx
+
 from prescale_cli.loadtest import (
     RouteStat,
     StageResult,
     _RateGate,
+    _warmup_plan,
     analyze,
     build_targets,
     default_levels,
@@ -14,6 +17,7 @@ from prescale_cli.loadtest import (
     parse_sitemap,
     percentile,
     route_label,
+    run_loadtest,
 )
 
 
@@ -264,3 +268,30 @@ def test_robots_disallowed_filtering():
 def test_robots_empty_allows_all():
     targets = ["https://app.com/", "https://app.com/api"]
     assert disallowed_targets("", targets, "prescale/0.1.0") == []
+
+
+# --- warmup (M1.1) ---
+
+def test_warmup_plan_is_low_and_brief():
+    assert _warmup_plan([1, 5, 200], 5.0) == (10, 2.0)   # low level, capped at ~2s
+    assert _warmup_plan([2], 0.5) == (2, 0.5)            # never longer than a stage
+
+
+def _counting_transport(counter):
+    def handler(request):
+        counter.append(1)
+        return httpx.Response(200, text="ok")
+    return httpx.MockTransport(handler)
+
+
+def test_warmup_sends_extra_traffic_but_is_discarded():
+    targets = ["http://t/"]
+    with_warmup, without = [], []
+    s1, _ = asyncio.run(run_loadtest(
+        targets, levels=[2], stage_seconds=0.02, warmup=True,
+        transport=_counting_transport(with_warmup)))
+    s2, _ = asyncio.run(run_loadtest(
+        targets, levels=[2], stage_seconds=0.02, warmup=False,
+        transport=_counting_transport(without)))
+    assert len(s1) == 1 and len(s2) == 1        # warmup is never a returned stage
+    assert len(with_warmup) > len(without)      # but it did send extra traffic

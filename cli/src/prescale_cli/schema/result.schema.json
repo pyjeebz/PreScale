@@ -36,7 +36,8 @@
         "stage_seconds": { "type": "number" },
         "latency_wall_s": { "type": "number" },
         "error_threshold": { "type": "number" },
-        "max_rps": { "type": ["number", "null"] }
+        "max_rps": { "type": ["number", "null"] },
+        "warmup": { "type": "boolean" }
       }
     },
     "verdict": {
