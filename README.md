@@ -121,6 +121,17 @@ prescale audit https://myapp.com
 ✓ CDN / edge cache      Detected (Cloudflare).
 ```
 
+### Use it from a coding agent (MCP)
+
+PreScale ships an MCP server so an AI coding agent can load-test **mid-build** — point it at your local preview URL, get a verdict, fix, repeat.
+
+```bash
+pip install 'prescale[mcp]'
+claude mcp add prescale -- prescale mcp     # Claude Code
+```
+
+It exposes `load_test`, `audit`, `list_runs`, and `get_run` tools that return the same compact verdict you get on the CLI. **Safe by default:** the agent can only load-test local hosts unless you allowlist others with `PRESCALE_MCP_ALLOW=staging.myapp.com` (or `prescale mcp --allow staging.myapp.com`).
+
 ## How it works
 
 1. **Preflight** — one request to confirm the URL is reachable.
