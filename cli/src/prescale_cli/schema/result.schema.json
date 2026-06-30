@@ -40,7 +40,8 @@
         "warmup": { "type": "boolean" },
         "repeat": { "type": "integer" },
         "think_time_s": { "type": "number" },
-        "fail_under": { "type": ["integer", "null"] }
+        "fail_under": { "type": ["integer", "null"] },
+        "profile": { "type": ["string", "null"] }
       }
     },
     "verdict": {
@@ -90,6 +91,16 @@
         "evidence": { "type": "array", "items": { "type": "string" } },
         "remediation": { "type": "array", "items": { "type": "string" } },
         "stack": { "type": "object" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "description": "Present when `run --profile` framed the run as a launch scenario.",
+      "properties": {
+        "name": { "type": "string" },
+        "label": { "type": "string" },
+        "peak_users": { "type": "integer" },
+        "would_survive": { "type": "boolean" }
       }
     }
   },

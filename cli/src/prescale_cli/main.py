@@ -9,6 +9,7 @@ from prescale_cli.commands import (
     history,
     investigate,
     mcp,
+    profiles,
     run,
     schema,
     show,
@@ -31,6 +32,7 @@ def cli() -> None:
         prescale audit https://myapp.com            # static scaling-hygiene check
         prescale history                            # list saved runs
         prescale compare                            # capacity diff of the last two runs
+        prescale profiles                           # launch scenarios for --profile
         prescale show                               # re-render the latest saved run
         prescale mcp                                # MCP server for coding agents
     """
@@ -41,6 +43,7 @@ cli.add_command(investigate.investigate)
 cli.add_command(audit.audit)
 cli.add_command(history.history)
 cli.add_command(compare.compare)
+cli.add_command(profiles.profiles)
 cli.add_command(show.show)
 cli.add_command(schema.schema)
 cli.add_command(mcp.mcp)

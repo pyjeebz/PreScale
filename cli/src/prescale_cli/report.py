@@ -266,6 +266,10 @@ def render_html(result: dict) -> str:
     target = result["target"]
     config = result["config"]
     dot, pill, headline, sub = _verdict(result)
+    prof = result.get("profile")
+    if prof:
+        verb = "likely holds" if prof["would_survive"] else "unlikely to hold"
+        sub = f"{sub} · {_esc(prof['label'])}: {verb} (peaks ~{prof['peak_users']})."
     ts = datetime.strptime(result["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime(
         "%Y-%m-%d %H:%M UTC")
     n_routes = len(target["routes"])

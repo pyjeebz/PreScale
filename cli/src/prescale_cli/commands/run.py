@@ -25,6 +25,7 @@ from prescale_cli.loadtest import (
     route_label,
     run_loadtest,
 )
+from prescale_cli.profiles import PROFILES, lookup, scenario_block
 from prescale_cli.render import render_terminal
 from prescale_cli.report import render_html
 from prescale_cli.result import build_result, write_result
@@ -74,12 +75,15 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Don't save this run to .prescale/runs/.")
 @click.option("--fail-under", "fail_under", default=None, type=int,
               help="Exit non-zero if it survives fewer than N users (a CI gate).")
+@click.option("--profile", "profile_name", default=None,
+              help="Frame the run as a launch scenario (see `prescale profiles`).")
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
         method: str, timeout: float, max_rps: float | None, warmup: bool,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
-        store: str | None, no_save: bool, fail_under: int | None) -> None:
+        store: str | None, no_save: bool, fail_under: int | None,
+        profile_name: str | None) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -94,6 +98,15 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         console.print(f"[red]Error:[/red] '{url}' doesn't look like a URL "
                       "(expected e.g. http://localhost:8000).")
         raise SystemExit(1)
+
+    prof = lookup(profile_name) if profile_name else None
+    if profile_name and prof is None:
+        console.print(f"[red]Error:[/red] unknown profile '{profile_name}'. "
+                      f"Try one of: {', '.join(PROFILES)}.")
+        raise SystemExit(1)
+    if prof is not None:
+        max_users = prof.peak_users
+        think_time = prof.think_time_s
 
     host = (parsed.hostname or "").lower()
     is_local = host in _LOCAL_HOSTS
@@ -184,8 +197,11 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         "repeat": repeat,
         "think_time_s": think_time,
         "fail_under": fail_under,
+        "profile": prof.name if prof else None,
     }
     result = build_result(report, url=url, targets=targets, config=config, warning=warning)
+    if prof is not None:
+        result["profile"] = scenario_block(prof, report.survives_users)
     saved_path = None if no_save else write_result(result, store=store)
 
     if html_path:

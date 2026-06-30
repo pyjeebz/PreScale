@@ -78,6 +78,15 @@ def render_terminal(result: dict) -> None:
         lines.append(f"Confidence  likely {conf['survives_low']}–{conf['survives_high']} "
                      f"users; treat ~{verdict['survives_users']} as a ballpark.")
 
+    prof = result.get("profile")
+    if prof:
+        icon = "✅" if prof["would_survive"] else "🛑"
+        verb = "likely holds" if prof["would_survive"] else "unlikely"
+        outcome = (f"survive ~{verdict['survives_users']}" if prof["would_survive"]
+                   else f"break at ~{verdict['survives_users']}")
+        lines.append(f"Launch  {icon} {prof['label']}: {verb} "
+                     f"(peaks ~{prof['peak_users']}, you {outcome}).")
+
     console.print(Panel("\n".join(lines), title="📈 Readiness report", border_style=color))
 
     if multi and stages:

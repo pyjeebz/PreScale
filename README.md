@@ -93,6 +93,21 @@ prescale run https://staging.myapp.com -u 500 --i-own-this --json
 prescale run https://staging.myapp.com --i-own-this --html report.html
 ```
 
+### Frame it as a launch — `--profile`
+
+Abstract user counts are hard to act on, so name the scenario:
+
+```bash
+prescale run https://staging.myapp.com --i-own-this --profile product-hunt
+prescale profiles      # list scenarios
+```
+
+```
+Launch  🛑 a Product Hunt #1 launch: unlikely (peaks ~100, you break at ~90).
+```
+
+Profiles (`steady-10k-dau`, `product-hunt`, `reddit`, `hn-frontpage`, `black-friday`) set a realistic peak concurrency + think-time and frame the verdict against it.
+
 ### Why it breaks — `prescale investigate`
 
 `run` tells you *what* breaks; `investigate` tells you *why* and *how to fix it*. It finds the culprit route, then probes it — baseline vs loaded latency, a static-vs-dynamic comparison, error/header forensics — to classify the bottleneck and prescribe a fix. Fully local, deterministic, no LLM.
