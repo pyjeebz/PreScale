@@ -29,8 +29,8 @@ def mcp(allow_hosts: tuple[str, ...]) -> None:
     try:
         from prescale_cli.mcp_server import serve
     except ImportError:
-        err.print("[red]Error:[/red] MCP support needs the optional extra:\n"
-                  "    pip install 'prescale[mcp]'")
+        err.print("[red]Error:[/red] MCP support needs the optional extra. Install it with:")
+        err.print("    pip install 'prescale[mcp]'", markup=False)
         raise SystemExit(1)
 
     allow = parse_allow(os.environ.get("PRESCALE_MCP_ALLOW"))

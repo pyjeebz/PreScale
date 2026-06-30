@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — 2026-06-30
+
+### Fixed
+- `prescale mcp` without the optional extra printed the wrong install command
+  (`pip install 'prescale'` instead of `'prescale[mcp]'`) — rich was interpreting
+  `[mcp]` as console markup.
+
+### Docs
+- Rewrote the README and refreshed the PyPI description for the full 0.2.x toolkit.
+
 ## 0.2.0 — 2026-06-30
 
 A big release: PreScale grew from a single load-test command into a full toolkit.

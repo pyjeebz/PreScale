@@ -124,3 +124,18 @@ def test_build_server_registers_tools():
     pytest.importorskip("mcp")
     from prescale_cli.mcp_server import build_server
     assert build_server(set()) is not None
+
+
+def test_mcp_command_without_extra_gives_correct_install_hint(monkeypatch):
+    import sys
+
+    from click.testing import CliRunner
+
+    from prescale_cli.main import cli
+
+    # simulate the optional extra not being installed
+    monkeypatch.setitem(sys.modules, "prescale_cli.mcp_server", None)
+    res = CliRunner().invoke(cli, ["mcp"])
+    assert res.exit_code == 1
+    # the [mcp] must survive (rich must not eat it as markup)
+    assert "prescale[mcp]" in res.stderr
