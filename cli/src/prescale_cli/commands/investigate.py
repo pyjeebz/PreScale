@@ -10,7 +10,9 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
+from prescale_cli.investigate import _LATENCY_WALL_S
 from prescale_cli.investigate import investigate as run_investigate
+from prescale_cli.live import LiveRamp
 from prescale_cli.loadtest import LoadError
 from prescale_cli.render import render_investigation, render_terminal
 from prescale_cli.result import latest_id, load_result
@@ -76,21 +78,18 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
         if not click.confirm("Proceed?", default=False):
             raise SystemExit(0)
 
-    def render_progress(status):
-        def cb(u: int) -> None:
-            status.update(f"[bold blue]Ramping load — {u} virtual users…")
-        return cb
-
+    live_mode = console.is_terminal and not as_json
     try:
-        if as_json:
+        if live_mode:
+            with LiveRamp(console, latency_wall=_LATENCY_WALL_S) as live:
+                result = asyncio.run(run_investigate(
+                    url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
+                    max_rps=max_rps, store=store,
+                    progress_cb=live.starting, on_stage=live.finished))
+        else:
             result = asyncio.run(run_investigate(
                 url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                 max_rps=max_rps, store=store))
-        else:
-            with console.status("[bold blue]Warming up…") as status:
-                result = asyncio.run(run_investigate(
-                    url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
-                    max_rps=max_rps, store=store, progress_cb=render_progress(status)))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1)
@@ -98,7 +97,7 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
     if as_json:
         click.echo(json.dumps(result, indent=2))
     else:
-        render_terminal(result)
+        render_terminal(result, show_ramp=not live_mode)
         render_investigation(result)
         if result.get("investigation") is None:
             console.print("\n[green]✓[/green] Held up — nothing to diagnose.")

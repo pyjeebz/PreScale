@@ -15,6 +15,7 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
+from prescale_cli.live import LiveRamp
 from prescale_cli.loadtest import (
     LoadError,
     analyze,
@@ -159,26 +160,22 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
 
     levels = default_levels(max_users)
 
-    def render_progress(status):
-        def cb(users: int) -> None:
-            status.update(f"[bold blue]Ramping load — {users} virtual users…")
-        return cb
-
+    live_mode = console.is_terminal and not as_json
     try:
-        if as_json:
+        if live_mode:
+            with LiveRamp(console, latency_wall=latency_wall) as live:
+                stages, warning = asyncio.run(run_loadtest(
+                    targets, levels=levels, stage_seconds=stage_seconds,
+                    method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
+                    repeat=repeat, think_time=think_time,
+                    progress_cb=live.starting, on_stage=live.finished,
+                ))
+        else:
             stages, warning = asyncio.run(run_loadtest(
                 targets, levels=levels, stage_seconds=stage_seconds,
                 method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
                 repeat=repeat, think_time=think_time,
             ))
-        else:
-            with console.status("[bold blue]Warming up…") as status:
-                stages, warning = asyncio.run(run_loadtest(
-                    targets, levels=levels, stage_seconds=stage_seconds,
-                    method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
-                    repeat=repeat, think_time=think_time,
-                    progress_cb=render_progress(status),
-                ))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1)
@@ -210,7 +207,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     if as_json:
         click.echo(json.dumps(result, indent=2))
     else:
-        render_terminal(result)
+        render_terminal(result, show_ramp=not live_mode)
         if saved_path or html_path:
             console.print()
         if saved_path:

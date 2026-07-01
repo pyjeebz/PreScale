@@ -10,8 +10,9 @@ from rich.table import Table
 console = Console()
 
 
-def render_terminal(result: dict) -> None:
-    """Print the load-ramp table and readiness verdict for a Result."""
+def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
+    """Print the load-ramp table and readiness verdict for a Result. Set
+    `show_ramp=False` when a live ramp table has already been drawn (a TTY run)."""
     verdict = result["verdict"]
     stages = result["stages"]
     warning = result.get("warning")
@@ -23,27 +24,28 @@ def render_terminal(result: dict) -> None:
     if warning:
         console.print(f"[yellow]⚠ {warning}[/yellow]\n")
 
-    table = Table(show_header=True, header_style="bold magenta", title="Load ramp")
-    table.add_column("Users", justify="right")
-    table.add_column("Req/s", justify="right")
-    table.add_column("p50", justify="right")
-    table.add_column("p95", justify="right")
-    table.add_column("p99", justify="right")
-    table.add_column("Errors", justify="right")
+    if show_ramp:
+        table = Table(show_header=True, header_style="bold magenta", title="Load ramp")
+        table.add_column("Users", justify="right")
+        table.add_column("Req/s", justify="right")
+        table.add_column("p50", justify="right")
+        table.add_column("p95", justify="right")
+        table.add_column("p99", justify="right")
+        table.add_column("Errors", justify="right")
 
-    for stage in stages:
-        is_onset = stage["users"] == onset_users
-        table.add_row(
-            str(stage["users"]),
-            f"{stage['rps']:.0f}",
-            _ms(stage["p50_ms"]),
-            _ms(stage["p95_ms"]),
-            _ms(stage["p99_ms"]),
-            _err(stage["error_rate"]),
-            style="bold red" if is_onset else None,
-        )
-    console.print(table)
-    console.print()
+        for stage in stages:
+            is_onset = stage["users"] == onset_users
+            table.add_row(
+                str(stage["users"]),
+                f"{stage['rps']:.0f}",
+                _ms(stage["p50_ms"]),
+                _ms(stage["p95_ms"]),
+                _ms(stage["p99_ms"]),
+                _err(stage["error_rate"]),
+                style="bold red" if is_onset else None,
+            )
+        console.print(table)
+        console.print()
 
     if onset_users is None:
         emoji, color = "✅", "green"

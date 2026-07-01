@@ -411,6 +411,7 @@ async def run_loadtest(
     repeat: int = 1,
     think_time: float = 0.0,
     progress_cb=None,
+    on_stage=None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> tuple[list[StageResult], str | None]:
     """Preflight the target, then ramp through `levels`, spreading each stage's
@@ -454,6 +455,8 @@ async def run_loadtest(
                 stage = await _run_stage(client, targets, method, users, stage_seconds,
                                          gate, think_time)
                 by_level.setdefault(users, []).append(stage)
+                if on_stage:
+                    on_stage(stage)
                 if stage.error_rate >= hard_stop_rate:
                     break
 

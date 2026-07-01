@@ -232,13 +232,14 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None) ->
 
 
 async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
-                      max_rps=None, store=None, transport=None, progress_cb=None) -> dict:
+                      max_rps=None, store=None, transport=None, progress_cb=None,
+                      on_stage=None) -> dict:
     """Ramp to find the culprit, probe it, and attach a diagnosis to the Result."""
     targets = build_targets(url, paths=tuple(paths))
     levels = default_levels(max_users)
     stages, warning = await run_loadtest(
         targets, levels=levels, stage_seconds=stage_seconds, max_rps=max_rps,
-        transport=transport, progress_cb=progress_cb)
+        transport=transport, progress_cb=progress_cb, on_stage=on_stage)
     report = analyze(stages, latency_wall=_LATENCY_WALL_S,
                      error_threshold=_ERROR_THRESHOLD, rate_capped=max_rps is not None)
     config = {"method": "GET", "max_users": max_users, "stage_seconds": stage_seconds,
