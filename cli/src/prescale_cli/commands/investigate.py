@@ -85,7 +85,8 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                 result = asyncio.run(run_investigate(
                     url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                     max_rps=max_rps, store=store,
-                    progress_cb=live.starting, on_stage=live.finished))
+                    progress_cb=live.starting, on_stage=live.finished,
+                    on_probe=live.diagnosing))
         else:
             result = asyncio.run(run_investigate(
                 url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,

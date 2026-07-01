@@ -233,7 +233,7 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None) ->
 
 async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
                       max_rps=None, store=None, transport=None, progress_cb=None,
-                      on_stage=None) -> dict:
+                      on_stage=None, on_probe=None) -> dict:
     """Ramp to find the culprit, probe it, and attach a diagnosis to the Result."""
     targets = build_targets(url, paths=tuple(paths))
     levels = default_levels(max_users)
@@ -248,6 +248,8 @@ async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
     result = build_result(report, url=url, targets=targets, config=config, warning=warning)
 
     if report.onset_users is not None and report.culprit_route:
+        if on_probe:
+            on_probe()
         probes = await gather_probes(url, report, stages, targets, transport=transport)
         diag = classify(probes)
         stack = {k: v for k, v in {"server": probes.server, "cdn": probes.cdn}.items() if v}

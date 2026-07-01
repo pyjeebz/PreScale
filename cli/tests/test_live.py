@@ -58,3 +58,15 @@ def test_live_ramp_marks_start_before_finish():
         live.starting(75)
         assert live._order == [75]
         assert live._stage[75] is None  # in flight until finished
+
+
+def test_live_ramp_caption_phases():
+    console = Console(file=StringIO(), force_terminal=False)
+    with LiveRamp(console, latency_wall=2.0) as live:
+        assert live._caption == "warming up…"
+        live.starting(10)
+        assert live._caption is None  # rows now carry the activity
+        live.finished(_stage(10, total=20, errors=0))
+        live.diagnosing()
+        assert "diagnosing" in (live._caption or "")
+    assert "warming up" in _text(_ramp_table([(10, None)], 2.0, caption="warming up…"))
