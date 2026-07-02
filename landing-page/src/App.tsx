@@ -109,13 +109,13 @@ function Hero() {
           <span className="bg-cream px-1.5 py-0.5 font-medium text-night">New</span>
           v0.2 <span className="text-faint">·</span> Apache-2.0
         </div>
-        <h1 className="max-w-[18ch] text-[clamp(2.2rem,6vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.03em]">
-          Find what breaks before your users do.
+        <h1 className="max-w-[20ch] text-[clamp(2.2rem,6vw,3.5rem)] font-medium leading-[1.05] tracking-[-0.03em]">
+          The open-source load tester that tells you why.
         </h1>
         <p className="mt-8 max-w-2xl text-[0.95rem] leading-relaxed text-dim">
-          PreScale is an open-source CLI that load-tests your site before it sees real traffic.
-          Point it at a URL — it ramps virtual users, finds which route breaks first, and tells
-          you, in plain English, when your app falls over.
+          PreScale is a command-line load tester. Point it at any URL — it ramps virtual users,
+          finds the route that breaks first, and tells you, in plain English, why it failed and
+          how to fix it.
         </p>
         <InstallTabs />
         <p className="mt-5 text-[0.72rem] text-faint">Free · works with any stack · no account required</p>

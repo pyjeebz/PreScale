@@ -36,9 +36,9 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-night/85 backdrop-blur-md">
       <div className="flex h-16 items-center justify-between px-8">
-        <a href="#/" className="flex items-center gap-2">
-          <span className="select-none text-accent">▍</span>
-          <span className="font-medium">prescale</span>
+        <a href="#/" className="flex items-center gap-2.5">
+          <img src="/logo.svg" alt="PreScale" className="h-7 w-7" />
+          <span className="font-medium">PreScale</span>
         </a>
         <nav className="flex items-center gap-1 text-[0.82rem]">
           {NAV.map((l) => (

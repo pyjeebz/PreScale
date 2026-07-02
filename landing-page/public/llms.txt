@@ -1,0 +1,29 @@
+# PreScale
+
+> PreScale is an open-source command-line load tester. Point it at any URL and it ramps virtual
+> users, finds the route that breaks first, and tells you in plain English why it failed and how
+> to fix it. Local-first, deterministic (no LLM in the core path), Apache-2.0.
+
+## What it does
+- Ramps closed-loop virtual users over HTTP/2 — no external load tool or server to stand up.
+- Finds the first route to break and the concurrency where it starts to give.
+- Diagnoses the bottleneck (connection pool, concurrency ceiling, slow query) and names the fix.
+- Reports a plain-English verdict, not a dashboard.
+- Runs on your machine; your data never leaves it.
+
+## Install
+- `pip install prescale` (requires Python 3.10+)
+
+## Commands
+- `prescale investigate <url>` — find the first breaking point, then probe it to explain why.
+- `prescale run <url>` — load test with a live ramp table (users, throughput, p50/p95/p99, errors).
+
+## How it compares
+- Locust and k6 are load engines you script (Python / JavaScript). PreScale is zero-config: point
+  it at a URL and read the verdict. Reach for PreScale for a pre-launch readiness check.
+
+## Links
+- Site: https://prescale.dev/
+- Docs: https://prescale.dev/#/docs
+- Source: https://github.com/pyjeebz/prescale
+- PyPI: https://pypi.org/project/prescale/

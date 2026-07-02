@@ -2,12 +2,74 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0c0d0c" />
+
+    <!-- Primary -->
+    <title>PreScale — The open-source load tester that tells you why</title>
+    <meta
+      name="description"
+      content="PreScale is an open-source command-line load tester. Point it at any URL — it ramps virtual users, finds the route that breaks first, and tells you in plain English why it failed and how to fix it. Local-first, deterministic, Apache-2.0."
+    />
+    <link rel="canonical" href="https://prescale.dev/" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="The Fork" />
+    <meta
+      name="keywords"
+      content="load testing, load tester, load test CLI, open source load testing, performance testing, stress test, scalability, breaking point, pre-launch, staging, capacity"
+    />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PreScale" />
+    <meta property="og:url" content="https://prescale.dev/" />
+    <meta property="og:title" content="PreScale — The open-source load tester that tells you why" />
+    <meta
+      property="og:description"
+      content="Point it at a URL. PreScale ramps virtual users, finds what breaks first, and tells you in plain English why — and how to fix it."
+    />
+    <meta property="og:image" content="https://prescale.dev/poster.png" />
+    <meta property="og:image:width" content="1758" />
+    <meta property="og:image:height" content="1176" />
+    <meta property="og:image:alt" content="PreScale terminal output diagnosing a route that breaks under load" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PreScale — The open-source load tester that tells you why" />
+    <meta
+      name="twitter:description"
+      content="Point it at a URL. PreScale ramps virtual users, finds what breaks first, and tells you in plain English why — and how to fix it."
+    />
+    <meta name="twitter:image" content="https://prescale.dev/poster.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
-    <title>PreScale — Find what breaks before your users do</title>
+
+    <!-- Structured data: helps search + answer engines describe PreScale -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "PreScale",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows, macOS, Linux",
+        "description": "PreScale is an open-source command-line load tester. Point it at any URL — it ramps virtual users, finds the route that breaks first, and tells you in plain English why it failed and how to fix it.",
+        "url": "https://prescale.dev/",
+        "downloadUrl": "https://pypi.org/project/prescale/",
+        "softwareRequirements": "Python 3.10+",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "author": {
+          "@type": "Organization",
+          "name": "The Fork",
+          "url": "https://github.com/pyjeebz/prescale"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

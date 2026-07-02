@@ -1,0 +1,5 @@
+# PreScale — allow everyone, including AI answer-engine crawlers
+User-agent: *
+Allow: /
+
+Sitemap: https://prescale.dev/sitemap.xml
