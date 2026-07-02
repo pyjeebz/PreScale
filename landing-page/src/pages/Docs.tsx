@@ -12,6 +12,7 @@ const TOC: [string, string][] = [
   ["quickstart", "Quickstart"],
   ["investigate", "investigate"],
   ["run", "run"],
+  ["audit", "audit"],
   ["options", "Options"],
   ["ci", "CI gate"],
   ["safety", "Safety"],
@@ -151,6 +152,27 @@ export function Docs() {
             <Term>
               <Cmd>prescale run http://localhost:8000 -u 500 -s 3</Cmd>
             </Term>
+          </Section>
+
+          <Section id="audit" title="prescale audit">
+            <p>
+              A fast, load-free hygiene check of the HTTP-level footguns that decide how you
+              scale — compression, static-asset caching, CDN, HTTP version, and cookies on assets.
+              It sends no load, so it's cheap enough to run on every commit.
+            </p>
+            <Term>
+              <Cmd>prescale audit https://myapp.com</Cmd>
+              <div className="mt-3" />
+              <Out>✓ Compression — gzip / brotli enabled</Out>
+              <Out accent>⚠ HTTP version — served over HTTP/1.1, enable HTTP/2</Out>
+              <Out accent>⚠ Static caching — 2 of 6 assets have no cache headers</Out>
+              <Out>✓ CDN / edge cache — Cloudflare detected</Out>
+            </Term>
+            <p>
+              Each finding comes with a one-line fix. Add <span className="text-cream">--json</span>{" "}
+              for machine-readable output, or <span className="text-cream">--timeout</span> to
+              change the per-request timeout (default 10s).
+            </p>
           </Section>
 
           <Section id="options" title="Options">
