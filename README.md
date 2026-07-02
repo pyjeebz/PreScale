@@ -1,10 +1,26 @@
+<div align="center">
+
+<img src="docs/logo.svg" alt="PreScale" width="64" />
+
 # PreScale
 
-**Launch-readiness load testing for developers — find what breaks before your users do.**
+**The open-source load tester that tells you why.**
+
+Point it at a URL — it finds what breaks first, at what traffic, and how to fix it.
+No scripts. No account. Runs on your machine.
 
 [![CI](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml/badge.svg)](https://github.com/pyjeebz/prescale/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/prescale.svg)](https://pypi.org/project/prescale/)
+[![Python](https://img.shields.io/pypi/pyversions/prescale.svg)](https://pypi.org/project/prescale/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+<img src="docs/demo.gif" alt="PreScale ramps load against a URL, finds the route that breaks first, and prints a plain-English diagnosis" width="820" />
+
+<sub><em>A real run against a fragile demo app — ramp → first break → diagnosis.</em></sub>
+
+</div>
+
+---
 
 A launch, a marketing push, a Hacker News front page, a feature-flag flip — traffic spikes and your app falls over: 500s, exhausted DB connections, a surprise bill, or just dead during the hour that mattered. PreScale tells you what breaks **before** that happens.
 
@@ -12,7 +28,7 @@ Point it at a URL. It ramps real traffic until something gives, then tells you, 
 
 ```bash
 pip install prescale
-prescale run https://staging.myapp.com
+prescale investigate https://staging.myapp.com
 ```
 
 ```
