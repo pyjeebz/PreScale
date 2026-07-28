@@ -1,4 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/_mintlify/:path*", "destination": "https://prescale.mintlify.site/_mintlify/:path*" },
+    { "source": "/api/request", "destination": "https://prescale.mintlify.site/_mintlify/api/request" },
+    { "source": "/docs", "destination": "https://prescale.mintlify.site/docs" },
+    { "source": "/docs/:path*", "destination": "https://prescale.mintlify.site/docs/:path*" },
+    { "source": "/mintlify-assets/:path+", "destination": "https://prescale.mintlify.site/mintlify-assets/:path+" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
