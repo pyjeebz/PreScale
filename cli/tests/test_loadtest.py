@@ -341,6 +341,29 @@ def test_confidence_band_widens_when_onset_is_marginal():
     assert report.stable is False
 
 
+def test_small_error_free_stages_do_not_collapse_the_band():
+    # Early stages of a slow app see few requests; zero errors there isn't a failure.
+    stages = [
+        _stage(1, {"/": _route(30, 0, 0.05)}),
+        _stage(10, {"/": _route(60, 0, 0.05)}),
+        _stage(50, {"/": _route(2000, 0, 0.05)}),
+        _stage(100, {"/": _route(2000, 1000, 0.05)}),
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert report.survives_users == 50
+    assert (report.survives_low, report.survives_high) == (50, 50)
+
+
+def test_small_stage_with_errors_still_widens_the_band():
+    stages = [
+        _stage(1, {"/": _route(30, 1, 0.05)}),  # 1 error in 30: can't rule out 2%+
+        _stage(50, {"/": _route(2000, 0, 0.05)}),
+        _stage(100, {"/": _route(2000, 1000, 0.05)}),
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.02)
+    assert report.survives_low == 0 and report.survives_high == 50
+
+
 # --- repeat + think-time + repeatability (M1.3–M1.5) ---
 
 def test_repeat_pools_samples_per_level():
