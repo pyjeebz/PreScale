@@ -45,6 +45,9 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
                 style="bold red" if is_onset else None,
             )
         console.print(table)
+        sent = sum(stage.get("total", 0) for stage in stages)
+        console.print(f"[dim]Sent {sent:,} requests while measuring "
+                      "(on serverless, each one is a billed invocation).[/dim]")
         console.print()
 
     if onset_users is None:
