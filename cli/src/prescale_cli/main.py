@@ -5,14 +5,17 @@ import click
 from prescale_cli import __version__
 from prescale_cli.commands import (
     audit,
+    ci,
     compare,
     history,
     investigate,
+    login,
     mcp,
     profiles,
     run,
     schema,
     show,
+    upload,
 )
 
 
@@ -35,6 +38,8 @@ def cli() -> None:
         prescale profiles                           # launch scenarios for --profile
         prescale show                               # re-render the latest saved run
         prescale mcp                                # MCP server for coding agents
+        prescale login                              # connect to your dashboard (opt-in)
+        prescale ci --target staging.myapp.com      # CI: check a preview deploy, comment on the PR
     """
 
 
@@ -47,6 +52,10 @@ cli.add_command(profiles.profiles)
 cli.add_command(show.show)
 cli.add_command(schema.schema)
 cli.add_command(mcp.mcp)
+cli.add_command(login.login)
+cli.add_command(login.logout)
+cli.add_command(upload.upload)
+cli.add_command(ci.ci)
 
 
 def main() -> None:
