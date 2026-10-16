@@ -1,0 +1,57 @@
+---
+title: "Install PreScale"
+description: "Install the PreScale CLI with one command on macOS, Linux or Windows. No Python setup needed; pip works too."
+---
+
+## One command
+
+<CodeGroup>
+
+```bash macOS / Linux
+curl -fsSL https://prescale.dev/install | sh
+```
+
+```powershell Windows
+irm https://prescale.dev/install.ps1 | iex
+```
+
+</CodeGroup>
+
+Open a new terminal, then check it worked:
+
+```bash
+prescale --version
+```
+
+The installer uses [uv](https://docs.astral.sh/uv) to put PreScale in its own isolated
+environment. If your machine has no Python 3.10+, uv brings its own. Nothing else on your
+system changes. Run the same command again to upgrade.
+
+<Note>
+The installer is short and public. Read it first if you prefer:
+[install](https://github.com/pyjeebz/PreScale/blob/main/landing-page/public/install) ·
+[install.ps1](https://github.com/pyjeebz/PreScale/blob/main/landing-page/public/install.ps1).
+</Note>
+
+### Options
+
+| Variable | What it does |
+|---|---|
+| `PRESCALE_VERSION=1.0.0` | Install a specific version |
+| `PRESCALE_EXTRAS=mcp` | Include the MCP server for coding agents |
+| `PRESCALE_NO_MODIFY_PATH=1` | Don't add the install directory to your shell profile |
+
+```bash
+curl -fsSL https://prescale.dev/install | PRESCALE_EXTRAS=mcp sh
+```
+
+## With pip
+
+Requires Python 3.10 or later.
+
+```bash
+pip install prescale            # the CLI
+pip install 'prescale[mcp]'     # + the MCP server for coding agents
+```
+
+`uvx prescale` and `pipx install prescale` work too.
