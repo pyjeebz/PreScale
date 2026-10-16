@@ -1,0 +1,94 @@
+name: PreScale capacity check
+description: Load-test each preview deploy, upload the verdict to PreScale, and comment the capacity change, culprit and fix on the PR.
+author: PreScale
+branding:
+  icon: activity
+  color: blue
+
+inputs:
+  token:
+    description: PreScale API token (create one under Connect in the dashboard). Store it as a secret.
+    required: true
+  target:
+    description: The PreScale target this deploy belongs to, as a hostname (e.g. staging.myapp.com). Preview URLs change every deploy; runs attach to this target.
+    required: true
+  url:
+    description: URL to test. Defaults to the deploy URL from the deployment_status event.
+    required: false
+    default: ""
+  paths:
+    description: Extra routes to test, one per line (e.g. /api/search).
+    required: false
+    default: ""
+  headers:
+    description: "Extra request headers for the target, one 'Name: value' per line, e.g. 'x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}'. Never saved or uploaded."
+    required: false
+    default: ""
+  max-users:
+    description: Peak virtual users.
+    required: false
+    default: "200"
+  stage-seconds:
+    description: Seconds to hold each load level.
+    required: false
+    default: "5"
+  fail-on-regression:
+    description: Fail the job on a confident capacity regression vs the baseline branch.
+    required: false
+    default: "false"
+  comment:
+    description: Post or update a capacity comment on the PR.
+    required: false
+    default: "true"
+  allow-production:
+    description: Also run on production deploys. Off by default; PreScale ramps load on previews and staging.
+    required: false
+    default: "false"
+  app-url:
+    description: PreScale dashboard URL.
+    required: false
+    default: https://prescale.dev/dashboard
+  prescale-version:
+    description: PreScale CLI version to install (default latest).
+    required: false
+    default: ""
+  github-token:
+    description: Token for the PR comment. Needs pull-requests write.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install PreScale
+      shell: bash
+      env:
+        VERSION: ${{ inputs.prescale-version }}
+      run: python -m pip install --quiet "prescale${VERSION:+==$VERSION}"
+
+    - name: Capacity check
+      shell: bash
+      env:
+        PRESCALE_TOKEN: ${{ inputs.token }}
+        PRESCALE_URL: ${{ inputs.app-url }}
+        PRESCALE_TARGET: ${{ inputs.target }}
+        PRESCALE_HEADERS: ${{ inputs.headers }}
+        PRESCALE_PATHS: ${{ inputs.paths }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_MAX_USERS: ${{ inputs.max-users }}
+        INPUT_STAGE_SECONDS: ${{ inputs.stage-seconds }}
+        INPUT_FAIL: ${{ inputs.fail-on-regression }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_ALLOW_PRODUCTION: ${{ inputs.allow-production }}
+      run: |
+        args=(--max-users "$INPUT_MAX_USERS" --stage-seconds "$INPUT_STAGE_SECONDS" --store "$RUNNER_TEMP/prescale")
+        [ "$INPUT_FAIL" = "true" ] && args+=(--fail-on-regression)
+        [ "$INPUT_COMMENT" = "true" ] || args+=(--no-comment)
+        [ "$INPUT_ALLOW_PRODUCTION" = "true" ] && args+=(--allow-production)
+        [ -n "$INPUT_URL" ] && args+=("$INPUT_URL")
+        prescale ci "${args[@]}"
