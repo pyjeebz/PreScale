@@ -10,11 +10,16 @@ from prescale_cli.main import cli
 from prescale_cli.result import build_result, write_result
 
 
-def _result(survives, *, low=None, high=None, peak=100.0, run_id=None, commit="abc1234"):
+def _result(survives, *, low=None, high=None, peak=100.0, run_id=None, commit="abc1234",
+            held_at=None):
+    """A run that ramped past `survives` and broke, or (held_at=N) one that held
+    to all N users it tested."""
     rs = RouteStat(total=100, errors=0)
     rs.latencies = [0.02] * 100
     stage = StageResult(users=survives, duration=5.0, routes={"/": rs})
-    report = RunReport(stages=[stage], survives_users=survives, max_tested=survives,
+    report = RunReport(stages=[stage], survives_users=survives,
+                       max_tested=held_at if held_at is not None else survives * 2,
+                       onset_users=None if held_at is not None else survives + 10,
                        peak_rps=peak,
                        survives_low=low if low is not None else survives,
                        survives_high=high if high is not None else survives)
@@ -87,3 +92,14 @@ def test_compare_command_needs_two_runs(tmp_path):
     write_result(_result(100, run_id="20260629T140000Z-aaaaaa"), store=tmp_path)
     res = CliRunner().invoke(cli, ["compare", "--store", str(tmp_path)])
     assert res.exit_code == 1
+
+
+def test_held_run_below_the_old_level_is_inconclusive_not_a_regression():
+    c = compare_results(_result(600, low=540, high=640), _result(150, held_at=150))
+    assert c["inconclusive"] and not c["regressed"]
+    assert "inconclusive" in c["summary"].lower()
+
+
+def test_held_run_that_reached_the_old_level_still_compares():
+    c = compare_results(_result(200, low=180, high=220), _result(190, held_at=190))
+    assert not c["inconclusive"] and not c["regressed"]
