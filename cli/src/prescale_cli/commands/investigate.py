@@ -104,7 +104,8 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
             raise SystemExit(1)
         console.print(Panel(
             f"investigate sends real traffic to [bold]{host}[/bold] (a ramp plus a few "
-            "probes).\nPoint it at a staging/preview URL you own — not production.",
+            "probes).\nPoint it at a staging/preview URL you own — not production.\n"
+            "Check it doesn't share production's database: the load reaches whatever it talks to.",
             title="⚠️  Heads up", border_style="yellow"))
         if not click.confirm("Proceed?", default=False):
             raise SystemExit(0)
