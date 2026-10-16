@@ -281,3 +281,24 @@ def test_git_env_override(monkeypatch):
     monkeypatch.setenv("PRESCALE_GIT_COMMIT", "abc1234")
     monkeypatch.setenv("PRESCALE_GIT_BRANCH", "feat/x")
     assert _git_environment() == {"git_commit": "abc1234", "git_branch": "feat/x"}
+
+
+def test_ci_defaults_to_a_gentle_ramp_and_reports_requests(monkeypatch, tmp_path):
+    _github_env(monkeypatch, tmp_path, _deployment())
+    seen = {}
+
+    async def fake_investigate(url, **kwargs):
+        seen["max_users"] = kwargs["max_users"]
+        result = _result()
+        result["stages"] = [{"total": 1200}, {"total": 3400}]
+        return result
+
+    monkeypatch.setattr("prescale_cli.commands.ci.run_investigate", fake_investigate)
+    monkeypatch.setattr("prescale_cli.commands.ci.upload_result",
+                        lambda *a, **k: _upload("steady", 0.0))
+    monkeypatch.setattr("prescale_cli.commands.ci.find_pull_request", lambda ctx, token: None)
+    result = CliRunner().invoke(cli, ["ci", "--target", "staging.myapp.com"])
+    assert result.exit_code == 0, result.output
+    assert seen["max_users"] == 100
+    assert "Ramp: up to 100 users" in result.output
+    assert "Sent 4,600 requests" in result.output
