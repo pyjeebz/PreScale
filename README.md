@@ -27,7 +27,7 @@ A launch, a marketing push, a Hacker News front page, a feature-flag flip — tr
 Point it at a URL. It ramps real traffic until something gives, then tells you, in plain English, what failed first, at what load — and *why*.
 
 ```bash
-pip install prescale
+curl -fsSL https://prescale.dev/install | sh
 prescale investigate https://staging.myapp.com
 ```
 
@@ -61,7 +61,19 @@ It isn't a framework you program (like k6 or Locust) — there's nothing to scri
 
 ## Install
 
-Requires Python 3.10+.
+```bash
+curl -fsSL https://prescale.dev/install | sh          # macOS and Linux
+```
+
+```powershell
+irm https://prescale.dev/install.ps1 | iex           # Windows (PowerShell)
+```
+
+No Python needed: the installer uses [uv](https://docs.astral.sh/uv) to put PreScale in its own
+isolated environment, bringing its own Python if your machine doesn't have one. Run it again to
+upgrade. It's short; [read it first](landing-page/public/install) if you like.
+
+Prefer pip? Python 3.10+:
 
 ```bash
 pip install prescale             # the CLI
@@ -222,7 +234,7 @@ Or catch regressions against a committed baseline (just a saved Result JSON):
 PreScale ships an MCP server so an AI coding agent can load-test **mid-build** — point it at your local preview URL, get a verdict, fix, repeat.
 
 ```bash
-pip install 'prescale[mcp]'
+curl -fsSL https://prescale.dev/install | PRESCALE_EXTRAS=mcp sh   # or: pip install 'prescale[mcp]'
 claude mcp add prescale -- prescale mcp     # Claude Code
 ```
 
