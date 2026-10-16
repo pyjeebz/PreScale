@@ -1,0 +1,100 @@
+#!/bin/sh
+# PreScale installer for macOS and Linux.
+#
+#   curl -fsSL https://prescale.dev/install | sh
+#
+# What it does: installs uv (https://docs.astral.sh/uv) if you don't have it,
+# then `uv tool install prescale` from PyPI into its own isolated environment.
+# uv brings its own Python if your machine doesn't have 3.10+. Nothing else on
+# your system is touched. Run it again to upgrade.
+#
+# Options (environment variables):
+#   PRESCALE_VERSION=0.3.0      install a specific version
+#   PRESCALE_EXTRAS=mcp         install extras, e.g. the MCP server for coding agents
+#   PRESCALE_NO_MODIFY_PATH=1   don't add the install dir to your shell profile
+#   PRESCALE_PACKAGE=<path|url> install from a local wheel or URL instead of PyPI
+#
+# Source: https://github.com/pyjeebz/PreScale/blob/main/landing-page/public/install
+# Prefer pip? `pip install prescale` works too.
+
+set -eu
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'prescale-install: %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+download() { # url → stdout
+  if have curl; then curl -fsSL "$1"
+  elif have wget; then wget -qO- "$1"
+  else err "need curl or wget to download uv"
+  fi
+}
+
+login_shell() { # the user's login shell, when $SHELL isn't set
+  user=$(id -un 2>/dev/null || printf '%s' "${USER:-}")
+  shell=""
+  if have getent; then shell=$(getent passwd "$user" 2>/dev/null | cut -d: -f7); fi
+  if [ -z "$shell" ] && have dscl; then shell=$(dscl . -read "/Users/$user" UserShell 2>/dev/null | awk '{print $2}'); fi
+  printf '%s' "${shell:-/bin/bash}"
+}
+
+find_uv() {
+  for candidate in uv "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv"; do
+    if have "$candidate" || [ -x "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+main() {
+  case "$(uname -s)" in
+    Linux | Darwin) ;;
+    MINGW* | MSYS* | CYGWIN*) err "on Windows, run in PowerShell: irm https://prescale.dev/install.ps1 | iex" ;;
+    *) err "unsupported system '$(uname -s)'. Try: pip install prescale" ;;
+  esac
+
+  uv_bin=$(find_uv || true)
+  if [ -z "$uv_bin" ]; then
+    say "→ Installing uv (manages PreScale's Python environment)"
+    # uv's official installer; we update PATH ourselves below, once.
+    download https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh >/dev/null 2>&1 ||
+      err "couldn't install uv. Install it from https://docs.astral.sh/uv, or use: pip install prescale"
+    uv_bin=$(find_uv || true)
+    [ -n "$uv_bin" ] || err "uv installed but wasn't found. Open a new shell and run this again."
+  fi
+
+  spec="${PRESCALE_PACKAGE:-prescale}"
+  if [ -n "${PRESCALE_EXTRAS:-}" ]; then spec="${spec}[${PRESCALE_EXTRAS}]"; fi
+  if [ -n "${PRESCALE_VERSION:-}" ]; then spec="$spec==$PRESCALE_VERSION"; fi
+
+  say "→ Installing $spec"
+  # --force replaces an earlier install; --upgrade picks up the latest release.
+  "$uv_bin" tool install --force --upgrade --quiet "$spec" ||
+    err "install failed. Try again, or use: pip install prescale"
+
+  bin_dir=$("$uv_bin" tool dir --bin 2>/dev/null || printf '%s' "$HOME/.local/bin")
+  prescale_bin="$bin_dir/prescale"
+  [ -x "$prescale_bin" ] || err "installed, but $prescale_bin is missing"
+
+  on_path=1
+  case ":$PATH:" in *":$bin_dir:"*) ;; *) on_path=0 ;; esac
+  if [ "$on_path" -eq 0 ] && [ -z "${PRESCALE_NO_MODIFY_PATH:-}" ]; then
+    # uv picks the profile file from $SHELL; some environments don't export it.
+    SHELL="${SHELL:-$(login_shell)}" "$uv_bin" tool update-shell >/dev/null 2>&1 || true
+  fi
+
+  say ""
+  say "✓ $("$prescale_bin" --version 2>/dev/null || printf 'prescale') installed at $prescale_bin"
+  if [ "$on_path" -eq 0 ]; then
+    say ""
+    say "  Open a new terminal (or run: export PATH=\"$bin_dir:\$PATH\") so 'prescale' is on your PATH."
+  fi
+  say ""
+  say "  Try it:   prescale run http://localhost:8000"
+  say "  Connect:  prescale login        (optional: send runs to your dashboard)"
+  say "  Upgrade:  run this installer again"
+}
+
+main "$@"
