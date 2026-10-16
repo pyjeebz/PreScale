@@ -592,7 +592,12 @@ def confidence_band(stages, *, latency_wall, error_threshold, survives_point,
     pessimistic (upper-bound) and optimistic (lower-bound) estimates of each
     level's error rate and p95. Deterministic — same data, same band."""
     def err_hi(s):
-        return wilson_bounds(s.errors, s.total)[1] if s.total else 0.0
+        # No observed errors is no evidence of failure. Without this, any small
+        # early stage (fewer than ~80 requests) "might" exceed the threshold and
+        # the band's low end collapses to 0 on every slow or short run.
+        if not s.total or not s.errors:
+            return 0.0
+        return wilson_bounds(s.errors, s.total)[1]
 
     def err_lo(s):
         return wilson_bounds(s.errors, s.total)[0] if s.total else 0.0
