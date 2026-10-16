@@ -397,3 +397,52 @@ def test_verdict_is_deterministic():
     b = analyze(stages, latency_wall=2.0, error_threshold=0.02)
     assert (a.survives_users, a.survives_low, a.survives_high, a.stable) == \
            (b.survives_users, b.survives_low, b.survives_high, b.stable)
+
+
+# --- load-generator saturation ---
+
+def test_blocked_event_loop_is_reported_as_generator_saturation():
+    import time
+
+    def slow_sync_handler(request):
+        time.sleep(0.12)  # blocks the event loop, like a CPU-bound load generator
+        return httpx.Response(200, text="ok")
+
+    stages, _ = asyncio.run(run_loadtest(
+        ["http://t/"], levels=[2], stage_seconds=0.5, warmup=False,
+        transport=httpx.MockTransport(slow_sync_handler)))
+    assert stages[0].loop_lag_ms >= 100
+    from prescale_cli.loadtest import generator_saturation
+    assert generator_saturation(stages)[0] == 2
+
+
+def test_normal_stage_is_not_flagged():
+    async def network_like(request):  # waits like a real server, so the loop stays free
+        await asyncio.sleep(0.01)
+        return httpx.Response(200, text="ok")
+
+    stages, _ = asyncio.run(run_loadtest(
+        ["http://t/"], levels=[2], stage_seconds=0.3, warmup=False,
+        transport=httpx.MockTransport(network_like)))
+    from prescale_cli.loadtest import generator_saturation
+    assert generator_saturation(stages) is None
+
+
+def test_saturation_becomes_a_result_warning():
+    from prescale_cli.result import build_result
+    stage = _stage(50, {"/": _route(500, 0, 0.05)})
+    stage.loop_lag_ms = 240.0
+    report = analyze([stage], latency_wall=2.0, error_threshold=0.02)
+    result = build_result(report, url="http://t/", targets=["http://t/"], config={}, warning=None)
+    assert "own machine was the bottleneck from ~50 users" in result["warning"]
+
+
+def test_saturation_after_the_breaking_point_is_ignored():
+    from prescale_cli.loadtest import generator_saturation
+    ok = _stage(50, {"/": _route(2000, 0, 0.05)})
+    broken = _stage(100, {"/": _route(2000, 1000, 0.05)})
+    broken.loop_lag_ms = 800.0  # churning through failures after the onset
+    assert generator_saturation([ok, broken], up_to=100) == (100, 800.0)
+    beyond = _stage(150, {"/": _route(2000, 1500, 0.05)})
+    beyond.loop_lag_ms = 900.0
+    assert generator_saturation([ok, broken, beyond], up_to=50) is None
