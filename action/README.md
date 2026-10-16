@@ -49,6 +49,10 @@ against a staging URL. Until then, each push compares with the previous run on
 the same PR.
 
 **Safety.** Production deploys are skipped unless `allow-production: true`.
+Previews often point at the same database as production; if yours do, the load
+reaches it too, so check before turning this on. On serverless every request is a
+billed invocation; the default of 100 users keeps each check small, and the job
+log says how many requests it sent.
 Headers go to your site only; they're never saved or uploaded. The only thing
 uploaded is the run's Result file, which you can inspect with
 `prescale upload --dry-run`.
@@ -62,7 +66,7 @@ uploaded is the run's Result file, which you can inspect with
 | `url` | deploy URL | URL to test |
 | `paths` | — | Extra routes, one per line |
 | `headers` | — | `Name: value` per line, sent to your site only |
-| `max-users` | `200` | Peak virtual users |
+| `max-users` | `100` | Peak virtual users (gentle enough for every PR) |
 | `stage-seconds` | `5` | Seconds per load level |
 | `fail-on-regression` | `false` | Fail on a confident regression |
 | `comment` | `true` | Post/update the PR comment |
