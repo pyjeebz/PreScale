@@ -1,0 +1,57 @@
+---
+title: "Connect the CLI to your dashboard"
+description: "Create a token, run prescale login, and upload runs with --upload. Nothing leaves your machine unless you ask."
+---
+
+The CLI works fully offline. Connecting it to your dashboard at
+[prescale.dev/dashboard](https://prescale.dev/dashboard) keeps a history of every run, a
+capacity timeline per site, and shareable reports.
+
+<Steps>
+  <Step title="Create a token">
+    In the dashboard, open **Connect** and click **Create token**. Copy it: it's shown once.
+  </Step>
+  <Step title="Log in">
+    ```bash
+    prescale login
+    ```
+    Paste the token when asked. It's checked against the dashboard, then saved to
+    `~/.config/prescale/credentials.json`, readable only by you.
+  </Step>
+  <Step title="Upload a run">
+    ```bash
+    prescale investigate https://staging.myapp.com --i-own-this --upload
+    ```
+    The CLI prints a link to the run. The first upload for a new site adds it as a target.
+  </Step>
+</Steps>
+
+## Upload later, or check first
+
+```bash
+prescale upload                    # the latest saved run
+prescale upload 20261015T1200Z     # a specific run (id or unique prefix)
+prescale upload --dry-run          # print exactly what would be sent, send nothing
+```
+
+An upload is the saved run file, unchanged. See [what gets uploaded](/reference/data-boundary).
+
+## Protected previews and logged-in routes
+
+Pass request headers with `-H`. They go to your site only and are never saved or uploaded.
+
+```bash
+prescale investigate https://myapp-git-feat-acme.vercel.app \
+  -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" --upload
+```
+
+## In CI
+
+Set `PRESCALE_TOKEN` (and `PRESCALE_URL` if you self-host) instead of running
+`prescale login`. For pull requests, use the [GitHub Action](/guides/github-action).
+
+## Tokens
+
+Revoke a token on the **Connect** page at any time. The CLI using it stops working
+immediately and tells you to log in again. `prescale logout` forgets the saved token on
+this machine.
