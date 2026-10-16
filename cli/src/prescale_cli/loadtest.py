@@ -102,7 +102,7 @@ def parse_sitemap(content: str, origin: str) -> list[str]:
 
 
 async def discover_sitemap(base_url: str, *, timeout: float = 10.0,
-                           cap: int = 20) -> list[str]:
+                           cap: int = 20, headers: dict[str, str] | None = None) -> list[str]:
     """Best-effort: fetch sitemap.xml (falling back to robots.txt), follow one
     level of sitemap-index nesting, and return up to `cap` same-origin page URLs."""
     parts = urlparse(base_url)
@@ -111,7 +111,7 @@ async def discover_sitemap(base_url: str, *, timeout: float = 10.0,
     nested: list[str] = []
 
     async with httpx.AsyncClient(
-        timeout=timeout, follow_redirects=True, headers={"User-Agent": _USER_AGENT}
+        timeout=timeout, follow_redirects=True, headers=client_headers(headers)
     ) as client:
         async def load(url: str) -> None:
             try:
@@ -157,7 +157,8 @@ def disallowed_targets(robots_text: str, targets: list[str], user_agent: str) ->
     return [t for t in targets if not parser.can_fetch(user_agent, t)]
 
 
-async def check_robots(targets: list[str], *, timeout: float = 10.0) -> list[str]:
+async def check_robots(targets: list[str], *, timeout: float = 10.0,
+                       headers: dict[str, str] | None = None) -> list[str]:
     """Best-effort: fetch robots.txt and return the disallowed subset of targets.
     Never raises; a missing or unreadable robots.txt means everything is allowed."""
     if not targets:
@@ -165,7 +166,7 @@ async def check_robots(targets: list[str], *, timeout: float = 10.0) -> list[str
     parts = urlparse(targets[0])
     origin = f"{parts.scheme}://{parts.netloc}"
     async with httpx.AsyncClient(
-        timeout=timeout, follow_redirects=True, headers={"User-Agent": _USER_AGENT}
+        timeout=timeout, follow_redirects=True, headers=client_headers(headers)
     ) as client:
         try:
             resp = await client.get(f"{origin}/robots.txt")
@@ -413,6 +414,7 @@ async def run_loadtest(
     progress_cb=None,
     on_stage=None,
     transport: httpx.AsyncBaseTransport | None = None,
+    headers: dict[str, str] | None = None,
 ) -> tuple[list[StageResult], str | None]:
     """Preflight the target, then ramp through `levels`, spreading each stage's
     load across `targets`. Stops early once a stage is more than `hard_stop_rate`
@@ -426,7 +428,7 @@ async def run_loadtest(
     gate = _RateGate(max_rps) if max_rps else None
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, follow_redirects=True,
-        headers={"User-Agent": _USER_AGENT}, transport=transport,
+        headers=client_headers(headers), transport=transport,
     ) as client:
         try:
             preflight = await client.request(method, targets[0])
@@ -465,11 +467,18 @@ async def run_loadtest(
 
 
 def open_client(*, timeout: float = 10.0, max_conns: int = 64,
-                transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+                transport: httpx.AsyncBaseTransport | None = None,
+                headers: dict[str, str] | None = None) -> httpx.AsyncClient:
     """A client with PreScale's standard headers/limits — for `investigate` probes."""
     limits = httpx.Limits(max_connections=max_conns, max_keepalive_connections=max_conns)
     return httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True,
-                             headers={"User-Agent": _USER_AGENT}, transport=transport)
+                             headers=client_headers(headers), transport=transport)
+
+
+def client_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """PreScale's User-Agent plus any `--header` values. The extra headers only
+    ever go to the target; they're never written into a Result."""
+    return {"User-Agent": _USER_AGENT, **(extra or {})}
 
 
 async def measure_route(client: httpx.AsyncClient, url: str, *, users: int,
