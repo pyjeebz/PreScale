@@ -6,7 +6,8 @@ rendered everywhere — `run --json`, `.prescale/runs/<id>.json`, `show`, and
 (later) the MCP server all speak this exact shape.
 
 Everything here is local-only: results live under `.prescale/` on the user's
-machine and are never uploaded.
+machine. They leave it only when the user explicitly uploads one (`--upload`,
+`prescale upload`; see `cloud.py`), and then exactly as stored.
 """
 
 from __future__ import annotations
@@ -111,9 +112,13 @@ def _stage_dict(stage: StageResult) -> dict:
 
 
 def _git_environment() -> dict:
+    """Commit and branch for the run. `PRESCALE_GIT_COMMIT` / `PRESCALE_GIT_BRANCH`
+    win over the local checkout, for CI jobs that test a deploy without one."""
     return {
-        "git_commit": _git("rev-parse", "--short", "HEAD"),
-        "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+        "git_commit": os.environ.get("PRESCALE_GIT_COMMIT")
+        or _git("rev-parse", "--short", "HEAD"),
+        "git_branch": os.environ.get("PRESCALE_GIT_BRANCH")
+        or _git("rev-parse", "--abbrev-ref", "HEAD"),
     }
 
 
