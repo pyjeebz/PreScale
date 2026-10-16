@@ -89,3 +89,34 @@ def test_investigate_no_diagnosis_when_held_up(tmp_path):
         "http://localhost:9/", max_users=2, stage_seconds=0.02, store=tmp_path,
         transport=transport))
     assert result.get("investigation") is None
+
+
+def test_investigate_profile_and_audit_attach_to_the_result(tmp_path):
+    import asyncio
+
+    import httpx
+
+    from prescale_cli.investigate import investigate
+    from prescale_cli.profiles import lookup
+
+    page = '<html><link rel="stylesheet" href="/app.css"></html>'
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, text=page))
+    # The audit makes its own client; point it at a dead port so it reports, never raises.
+    result = asyncio.run(investigate(
+        "http://127.0.0.1:9/", stage_seconds=0.05, store=tmp_path, transport=transport,
+        profile=lookup("product-hunt"), audit=True))
+    assert result["profile"]["name"] == "product-hunt"
+    assert result["profile"]["peak_users"] == 100
+    assert result["config"]["profile"] == "product-hunt"
+    assert isinstance(result["audit"], list) and result["audit"]
+    assert {"name", "status", "detail"} <= set(result["audit"][0])
+
+
+def test_investigate_rejects_unknown_profile():
+    from click.testing import CliRunner
+
+    from prescale_cli.main import cli
+
+    out = CliRunner().invoke(cli, ["investigate", "http://localhost:1", "--profile", "nope"])
+    assert out.exit_code == 1
+    assert "unknown profile" in out.output
