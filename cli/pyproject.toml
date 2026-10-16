@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prescale"
-version = "0.2.1"
+version = "1.0.0"
 description = "Launch-readiness load testing for developers - find what breaks before your users do"
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["load-testing", "performance", "stress-test", "cli", "devtools", "launch"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
