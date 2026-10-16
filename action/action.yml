@@ -27,7 +27,7 @@ inputs:
   max-users:
     description: Peak virtual users.
     required: false
-    default: "200"
+    default: "100"
   stage-seconds:
     description: Seconds to hold each load level.
     required: false
