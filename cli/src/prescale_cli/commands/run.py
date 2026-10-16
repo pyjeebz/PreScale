@@ -131,7 +131,8 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         console.print(Panel(
             f"You're about to send real traffic to [bold]{host}[/bold] "
             f"(up to {max_users} concurrent users).\n"
-            "Point this at a staging/preview URL you own — not production.",
+            "Point this at a staging/preview URL you own — not production.\n"
+            "Check it doesn't share production's database: the load reaches whatever it talks to.",
             title="⚠️  Heads up", border_style="yellow",
         ))
         if not click.confirm("Proceed?", default=False):
