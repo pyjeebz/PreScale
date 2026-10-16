@@ -25,7 +25,7 @@ from prescale_cli.ci import (
 )
 from prescale_cli.cloud import CloudError, parse_headers, require_credentials, upload_result
 from prescale_cli.investigate import investigate as run_investigate
-from prescale_cli.loadtest import LoadError
+from prescale_cli.loadtest import LoadError, default_levels
 
 console = Console()
 
@@ -49,7 +49,8 @@ def _annotate(level: str, message: str) -> None:
 @click.option("--header", "-H", "header_values", multiple=True,
               help="Extra request header 'Name: value' (repeatable). Newline-separated "
                    "headers in $PRESCALE_HEADERS are added too, so secrets stay out of argv.")
-@click.option("--max-users", "-u", default=200, type=int, help="Peak virtual users.")
+@click.option("--max-users", "-u", default=100, type=int,
+              help="Peak virtual users (default 100: gentle enough to run on every PR).")
 @click.option("--stage-seconds", "-s", default=5.0, type=float,
               help="Seconds to hold each load level.")
 @click.option("--max-rps", default=None, type=float, help="Cap aggregate requests/sec.")
@@ -118,6 +119,10 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     console.print(f"[bold]PreScale[/bold] — capacity check of [cyan]{url}[/cyan] for "
                   f"[bold]{target}[/bold]"
                   + (f" (PR #{pr_number})" if pr_number else ""))
+    levels = default_levels(max_users)
+    console.print(f"[dim]Ramp: up to {max_users} users in {len(levels)} steps of "
+                  f"{stage_seconds:g}s (~{round(len(levels) * stage_seconds)}s of load). "
+                  "Previews often share production's database: the load reaches it too.[/dim]")
     try:
         result = asyncio.run(run_investigate(
             url, max_users=max_users, paths=extra_paths, stage_seconds=stage_seconds,
@@ -137,6 +142,8 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     body = render_comment(result, upload, target=target, sha=ctx.sha)
     comparison = upload.get("comparison")
     verdict = result["verdict"]
+    sent = sum(stage.get("total", 0) for stage in result.get("stages", []))
+    console.print(f"[dim]Sent {sent:,} requests while measuring.[/dim]")
     console.print(f"survives ~{verdict['survives_users']} users"
                   + (f" · {comparison['kind']} {round(comparison['pct'] * 100):+d}% vs "
                      f"{comparison['against']}" if comparison else " · first run")
