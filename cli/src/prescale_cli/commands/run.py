@@ -15,6 +15,8 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
+from prescale_cli.cloud import CloudError, require_credentials
+from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.live import LiveRamp
 from prescale_cli.loadtest import (
     LoadError,
@@ -78,13 +80,15 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Exit non-zero if it survives fewer than N users (a CI gate).")
 @click.option("--profile", "profile_name", default=None,
               help="Frame the run as a launch scenario (see `prescale profiles`).")
+@header_option
+@upload_option
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         stage_seconds: float, latency_wall: float, error_threshold: float,
         method: str, timeout: float, max_rps: float | None, warmup: bool,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
         store: str | None, no_save: bool, fail_under: int | None,
-        profile_name: str | None) -> None:
+        profile_name: str | None, headers: dict[str, str], upload: bool) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -93,12 +97,20 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         prescale run https://staging.myapp.com --path /api/search --path /pricing
         prescale run https://staging.myapp.com --from-sitemap -u 500 --i-own-this
         prescale run https://staging.myapp.com --i-own-this --html report.html
+        prescale run https://staging.myapp.com --i-own-this --upload
     """
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
         console.print(f"[red]Error:[/red] '{url}' doesn't look like a URL "
                       "(expected e.g. http://localhost:8000).")
         raise SystemExit(1)
+
+    if upload:
+        try:
+            require_credentials()
+        except CloudError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise SystemExit(1)
 
     prof = lookup(profile_name) if profile_name else None
     if profile_name and prof is None:
@@ -130,7 +142,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         if not as_json:
             console.print("[dim]Discovering routes from sitemap.xml…[/dim]")
         try:
-            extra = asyncio.run(discover_sitemap(url, timeout=timeout))
+            extra = asyncio.run(discover_sitemap(url, timeout=timeout, headers=headers))
         except Exception:  # discovery is best-effort; never block the run
             extra = []
         if not as_json:
@@ -140,7 +152,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     targets = build_targets(url, paths=paths, extra=extra)
 
     if not ignore_robots and not as_json:
-        disallowed = asyncio.run(check_robots(targets, timeout=timeout))
+        disallowed = asyncio.run(check_robots(targets, timeout=timeout, headers=headers))
         if disallowed:
             console.print(f"[yellow]⚠ robots.txt disallows {len(disallowed)} of these "
                           "route(s) — testing anyway (use --ignore-robots to "
@@ -167,14 +179,14 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
                 stages, warning = asyncio.run(run_loadtest(
                     targets, levels=levels, stage_seconds=stage_seconds,
                     method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
-                    repeat=repeat, think_time=think_time,
+                    repeat=repeat, think_time=think_time, headers=headers,
                     progress_cb=live.starting, on_stage=live.finished,
                 ))
         else:
             stages, warning = asyncio.run(run_loadtest(
                 targets, levels=levels, stage_seconds=stage_seconds,
                 method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
-                repeat=repeat, think_time=think_time,
+                repeat=repeat, think_time=think_time, headers=headers,
             ))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
@@ -214,6 +226,9 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
             console.print(f"[green]✓[/green] Saved run to [cyan]{saved_path}[/cyan]")
         if html_path:
             console.print(f"[green]✓[/green] HTML report written to [cyan]{html_path}[/cyan]")
+
+    if upload:
+        upload_after_run(result, as_json=as_json)
 
     if fail_under is not None and report.survives_users < fail_under:
         Console(stderr=True).print(
