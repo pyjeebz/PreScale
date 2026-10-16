@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.0 — Unreleased
+
+PreScale 1.0: the CLI can now send runs to your PreScale dashboard and check every
+deploy from CI. It still works fully offline, and nothing is uploaded unless you ask.
+
+### Added
+- **One-line install**, no Python setup: `curl -fsSL https://prescale.dev/install | sh`
+  (macOS, Linux) or `irm https://prescale.dev/install.ps1 | iex` (Windows). Installs into
+  its own environment with uv. `pip install prescale` still works.
+- **`prescale login` / `logout`**: connect to your dashboard with an API token (saved
+  readable only by you). `PRESCALE_TOKEN` / `PRESCALE_URL` for CI.
+- **`--upload`** on `run` and `investigate`, and **`prescale upload [run] [--dry-run]`**.
+  The upload is the saved Result file, unchanged; `--dry-run` prints exactly that.
+- **`-H` / `--header`** on `run`, `investigate` and `ci`: extra request headers (for
+  example a Vercel protection bypass). Sent to your site only, never saved or uploaded.
+- **`prescale ci`**: check a deploy from CI. Investigates the deploy URL, uploads, compares
+  with your baseline branch, writes the job summary and keeps one PR comment up to date.
+  `--fail-on-regression` fails the job on a confirmed drop. Skips production deploys.
+- **GitHub Action** `pyjeebz/prescale/action@v1`, a thin wrapper around `prescale ci`.
+- **`investigate --profile <name>`** (ramps to 1.5x the launch's peak) and **`--audit`**
+  (the HTTP hygiene checks in the same run): everything Launch Guard needs in one command.
+- `PRESCALE_GIT_COMMIT` / `PRESCALE_GIT_BRANCH` override the detected git info.
+- Result schema: optional `audit` findings (still `schema_version: 1`).
+
+### Changed
+- **Confidence bands** no longer collapse to 0 on small, error-free early stages, so
+  regressions on slow or short runs can be confirmed.
+- **`compare`**: a run that held to its max below the old level is reported as
+  *inconclusive* instead of a regression. It wasn't pushed far enough to tell.
+
 ## 0.2.1 — 2026-06-30
 
 ### Fixed
