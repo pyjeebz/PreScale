@@ -167,9 +167,11 @@ def _baseline_finding(size_bytes: int, seconds: float) -> Finding:
     return Finding("Baseline", "info", detail)
 
 
-async def run_audit(url: str, *, timeout: float = 10.0, max_assets: int = 6) -> list[Finding]:
+async def run_audit(url: str, *, timeout: float = 10.0, max_assets: int = 6,
+                    extra_headers: dict[str, str] | None = None) -> list[Finding]:
     """Fetch the page and a sample of its assets; return scaling-hygiene findings."""
-    headers = {"User-Agent": _USER_AGENT, "Accept-Encoding": "gzip, deflate, br"}
+    headers = {"User-Agent": _USER_AGENT, "Accept-Encoding": "gzip, deflate, br",
+               **(extra_headers or {})}
     try:
         client = httpx.AsyncClient(http2=True, timeout=timeout,
                                    follow_redirects=True, headers=headers)
