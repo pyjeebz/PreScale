@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from prescale_cli.audit import _CDN_MARKERS, extract_assets
+from prescale_cli.audit import _CDN_MARKERS, AuditError, extract_assets, run_audit
 from prescale_cli.loadtest import (
     analyze,
     build_targets,
@@ -22,6 +22,7 @@ from prescale_cli.loadtest import (
     route_label,
     run_loadtest,
 )
+from prescale_cli.profiles import scenario_block
 from prescale_cli.result import build_result, write_result
 
 _PROBE_SECONDS = 2.0
@@ -209,7 +210,8 @@ async def _static_probe(client, base_url, onset):
     return route_label(assets[0]), ok
 
 
-async def gather_probes(base_url, report, stages, targets, *, transport=None) -> Probes:
+async def gather_probes(base_url, report, stages, targets, *, transport=None,
+                        headers=None) -> Probes:
     """Run the active probes on the culprit route + a static reference."""
     culprit = report.culprit_route
     onset = report.onset_users
@@ -223,7 +225,8 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None) ->
         error_kinds=dict(cstat.error_kinds) if cstat else {},
         status_counts=dict(cstat.status_counts) if cstat else {},
     )
-    async with open_client(max_conns=onset + 10, transport=transport) as client:
+    async with open_client(max_conns=onset + 10, transport=transport,
+                           headers=headers) as client:
         base = await measure_route(client, culprit_url, users=1, seconds=_PROBE_SECONDS)
         p.baseline_p95_ms = base.pct(0.95) * 1000 if base.routes else None
         p.server, p.cdn = await _headers(client, culprit_url)
@@ -233,24 +236,28 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None) ->
 
 async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
                       max_rps=None, store=None, transport=None, progress_cb=None,
-                      on_stage=None, on_probe=None) -> dict:
+                      on_stage=None, on_probe=None, headers=None, think_time=0.0,
+                      profile=None, audit=False) -> dict:
     """Ramp to find the culprit, probe it, and attach a diagnosis to the Result."""
     targets = build_targets(url, paths=tuple(paths))
     levels = default_levels(max_users)
     stages, warning = await run_loadtest(
         targets, levels=levels, stage_seconds=stage_seconds, max_rps=max_rps,
-        transport=transport, progress_cb=progress_cb, on_stage=on_stage)
+        transport=transport, progress_cb=progress_cb, on_stage=on_stage, headers=headers,
+        think_time=think_time)
     report = analyze(stages, latency_wall=_LATENCY_WALL_S,
                      error_threshold=_ERROR_THRESHOLD, rate_capped=max_rps is not None)
     config = {"method": "GET", "max_users": max_users, "stage_seconds": stage_seconds,
               "latency_wall_s": _LATENCY_WALL_S, "error_threshold": _ERROR_THRESHOLD,
-              "max_rps": max_rps, "warmup": True, "repeat": 1, "think_time_s": 0.0}
+              "max_rps": max_rps, "warmup": True, "repeat": 1, "think_time_s": think_time,
+              "profile": profile.name if profile else None}
     result = build_result(report, url=url, targets=targets, config=config, warning=warning)
 
     if report.onset_users is not None and report.culprit_route:
         if on_probe:
             on_probe()
-        probes = await gather_probes(url, report, stages, targets, transport=transport)
+        probes = await gather_probes(url, report, stages, targets, transport=transport,
+                                     headers=headers)
         diag = classify(probes)
         stack = {k: v for k, v in {"server": probes.server, "cdn": probes.cdn}.items() if v}
         result["investigation"] = {
@@ -262,6 +269,19 @@ async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
             "remediation": remediate(diag, stack),
             "stack": stack,
         }
+
+    if profile is not None:
+        result["profile"] = scenario_block(profile, report.survives_users)
+
+    if audit:
+        # Load-free hygiene checks, so Launch Guard has the whole picture in one run.
+        try:
+            findings = await run_audit(url, extra_headers=headers)
+            result["audit"] = [{"name": f.name, "status": f.status, "detail": f.detail,
+                                "fix": f.fix} for f in findings]
+        except AuditError as exc:
+            result["audit"] = [{"name": "Audit", "status": "info",
+                                "detail": f"Couldn't run the audit: {exc}", "fix": None}]
 
     write_result(result, store=store)
     return result
