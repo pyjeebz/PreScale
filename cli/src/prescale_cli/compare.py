@@ -19,6 +19,7 @@ def _facts(result: dict) -> dict:
         "survives_high": conf.get("survives_high"),
         "peak_rps": v["peak_rps"],
         "onset_users": v["onset_users"],
+        "max_tested": v.get("max_tested"),
         "commit": env.get("git_commit"),
         "branch": env.get("git_branch"),
         "created_at": result.get("created_at"),
@@ -28,11 +29,14 @@ def _facts(result: dict) -> dict:
 
 def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHOLD) -> dict:
     """Diff two Results by capacity. A regression is a >threshold drop in
-    survives_users; it's 'confident' when the M1 bands don't overlap."""
+    survives_users; it's 'confident' when the M1 bands don't overlap. A new run
+    that held to its max below the old level is 'inconclusive', not a drop."""
     o, n = _facts(old), _facts(new)
     o_surv, n_surv = o["survives_users"], n["survives_users"]
     pct = (n_surv - o_surv) / o_surv if o_surv else 0.0
-    regressed = pct <= -threshold
+    inconclusive = (n["onset_users"] is None and n["max_tested"] is not None
+                    and n["max_tested"] < o_surv * (1 - threshold))
+    regressed = not inconclusive and pct <= -threshold
     improved = pct >= threshold
     confident = False
     if regressed and o["survives_low"] is not None and n["survives_high"] is not None:
@@ -48,13 +52,18 @@ def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHO
                          if o["peak_rps"] else 0.0),
         "regressed": regressed,
         "improved": improved,
+        "inconclusive": inconclusive,
         "confident": confident,
-        "summary": _summary(o, n, pct, regressed, improved),
+        "summary": _summary(o, n, pct, regressed, improved, inconclusive),
     }
 
 
-def _summary(o: dict, n: dict, pct: float, regressed: bool, improved: bool) -> str:
+def _summary(o: dict, n: dict, pct: float, regressed: bool, improved: bool,
+             inconclusive: bool = False) -> str:
     arrow = f"{o['survives_users']} → {n['survives_users']}"
+    if inconclusive:
+        return (f"Capacity inconclusive: held to all {n['max_tested']} users tested, below "
+                f"the previous ~{o['survives_users']}. Re-run with a higher --max-users.")
     since = f" since {o['commit']}" if o.get("commit") else ""
     if regressed:
         return f"Capacity regressed: {arrow} users ({pct:+.0%}){since}."
