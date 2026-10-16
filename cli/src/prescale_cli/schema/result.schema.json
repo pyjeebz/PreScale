@@ -95,12 +95,26 @@
     },
     "profile": {
       "type": "object",
-      "description": "Present when `run --profile` framed the run as a launch scenario.",
+      "description": "Present when `run --profile` or `investigate --profile` framed the run as a launch scenario.",
       "properties": {
         "name": { "type": "string" },
         "label": { "type": "string" },
         "peak_users": { "type": "integer" },
         "would_survive": { "type": "boolean" }
+      }
+    },
+    "audit": {
+      "type": "array",
+      "description": "Present when the run included the load-free HTTP hygiene audit (`investigate --audit`).",
+      "items": {
+        "type": "object",
+        "required": ["name", "status", "detail"],
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "enum": ["pass", "warn", "fail", "info"] },
+          "detail": { "type": "string" },
+          "fix": { "type": ["string", "null"] }
+        }
       }
     }
   },
