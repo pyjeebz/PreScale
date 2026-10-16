@@ -124,3 +124,7 @@ helios-agent.yaml
 !helios-agent.yaml.example
 # PreScale local run store
 .prescale/
+
+# Closed-source hosted dashboard (Better Auth route) — lives in the private
+# prescale-web repo, never in this public monorepo. Guardrail against `git add -A`.
+web/
