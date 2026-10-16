@@ -296,7 +296,13 @@ def test_warmup_sends_extra_traffic_but_is_discarded():
         targets, levels=[2], stage_seconds=0.02, warmup=False,
         transport=_counting_transport(without)))
     assert len(s1) == 1 and len(s2) == 1        # warmup is never a returned stage
-    assert len(with_warmup) > len(without)      # but it did send extra traffic
+    # Traffic beyond the measured stage and the one preflight request. Comparing
+    # each run with its own counts (not the two runs' totals, which vary with
+    # machine speed) keeps this deterministic.
+    extra_with = len(with_warmup) - s1[0].total - 1
+    extra_without = len(without) - s2[0].total - 1
+    assert extra_with > 0                       # warmup did send extra traffic
+    assert extra_without < extra_with           # and only warmup does
 
 
 # --- confidence band (M1.2) ---
