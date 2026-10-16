@@ -204,6 +204,9 @@ class StageResult:
     duration: float
     routes: dict[str, RouteStat] = field(default_factory=dict)
     samples: int = 1
+    # p95 of how late PreScale's own event loop ran during the stage. High values
+    # mean the load generator, not the target, was the bottleneck.
+    loop_lag_ms: float = 0.0
 
     @property
     def total(self) -> int:
@@ -355,6 +358,11 @@ async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
             await asyncio.sleep(think_time)
 
 
+# Loop-lag sampling: a short sleep that wakes this late means the CLI is CPU-bound.
+_LAG_INTERVAL_S = 0.05
+_LAG_THRESHOLD_MS = 100.0
+
+
 async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
                      users: int, duration: float, gate: _RateGate | None = None,
                      think_time: float = 0.0) -> StageResult:
@@ -363,14 +371,48 @@ async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
     loop = asyncio.get_running_loop()
     start = loop.time()
     deadline = start + duration
-    await asyncio.gather(
-        *(_worker(client, method, deadline, sink, lambda: next(cycle), gate, think_time)
-          for _ in range(users))
-    )
+    stop = asyncio.Event()
+    lags: list[float] = []
+    watcher = asyncio.create_task(_watch_loop_lag(stop, lags))
+    try:
+        await asyncio.gather(
+            *(_worker(client, method, deadline, sink, lambda: next(cycle), gate, think_time)
+              for _ in range(users))
+        )
+    finally:
+        stop.set()
+        await watcher
     # Use actual elapsed wall-time (workers finish their in-flight request after the
     # deadline) so rps reflects true throughput instead of inflating with concurrency.
     elapsed = loop.time() - start
-    return sink.to_stage(users, elapsed if elapsed > 0 else duration)
+    stage = sink.to_stage(users, elapsed if elapsed > 0 else duration)
+    stage.loop_lag_ms = percentile(sorted(lags), 0.95) * 1000 if lags else 0.0
+    return stage
+
+
+async def _watch_loop_lag(stop: asyncio.Event, lags: list[float],
+                          interval: float = _LAG_INTERVAL_S) -> None:
+    """Sample how late a short sleep wakes up. When the CLI's own CPU is the
+    limit, every timer fires late, including the requests' own timing."""
+    loop = asyncio.get_running_loop()
+    while not stop.is_set():
+        started = loop.time()
+        await asyncio.sleep(interval)
+        lags.append(max(0.0, loop.time() - started - interval))
+
+
+def generator_saturation(stages: list[StageResult], *, up_to: int | None = None,
+                         threshold_ms: float = _LAG_THRESHOLD_MS) -> tuple[int, float] | None:
+    """The first level where PreScale's machine, not the target, was saturated:
+    (users, p95 loop lag in ms), or None. Only levels up to `up_to` (the onset)
+    count: past the breaking point the CLI churns through failures, and that
+    can't change the verdict."""
+    for stage in stages:
+        if up_to is not None and stage.users > up_to:
+            break
+        if stage.loop_lag_ms >= threshold_ms:
+            return stage.users, stage.loop_lag_ms
+    return None
 
 
 def _merge_stages(group: list[StageResult]) -> StageResult:
@@ -390,7 +432,8 @@ def _merge_stages(group: list[StageResult]) -> StageResult:
             for kind, n in rs.error_kinds.items():
                 m.error_kinds[kind] = m.error_kinds.get(kind, 0) + n
     return StageResult(users=group[0].users, duration=sum(s.duration for s in group),
-                       routes=merged, samples=len(group))
+                       routes=merged, samples=len(group),
+                       loop_lag_ms=max(s.loop_lag_ms for s in group))
 
 
 def _warmup_plan(levels: list[int], stage_seconds: float) -> tuple[int, float]:
