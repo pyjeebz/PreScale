@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from prescale_cli import __version__
-from prescale_cli.loadtest import RunReport, StageResult, route_label
+from prescale_cli.loadtest import RunReport, StageResult, generator_saturation, route_label
 
 SCHEMA_VERSION = 1
 
@@ -50,6 +50,17 @@ def build_result(report: RunReport, *, url: str, targets: list[str],
     """Turn a finished `RunReport` plus its inputs into the `Result` envelope."""
     now = datetime.now(timezone.utc)
     parsed = urlparse(url)
+    # A busy generator inflates measured latency, so it can fake a latency onset;
+    # it can't make the server return errors. Judge the levels that set the verdict.
+    judged_up_to = (report.onset_users if report.onset_reason == "latency"
+                    else report.survives_users if report.onset_users is not None else None)
+    saturated = generator_saturation(report.stages, up_to=judged_up_to)
+    if saturated:
+        users, lag = saturated
+        note = (f"PreScale's own machine was the bottleneck from ~{users} users (it fell "
+                f"{lag:.0f}ms behind), so results above that level may understate your app. "
+                "Try --max-rps, fewer users, or a bigger machine.")
+        warning = f"{warning} {note}" if warning else note
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "run",
