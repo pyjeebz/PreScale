@@ -340,7 +340,9 @@ function Sidebar({ view }: { view: View }) {
           </ul>
           <div className="mx-2 mb-1 mt-3 text-[11px] font-[450] text-muted-foreground/60">Resources</div>
           <a
-            href="/docs"
+            href="https://github.com/pyjeebz/prescale#readme"
+            target="_blank"
+            rel="noreferrer"
             className="flex h-8 items-center gap-2.5 rounded-[6px] px-2 text-[13px] font-[450] text-muted-foreground transition duration-150 [@media(hover:hover)]:hover:bg-muted [@media(hover:hover)]:hover:text-foreground"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px] shrink-0">
