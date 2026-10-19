@@ -7,7 +7,20 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from prescale_cli.bars import text_bar
+
 console = Console()
+
+RAMP_BAR_WIDTH = 16
+
+
+def latency_bar(p95_ms: float, wall_s: float, *, broke: bool = False) -> str:
+    """A stage's (or route's) p95 as the brand's bar, running toward the latency
+    wall (marked ┆). Its length is how close it came to breaking."""
+    wall_ms = wall_s * 1000
+    bar = text_bar(p95_ms, wall_ms * 1.25, width=RAMP_BAR_WIDTH, marker=wall_ms)
+    color = "red" if broke or p95_ms >= wall_ms else "cyan"
+    return f"[{color}]{bar}[/{color}]"
 
 
 def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
@@ -30,6 +43,7 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
         table.add_column("Req/s", justify="right")
         table.add_column("p50", justify="right")
         table.add_column("p95", justify="right")
+        table.add_column(f"vs {latency_wall:g}s wall", no_wrap=True)
         table.add_column("p99", justify="right")
         table.add_column("Errors", justify="right")
 
@@ -40,6 +54,7 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
                 f"{stage['rps']:.0f}",
                 _ms(stage["p50_ms"]),
                 _ms(stage["p95_ms"]),
+                latency_bar(stage["p95_ms"], latency_wall, broke=is_onset),
                 _ms(stage["p99_ms"]),
                 _err(stage["error_rate"]),
                 style="bold red" if is_onset else None,
@@ -62,6 +77,13 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
                     f"{_u(verdict['survives_users'])}.")
 
     lines = [f"[bold]Scale readiness:[/bold] {emoji} {headline}"]
+    # How far up the ramp it got, in the brand's bar.
+    tested = verdict.get("max_tested") or 0
+    if tested:
+        ramp = text_bar(verdict["survives_users"], tested, width=24)
+        tone = "red" if verdict["survives_users"] == 0 else "cyan"
+        lines.append(f"Ramp  [{tone}]{ramp}[/{tone}]  ~{verdict['survives_users']} of "
+                     f"{tested} {_u(tested)} tested")
     if onset_users is not None:
         culprit = f"{verdict['culprit_route']}  " if (multi and verdict["culprit_route"]) else ""
         if verdict["onset_reason"] == "latency":
@@ -91,6 +113,11 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
                    else f"break at ~{verdict['survives_users']}")
         lines.append(f"Launch  {icon} {prof['label']}: {verb} "
                      f"(peaks ~{prof['peak_users']}, you {outcome}).")
+        # Capacity against the launch's peak (marked ┆).
+        scale = max(prof["peak_users"], verdict["survives_users"]) * 1.15
+        tone = "green" if prof["would_survive"] else "red"
+        bar = text_bar(verdict["survives_users"], scale, width=24, marker=prof["peak_users"])
+        lines.append(f"        [{tone}]{bar}[/{tone}]  ┆ = launch peak")
 
     console.print(Panel("\n".join(lines), title="📈 Readiness report", border_style=color))
 
@@ -100,6 +127,7 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
 
 def _render_routes(result: dict) -> None:
     verdict = result["verdict"]
+    latency_wall = result.get("config", {}).get("latency_wall_s", 2.0)
     stages = result["stages"]
     decisive = next((s for s in stages if s["users"] == verdict["onset_users"]), stages[-1])
     table = Table(show_header=True, header_style="bold magenta",
@@ -107,6 +135,7 @@ def _render_routes(result: dict) -> None:
     table.add_column("Route")
     table.add_column("Req/s", justify="right")
     table.add_column("p95", justify="right")
+    table.add_column(f"vs {latency_wall:g}s wall", no_wrap=True)
     table.add_column("Errors", justify="right")
 
     ranked = sorted(decisive["routes"].items(),
@@ -118,6 +147,7 @@ def _render_routes(result: dict) -> None:
             shown,
             f"{stat['rps']:.0f}",
             _ms(stat["p95_ms"]),
+            latency_bar(stat["p95_ms"], latency_wall, broke=is_culprit),
             _err(stat["error_rate"]),
         )
     console.print()
