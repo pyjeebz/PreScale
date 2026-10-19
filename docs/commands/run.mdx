@@ -1,0 +1,214 @@
+---
+title: "prescale run — Ramp Traffic and Find What Breaks"
+sidebarTitle: "prescale run"
+description: "prescale run ramps virtual users at your URL and reports what breaks first, at what load, and how sure it is."
+---
+
+`prescale run` is PreScale's core command. Point it at any URL and it ramps virtual users from one up to your configured peak, measures throughput, latency percentiles, and error rates at every step, and tells you — in plain English — what breaks first and exactly how many concurrent users your app can handle. No scripts, no YAML, no account required.
+
+## Basic usage
+
+```bash
+# Local app, zero config
+prescale run http://localhost:8000
+
+# Staging target — confirm you own it
+prescale run https://staging.myapp.com --i-own-this
+
+# Test specific routes
+prescale run https://staging.myapp.com --path /api/search --path /pricing --i-own-this
+
+# Frame the result against a real launch scenario
+prescale run https://staging.myapp.com --profile product-hunt --i-own-this
+
+# Machine-readable JSON output (great for CI)
+prescale run https://staging.myapp.com --i-own-this --json
+
+# Self-contained shareable HTML report
+prescale run https://staging.myapp.com --i-own-this --html report.html
+```
+
+## Example output
+
+While the ramp is running you'll see a live table that updates at each load level:
+
+```text
+PreScale — load testing https://staging.myapp.com  (1 route)
+
+ Users   Req/s    p50    p95    p99   Errors
+    10     520   18ms   31ms   44ms      0%
+    50     610   46ms  120ms  210ms      0%
+    90     590   80ms  240ms  900ms      0%
+   150     410  180ms   2.1s   3.4s      7%   ← breaks here
+```
+
+Once the ramp finishes, PreScale prints a verdict:
+
+```text
+Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+
+First failure   errors climb at ~150 users
+Latency wall    p95 crosses 2s at ~150 users
+Likely cause    Server returned 5xx under load — likely an unhandled overload
+                (DB connection pool, worker queue, or an uncaught error path).
+```
+
+> Numbers are illustrative — your results depend on your app and infrastructure.
+
+## Options
+
+<ParamField path="url" type="string" required>
+  The URL to load test (e.g. `http://localhost:8000` or `https://staging.myapp.com`). Must include a scheme and host.
+</ParamField>
+
+<ParamField query="--max-users / -u" type="integer" default="200">
+  Peak virtual users to ramp to. PreScale steps through load levels from 1 up to this number, holding each level for `--stage-seconds` before moving to the next.
+</ParamField>
+
+<ParamField query="--stage-seconds / -s" type="float" default="5.0">
+  How many seconds to hold each load level before stepping up. Increase this for a slower, more thorough ramp; decrease it for a faster smoke test.
+</ParamField>
+
+<ParamField query="--path" type="string">
+  An extra route to test, relative to the base URL (e.g. `--path /api/search`). Repeatable — pass it multiple times to test several routes in parallel. If you omit `--path`, PreScale tests the root path.
+</ParamField>
+
+<ParamField query="--from-sitemap" type="boolean" default="false">
+  Discover additional GET routes by fetching the target's `sitemap.xml` and adding every listed URL to the test. Discovery is best-effort and never blocks the run if the sitemap is missing or malformed.
+</ParamField>
+
+<ParamField query="--profile" type="string">
+  Frame the run as a named launch scenario. PreScale sets a realistic peak concurrency and think-time for the scenario and frames the verdict against it (e.g. "a Product Hunt #1 launch: unlikely"). Run `prescale profiles` to list available profiles: `steady-10k-dau`, `product-hunt`, `reddit`, `hn-frontpage`, `black-friday`.
+</ParamField>
+
+<ParamField query="--latency-wall" type="float" default="2.0">
+  The p95 latency threshold in seconds. If any load level pushes p95 above this value, PreScale marks that level as the break point. Raise it if your app has inherently slower endpoints; lower it for stricter SLOs.
+</ParamField>
+
+<ParamField query="--error-threshold" type="float" default="0.02">
+  The error-rate threshold as a fraction between 0 and 1 (e.g. `0.02` = 2%). If any load level produces an error rate above this value, PreScale marks it as the break point.
+</ParamField>
+
+<ParamField query="--method / -m" type="string" default="GET">
+  The HTTP method to use for every request in the ramp (e.g. `GET`, `POST`, `HEAD`).
+</ParamField>
+
+<ParamField query="--timeout" type="float" default="10.0">
+  Per-request timeout in seconds. Requests that exceed this are counted as errors.
+</ParamField>
+
+<ParamField query="--max-rps" type="float">
+  Cap aggregate requests per second across all virtual users. Useful as a safety ceiling when testing staging environments shared with other teams. By default there is no cap.
+</ParamField>
+
+<ParamField query="--warmup / --no-warmup" type="boolean" default="true">
+  Run a brief warmup phase before measurement begins (default: on). The warmup lets connection pools, JIT compilers, and caches reach a steady state so early ramp measurements aren't artificially slow. Pass `--no-warmup` to skip it.
+</ParamField>
+
+<ParamField query="--repeat" type="integer" default="1">
+  Run the full ramp N times and pool the results. Multiple repeats tighten the confidence band on the verdict — useful when you want higher certainty before a launch.
+</ParamField>
+
+<ParamField query="--think-time" type="float" default="0.0">
+  Seconds each virtual user pauses between consecutive requests. A non-zero think time models real user behaviour more accurately and reduces the raw requests-per-second for a given concurrency level.
+</ParamField>
+
+<ParamField query="--ignore-robots" type="boolean" default="false">
+  Skip the `robots.txt` courtesy check. By default, PreScale warns you if any of the routes you are testing are disallowed by `robots.txt`. Pass this flag to silence the warning.
+</ParamField>
+
+<ParamField query="--i-own-this" type="boolean" default="false">
+  Skip the interactive confirmation prompt for non-local targets. Required when running in non-interactive environments (CI, `--json` mode). See [Safety](#safety) below.
+</ParamField>
+
+<ParamField query="--json" type="boolean" default="false">
+  Emit the full versioned Result document as JSON instead of the human-readable terminal output. See [Output formats](#output-formats) below.
+</ParamField>
+
+<ParamField query="--html PATH" type="string">
+  Write a self-contained HTML report to the given path. The file can be shared directly — it has no external dependencies. See [Output formats](#output-formats) below.
+</ParamField>
+
+<ParamField query="--store DIR" type="string">
+  Directory where PreScale saves run JSON files. Defaults to `./.prescale`. See [Saved runs](#saved-runs) below.
+</ParamField>
+
+<ParamField query="--no-save" type="boolean" default="false">
+  Do not save this run to disk. Useful for quick throwaway tests. See [Saved runs](#saved-runs) below.
+</ParamField>
+
+<ParamField query="--fail-under N" type="integer">
+  Exit with a non-zero status code if the app survives fewer than N concurrent users. Use this as a CI gate — pair it with `--i-own-this` and `--json` to keep pipeline output clean.
+</ParamField>
+
+## Output formats
+
+`prescale run` supports three output modes:
+
+<Tabs>
+  <Tab title="Terminal (default)">
+    The default mode renders a live ramp table as the test runs, then prints a plain-English verdict with the break point, likely cause, and confidence band. This is the most human-friendly output.
+  </Tab>
+
+  <Tab title="--json">
+    Emits a single JSON object — the full versioned Result document — to stdout. The shape is identical to the `.json` file saved in `.prescale/runs/`, so you can pipe it straight to `jq`, post it to an API, or store it as a CI artifact. Every saved run and every `--json` output share the same schema; run `prescale schema` to inspect it.
+
+    ```bash
+    prescale run https://staging.myapp.com --i-own-this --json | jq .verdict
+    ```
+  </Tab>
+
+  <Tab title="--html PATH">
+    Writes a self-contained HTML report to the path you specify. The file bundles all styles, scripts, and data inline — no external dependencies — so you can attach it to a pull request, email it, or host it on any static server.
+
+    ```bash
+    prescale run https://staging.myapp.com --i-own-this --html report.html
+    ```
+  </Tab>
+</Tabs>
+
+## Safety
+
+Sending load to a URL you do not own can cause outages or unexpected cloud bills. PreScale defaults to safe:
+
+* **Local hosts** (`localhost`, `127.0.0.1`, `0.0.0.0`, `::1`) are tested without any prompt.
+* **All other hosts** trigger an interactive confirmation panel that tells you the target host and the peak concurrency before asking you to confirm.
+
+```text
+⚠️  Heads up
+You're about to send real traffic to staging.myapp.com (up to 200 concurrent users).
+Point this at a staging/preview URL you own — not production.
+Proceed? [y/N]:
+```
+
+Pass `--i-own-this` to skip this prompt — required in CI and whenever you run with `--json` (which has no interactive mode).
+
+<Warning>
+  Always point `prescale run` at a **staging or preview** URL, not production, unless you have load-tested it before and know it can handle the traffic.
+</Warning>
+
+## Saved runs
+
+Every successful run is automatically saved to `.prescale/runs/<id>.json` in the current working directory. The saved file is the same versioned Result document that `--json` emits.
+
+You can change this behaviour with the following flags:
+
+* **`--no-save`** — skip saving entirely (e.g. for quick throwaway tests).
+* **`--store DIR`** — write to a different directory (e.g. `--store /tmp/prescale-ci`).
+
+To revisit saved runs later:
+
+```bash
+prescale history          # list all saved runs, newest first
+prescale show             # re-render the most recent run in the terminal
+prescale show <id> --html r.html   # render a specific run as HTML
+```
+
+Add `.prescale/` to your `.gitignore` to keep run files out of version control, or commit them if you want a persistent history.
+
+<Tip>
+  After `prescale run` identifies what breaks, run `prescale investigate` on the same URL to find out *why* it breaks and get a concrete fix recommendation. `investigate` runs its own ramp plus a targeted second-pass probe of the culprit route.
+</Tip>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
