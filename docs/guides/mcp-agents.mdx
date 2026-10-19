@@ -10,12 +10,18 @@ PreScale ships an MCP server so AI coding agents can load-test your local dev se
 
 The MCP server is an optional dependency. Install it alongside the base CLI:
 
-```bash
-pip install 'prescale[mcp]'
+<CodeGroup>
+```bash Installer
+curl -fsSL https://prescale.dev/install | PRESCALE_EXTRAS=mcp sh
 ```
 
+```bash pip
+pip install 'prescale[mcp]'
+```
+</CodeGroup>
+
 <Note>
-  The `mcp` extra installs the FastMCP transport layer. If you already have `prescale` installed without it, re-run the command above — it will upgrade in place.
+  The `mcp` extra installs the FastMCP transport layer. If you already have `prescale` installed without it, re-run either command above — it upgrades in place.
 </Note>
 
 ## Register with Claude Code
@@ -119,6 +125,3 @@ Here is what a typical agent-assisted performance loop looks like once PreScale 
 5. **The new result clears 100 users** — the agent moves on.
 
 The agent never leaves the editor. The full test-diagnose-fix-retest loop happens in the same session, with structured data at each step.
-
-
-This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
