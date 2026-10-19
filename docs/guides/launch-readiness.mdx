@@ -1,0 +1,139 @@
+---
+title: "Find Your Capacity Ceiling Before Launch with PreScale"
+sidebarTitle: "Launch readiness"
+description: "Use PreScale to find your capacity ceiling before launch: run a load test, diagnose bottlenecks, audit HTTP hygiene, and check real traffic profiles."
+---
+
+Before a product launch, a marketing push, or a Hacker News post, use PreScale to find your capacity ceiling, understand what breaks first, and fix it — before users find out. A broken launch during peak interest is expensive to recover from. An hour of load testing beforehand is not.
+
+<Warning>
+  Always run PreScale against a **staging or preview URL**, not production. Load testing sends real traffic and can cause real outages or unexpected bills. PreScale will prompt you to confirm ownership of any non-local host; pass `--i-own-this` to skip the prompt in automated or rehearsed runs.
+</Warning>
+
+## Step-by-step launch prep
+
+<Steps>
+  <Step title="Start your staging server">
+    Point PreScale at a staging or preview environment that mirrors production as closely as possible — same runtime, same database tier, same environment variables. The closer the staging environment is to production, the more actionable the results will be.
+
+    If you are deploying to a platform like Vercel, Fly, or Railway, use the preview URL for your current branch. For a VPS or Kubernetes setup, deploy a recent build to a staging namespace or instance first.
+  </Step>
+
+  <Step title="Run the load test">
+    Use `investigate` to get the full picture in one shot — it finds what breaks, at what load, and why:
+
+    ```bash
+    prescale investigate https://staging.myapp.com --i-own-this
+    ```
+
+    `investigate` runs the traffic ramp and then probes the culprit route to classify the bottleneck and prescribe a fix. If you only want the capacity number without the diagnosis, use `run` instead — but for launch prep, `investigate` gives you everything you need to act.
+  </Step>
+
+  <Step title="Read the verdict">
+    PreScale prints a structured result showing what happened at each load level and where things broke. The key fields to read:
+
+    * **`survives_users`** — the estimated number of concurrent users your app handles before errors or latency crosses the threshold.
+    * **Confidence band (`survives_low`–`survives_high`)** — the range the real break point is likely to fall in. See [Interpreting the confidence band](#interpreting-the-confidence-band) below.
+    * **`stable` vs uncertain** — whether the result is statistically solid or the band is wide enough that you should run with `--repeat 3` to tighten it.
+    * **`onset_reason`** — what tripped first: error rate, latency wall, or both.
+    * **`culprit_route`** — the specific route that broke first, if PreScale could isolate it.
+  </Step>
+
+  <Step title="Fix the bottleneck">
+    `investigate` classifies the bottleneck and tells you how to fix it in plain English. Common classes include connection pool exhaustion, a slow upstream, an unhandled error path under load, or a worker queue filling up.
+
+    See the [Bottleneck Types reference](/reference/bottleneck-types) for what each bottleneck class means, what evidence PreScale uses to identify it, and the recommended remediation steps for each.
+
+    After making changes, re-run `prescale investigate` to confirm the fix moved the number in the right direction.
+  </Step>
+
+  <Step title="Frame against your launch scenario">
+    Abstract user counts are hard to act on. Use `--profile` to frame the result as a go/no-go verdict for your specific launch type:
+
+    ```bash
+    # Will we survive a Product Hunt #1 launch?
+    prescale run https://staging.myapp.com --i-own-this --profile product-hunt
+
+    # What about a Hacker News front page?
+    prescale run https://staging.myapp.com --i-own-this --profile hn-frontpage
+    ```
+
+    The output translates your capacity number into a concrete verdict:
+
+    ```text
+    Launch  🛑 a Product Hunt #1 launch: unlikely (peaks ~100, you break at ~90).
+    Launch  ✅ a Hacker News front-page hug: likely (peaks ~300, you survive ~340).
+    ```
+
+    See the [Profile examples](#profile-examples) table below for all available profiles and their peak concurrency numbers.
+  </Step>
+
+  <Step title="Run a final audit">
+    Once you are happy with the load capacity, run a static HTTP hygiene check. `audit` is load-free — it checks compression, static-asset caching, CDN presence, HTTP version, and cookie hygiene in seconds:
+
+    ```bash
+    prescale audit https://staging.myapp.com
+    ```
+
+    These checks catch issues that are invisible under normal traffic but hurt perceived performance and cost at scale — uncompressed assets that bloat response sizes, missing cache headers that re-fetch static files on every request, or a missing CDN that routes all traffic through your origin.
+  </Step>
+</Steps>
+
+## Interpreting the confidence band
+
+PreScale is honest about uncertainty. Every result includes a confidence band — a range of users that brackets the true break point:
+
+```text
+Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+```
+
+* **`survives ~90 (75–110)`** means PreScale is confident your app holds up through roughly 90 users, with the real break point likely somewhere in the 75–110 range.
+* **A narrow band** (e.g. `85–95`) means the result is stable and repeatable — you can act on it confidently.
+* **A wide band** (e.g. `50–150`) means the test saw variable results across load levels. Run with `--repeat 3` to pool multiple ramp-ups and tighten the band:
+
+  ```bash
+  prescale investigate https://staging.myapp.com --i-own-this --repeat 3
+  ```
+
+The `stable` flag in the JSON output tells you programmatically whether the band is tight enough to trust. If `stable` is `false`, treat the result as directional rather than definitive and run again with `--repeat`.
+
+## Profile examples
+
+Use `prescale profiles` to list all available scenarios. The table below shows each profile, its description, and the **peak concurrent users** it targets — the number your app must survive to get a ✅ verdict:
+
+| Profile | Description | Peak users | Think time |
+| - | - | - | - |
+| `steady-10k-dau` | Steady traffic (\~10k daily users) | 25 | 1.0s |
+| `product-hunt` | A Product Hunt #1 launch | 100 | 0.5s |
+| `hn-frontpage` | A Hacker News front-page hug | 300 | 0.3s |
+| `reddit` | A top Reddit post spike | 300 | 0.3s |
+| `black-friday` | Sustained Black Friday load | 500 | 0.5s |
+
+Each profile sets a realistic `think-time` (pause between requests per virtual user) that reflects how real humans browse during that event. This makes the simulated load pattern more accurate than a pure concurrent-connection ramp.
+
+## Testing multiple routes
+
+If your app has routes with different performance characteristics — a checkout API, a search endpoint, a heavy dashboard query — test them explicitly with `--path`:
+
+```bash
+prescale investigate https://staging.myapp.com \
+  --i-own-this \
+  --path /api/checkout \
+  --path /api/search \
+  --path /dashboard
+```
+
+PreScale tests all routes in parallel during the ramp and reports which one breaks first. You can also use `--from-sitemap` to auto-discover GET routes from your site's `sitemap.xml`:
+
+```bash
+prescale investigate https://staging.myapp.com --i-own-this --from-sitemap
+```
+
+This is useful for content-heavy sites where you want to catch slow pages without enumerating every route manually.
+
+<Tip>
+  Once your launch prep is done and you are satisfied with the capacity, commit `prescale-baseline.json` to your repository and wire up `prescale compare --fail-on-regression` in CI. Future PRs will be automatically checked against the capacity you validated today. See the [CI Regression guide](/guides/ci-regression) for the full workflow.
+</Tip>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
