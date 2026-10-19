@@ -25,7 +25,7 @@ The root object has the following properties. Fields marked **required** must be
 </ResponseField>
 
 <ResponseField name="tool_version" type="string" required>
-  The version of `prescale` that produced this result (e.g. `"0.2.0"`).
+  The version of `prescale` that produced this result (e.g. `"1.0.0"`).
 </ResponseField>
 
 <ResponseField name="created_at" type="string" required>
@@ -311,7 +311,7 @@ A minimal result for a successful run against a local app:
   "schema_version": 1,
   "kind": "run",
   "id": "20260628T173648Z",
-  "tool_version": "0.2.0",
+  "tool_version": "1.0.0",
   "created_at": "2026-06-28T17:36:48Z",
   "warning": null,
   "target": {
@@ -385,6 +385,3 @@ A minimal result for a successful run against a local app:
 <Tip>
   Run `prescale schema` to print the full JSON Schema in your terminal — useful for validating results programmatically or generating TypeScript types. Add `.prescale/` to your `.gitignore` to keep run artifacts out of source control (except any baseline files you deliberately commit for CI comparison).
 </Tip>
-
-
-This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
