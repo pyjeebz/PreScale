@@ -9,8 +9,10 @@ deploy from CI. It still works fully offline, and nothing is uploaded unless you
 - **One-line install**, no Python setup: `curl -fsSL https://prescale.dev/install | sh`
   (macOS, Linux) or `irm https://prescale.dev/install.ps1 | iex` (Windows). Installs into
   its own environment with uv. `pip install prescale` still works.
-- **`prescale login` / `logout`**: connect to your dashboard with an API token (saved
-  readable only by you). `PRESCALE_TOKEN` / `PRESCALE_URL` for CI.
+- **`prescale login` / `logout`**: connect to your dashboard by approving the login in your
+  browser, no token to copy (`--no-browser` prints the link; over SSH it does by default).
+  `--paste` takes a token from Connect instead, `--token` for scripts. The token is saved
+  readable only by you. `PRESCALE_TOKEN` / `PRESCALE_URL` for CI.
 - **`--upload`** on `run` and `investigate`, and **`prescale upload [run] [--dry-run]`**.
   The upload is the saved Result file, unchanged; `--dry-run` prints exactly that.
 - **`-H` / `--header`** on `run`, `investigate` and `ci`: extra request headers (for
@@ -21,6 +23,11 @@ deploy from CI. It still works fully offline, and nothing is uploaded unless you
 - **GitHub Action** `pyjeebz/prescale/action@v1`, a thin wrapper around `prescale ci`.
 - **`investigate --profile <name>`** (ramps to 1.5x the launch's peak) and **`--audit`**
   (the HTTP hygiene checks in the same run): everything Launch Guard needs in one command.
+- **PreScale's bars in text** (`░` → `▒` → `█`, `┆` for a threshold): the load-ramp and
+  per-route tables gain a p95 bar toward the latency wall (live and final), the readiness
+  panel shows how far up the ramp you got (and capacity vs a launch's peak), `compare` and
+  `compare --md` draw old vs new, and the PR comment draws the baseline vs this deploy plus
+  the routes at the breaking stage.
 - `PRESCALE_GIT_COMMIT` / `PRESCALE_GIT_BRANCH` override the detected git info.
 - Result schema: optional `audit` findings (still `schema_version: 1`).
 
