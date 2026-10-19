@@ -22,6 +22,12 @@
     { "source": "/docs", "destination": "https://prescale.mintlify.site/docs" },
     { "source": "/docs/:path*", "destination": "https://prescale.mintlify.site/docs/:path*" },
     { "source": "/mintlify-assets/:path+", "destination": "https://prescale.mintlify.site/mintlify-assets/:path+" },
+    { "source": "/dashboard", "destination": "https://prescale-dashboard.vercel.app/dashboard" },
+    { "source": "/dashboard/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/:path*" },
+    { "source": "/r/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/r/:path*" },
+    { "source": "/s/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/s/:path*" },
+    { "source": "/badge/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/badge/:path*" },
+    { "source": "/b/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/b/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
