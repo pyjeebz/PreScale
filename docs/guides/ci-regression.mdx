@@ -1,0 +1,112 @@
+---
+title: "Gate CI Builds on Load Capacity Regressions with PreScale"
+sidebarTitle: "CI regression gates"
+description: "Fail a CI build when capacity drops: set a minimum on prescale run, or compare each run against a baseline."
+---
+
+PreScale integrates into CI to catch capacity regressions before they reach users. You have two approaches: set a simple capacity floor that fails the build immediately, or diff each PR against a committed baseline and comment a human-readable comparison directly on the pull request.
+
+## Approach 1: Simple capacity floor
+
+Use `--fail-under N` to exit non-zero if the run survives fewer than `N` concurrent users. This is the fastest way to add a load gate — one extra step in your pipeline, no baseline file required.
+
+```yaml
+- name: Install PreScale
+  run: pip install prescale
+
+- name: Load test staging
+  run: prescale run https://staging.myapp.com --i-own-this --fail-under 100
+```
+
+If your app breaks before 100 concurrent users, the step exits with a non-zero code and the build fails. No scripts, no thresholds to configure — just a number you can defend.
+
+## Approach 2: Baseline comparison
+
+Commit a baseline result JSON from your `main` branch and compare every PR against it. This catches *regressions* — a PR that ships new code that drops capacity from 150 users to 80 users — without requiring you to pick a magic number upfront.
+
+Below is a complete GitHub Actions workflow that handles both sides:
+
+```yaml
+name: Load test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ── On main: refresh and commit the baseline ──────────────────────────
+  refresh-baseline:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PreScale
+        run: pip install prescale
+
+      - name: Run load test and save baseline
+        run: prescale run https://staging.myapp.com --i-own-this --json > prescale-baseline.json
+
+      - name: Commit updated baseline
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prescale-baseline.json
+          git diff --cached --quiet || git commit -m "chore: update load test baseline [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── On PRs: run, compare, and comment ─────────────────────────────────
+  regression-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PreScale
+        run: pip install prescale
+
+      - name: Run load test
+        run: prescale run https://staging.myapp.com --i-own-this
+
+      - name: Compare against baseline
+        run: |
+          prescale compare \
+            --baseline prescale-baseline.json \
+            --fail-on-regression \
+            --markdown > cmp.md
+
+      - name: Post comparison as PR comment
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file cmp.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+```
+
+`compare` diffs the latest saved run (written automatically to `.prescale/runs/`) against the baseline JSON. The `--fail-on-regression` flag makes the step exit non-zero only when the regression check determines capacity has genuinely dropped.
+
+## Understanding regression results
+
+`compare` uses PreScale's **confidence bands** to decide whether a regression is real. Every run produces a `survives_low`–`survives_high` range alongside the `survives_users` point estimate. The comparison checks whether the bands *overlap*:
+
+* **Overlapping bands** — the difference is within statistical noise. The build passes even if the point estimates differ.
+* **Non-overlapping bands** — the capacity drop is outside noise. `--fail-on-regression` triggers and the build fails.
+
+This means you won't be chasing phantom regressions caused by a noisy cloud runner. If you want tighter bands and higher confidence (fewer false passes on genuine drops), run with `--repeat 3` to pool multiple ramp-ups before saving the baseline.
+
+## The `--markdown` flag
+
+`prescale compare --markdown` produces a PR-comment-ready block: a short summary table and a verdict sentence, formatted in GitHub-flavoured Markdown. Pipe it to a file and hand it to `gh pr comment --body-file` as shown in the workflow above.
+
+<Tip>
+  Combine `prescale audit` in CI too — it's load-free and checks HTTP hygiene (compression, caching, CDN, HTTP/2) without sending any ramp traffic. It runs in seconds, so it's cheap enough to add to every commit:
+
+  ```yaml
+  - name: HTTP hygiene audit
+    run: prescale audit https://staging.myapp.com --i-own-this
+  ```
+</Tip>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
