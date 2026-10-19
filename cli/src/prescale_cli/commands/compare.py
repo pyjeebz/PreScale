@@ -81,6 +81,7 @@ def _render(cmp: dict) -> None:
     table.add_column("")
     table.add_column("Survives", justify="right")
     table.add_column("Capacity", no_wrap=True)
+    table.add_column("req/s at capacity", justify="right")
     table.add_column("Peak req/s", justify="right")
     table.add_column("Commit")
     table.add_column("When")
@@ -89,7 +90,8 @@ def _render(cmp: dict) -> None:
     for label, f in (("old", o), ("new", n)):
         tone = "cyan" if label == "old" else color
         bar = f"[{tone}]{text_bar(f['survives_users'], scale, width=24)}[/{tone}]"
-        table.add_row(label, str(f["survives_users"]), bar, f"{f['peak_rps']:.0f}",
+        at_capacity = f"{f['capacity_rps']:,.0f}" if f.get("capacity_rps") else "-"
+        table.add_row(label, str(f["survives_users"]), bar, at_capacity, f"{f['peak_rps']:.0f}",
                       f["commit"] or "-", f["created_at"] or "-")
     console.print(table)
     note = "" if (cmp["confident"] or not cmp["regressed"]) else \
