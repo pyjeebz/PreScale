@@ -7,8 +7,16 @@ The PreScale GitHub Action runs when a preview deploy finishes, load-tests it, u
 result, and keeps **one** comment on the pull request up to date:
 
 > ### 🔴 Capacity regressed: 150 → 100 users (−33%)
+> ```text
+> main @ 71aa0c9  ░░░░░░░░░░░░░░▒▒▒██       ~150
+> this deploy     ░░░░░░░▒▒▒██              ~100  −33%
+> ```
 > **Breaks first:** `/api/search` · errors climbed at ~150 users
 > **Why:** `connection_pool` (high confidence) · **Fix:** increase the DB connection-pool size.
+
+The bars are PreScale's mark in text: sparse `░` → `▒` → a solid `█` end at the capacity
+measured. When the deploy breaks on more than one route, the comment also shows each
+route's p95 as a bar toward the latency wall (`┆`).
 
 ## Set it up
 
