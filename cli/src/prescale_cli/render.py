@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from prescale_cli.bars import text_bar
+from prescale_cli.throughput import VISITOR_NOTE, describe
 
 console = Console()
 
@@ -84,6 +85,10 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
         tone = "red" if verdict["survives_users"] == 0 else "cyan"
         lines.append(f"Ramp  [{tone}]{ramp}[/{tone}]  ~{verdict['survives_users']} of "
                      f"{tested} {_u(tested)} tested")
+    # Virtual users send requests back to back, so say what the number means in traffic.
+    traffic = describe(result)
+    if traffic:
+        lines.append(f"Traffic  {traffic} [dim]({VISITOR_NOTE})[/dim]")
     if onset_users is not None:
         culprit = f"{verdict['culprit_route']}  " if (multi and verdict["culprit_route"]) else ""
         if verdict["onset_reason"] == "latency":
