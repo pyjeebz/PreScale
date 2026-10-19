@@ -1,0 +1,87 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "luma",
+  "name": "PreScale",
+  "description": "Load-test your app and find out why it breaks. Then again on every deploy.",
+  "colors": {
+    "primary": "#0FA3B1",
+    "light": "#3FD3DE",
+    "dark": "#0FA3B1"
+  },
+  "background": {
+    "color": {
+      "dark": "#000000"
+    }
+  },
+  "appearance": {
+    "default": "dark"
+  },
+  "fonts": {
+    "family": "Google Sans"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "https://prescale.dev"
+  },
+  "navbar": {
+    "links": [
+      { "label": "Dashboard", "href": "https://prescale.dev/dashboard" }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/pyjeebz/PreScale"
+    }
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": ["introduction", "quickstart", "installation"]
+      },
+      {
+        "group": "Commands",
+        "pages": [
+          "commands/run",
+          "commands/investigate",
+          "commands/audit",
+          "commands/compare",
+          "commands/history-show",
+          "commands/profiles"
+        ]
+      },
+      {
+        "group": "Dashboard",
+        "pages": ["dashboard/connect", "dashboard/targets"]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/github-action",
+          "guides/ci-regression",
+          "guides/launch-guard",
+          "guides/launch-readiness",
+          "guides/mcp-agents"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/data-boundary",
+          "reference/result-schema",
+          "reference/bottleneck-types",
+          "reference/configuration"
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/pyjeebz/PreScale"
+    }
+  },
+  "styling": {
+    "codeblocks": "system"
+  }
+}
