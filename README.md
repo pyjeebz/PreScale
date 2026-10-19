@@ -245,6 +245,19 @@ claude mcp add prescale -- prescale mcp     # Claude Code
 
 It exposes `load_test`, `investigate`, `audit`, `list_runs`, and `get_run` tools that return the same compact verdict you get on the CLI. **Safe by default:** the agent can only load-test local hosts unless you allowlist others with `PRESCALE_MCP_ALLOW=staging.myapp.com` (or `prescale mcp --allow staging.myapp.com`).
 
+## What gets uploaded
+
+The CLI works fully offline. Nothing leaves your machine unless you pass `--upload`, run `prescale upload`, or use the GitHub Action. An upload is the saved run file (`.prescale/runs/<id>.json`), unchanged:
+
+- the verdict: users survived, confidence band, where and why it broke
+- per-stage and per-route timings, error rates and request counts
+- the diagnosis and suggested fixes, if you ran `investigate`, and HTTP hygiene findings, if you ran `--audit`
+- the target URL, the route paths you tested, the git commit and branch, and the CLI version
+
+**Never sent:** request and response bodies, cookies, header values you pass with `-H` (auth tokens, Vercel bypass secrets), environment variables, or anything from your codebase. See the exact payload first with `prescale upload --dry-run`.
+
+Runs are private to your account. A run is public only if you **share** it (an unguessable link you can take down) or **sign it off**. API tokens are stored as hashes; the token itself is shown once.
+
 ## How it works
 
 1. **Preflight** — one request to confirm the URL is reachable, then a brief warmup.
