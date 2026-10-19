@@ -1,0 +1,99 @@
+---
+title: "prescale audit — HTTP Scaling Hygiene Check Command"
+sidebarTitle: "prescale audit"
+description: "prescale audit runs a load-free HTTP check for compression, caching, CDN detection, and HTTP/2 — cheap enough to run on every commit."
+---
+
+`prescale audit` does a fast, load-free check of HTTP-level scaling issues — compression, caching headers, CDN presence, HTTP version, and cookies on assets. No traffic ramp is sent, no load is generated. You get actionable findings in seconds, making it safe to run against production and easy to slot into CI.
+
+## Usage
+
+```bash
+prescale audit https://myapp.com
+prescale audit https://myapp.com --json
+```
+
+## Example output
+
+```text
+PreScale audit — https://myapp.com
+
+✓ Compression           Responses are compressed (br).
+⚠ HTTP version          Served over HTTP/1.1.
+⚠ Static asset caching  2 of 6 sampled assets have no caching headers.
+✓ CDN / edge cache      Detected (Cloudflare).
+
+2 passed · 2 warnings · 0 failed
+```
+
+Each finding is prefixed with a status icon: `✓` for pass, `⚠` for warn, and `✗` for fail. When a fix is available, it is printed beneath the finding in dim text.
+
+## Checks performed
+
+| Check | Why it matters for scaling |
+| - | - |
+| **Compression** | Brotli or gzip shrinks response bodies, reducing bandwidth consumption and server-side costs. Uncompressed responses waste capacity at every user tier. |
+| **HTTP version** | HTTP/2 multiplexes requests over a single connection, eliminating the per-request connection overhead that slows HTTP/1.1 under concurrent load. |
+| **Static asset caching** | Assets without `Cache-Control` or `Expires` headers are re-fetched on every request. Under load, that drives up origin hits and latency — edge or browser caching is the cheapest scaling lever you have. |
+| **CDN / edge cache** | A CDN absorbs traffic at the edge before it reaches your origin. No CDN means every concurrent user hits your servers directly. |
+
+## Options
+
+<ParamField path="url" type="string" required>
+  The URL to audit. Must include the scheme — for example, `https://myapp.com`.
+</ParamField>
+
+<ParamField query="--timeout" type="float" default="10.0">
+  Per-request timeout in seconds. Increase this value if your host is slow to respond on a cold start.
+</ParamField>
+
+<ParamField query="--json" type="boolean">
+  Emit findings as a JSON array instead of the default terminal output. Useful for piping into other tools or storing results.
+</ParamField>
+
+## JSON output
+
+When you pass `--json`, each finding is emitted as an object with four fields:
+
+```json
+[
+  {
+    "name": "Compression",
+    "status": "pass",
+    "detail": "Responses are compressed (br).",
+    "fix": null
+  },
+  {
+    "name": "HTTP version",
+    "status": "warn",
+    "detail": "Served over HTTP/1.1.",
+    "fix": "Enable HTTP/2 on your server or proxy (nginx, Caddy, or a CDN edge all do this for free)."
+  },
+  {
+    "name": "Static asset caching",
+    "status": "warn",
+    "detail": "2 of 6 sampled assets have no caching headers.",
+    "fix": "Add Cache-Control: public, max-age=31536000 to immutable static assets."
+  },
+  {
+    "name": "CDN / edge cache",
+    "status": "pass",
+    "detail": "Detected (Cloudflare).",
+    "fix": null
+  }
+]
+```
+
+| Field | Type | Description |
+| - | - | - |
+| `name` | string | Human-readable check name |
+| `status` | `"pass"` \| `"warn"` \| `"fail"` | Outcome of the check |
+| `detail` | string | What was observed |
+| `fix` | string \| null | Remediation hint, or `null` when the check passed |
+
+<Tip>
+  Because `prescale audit` sends no load at all, it is safe to run on every commit in CI — even against a production URL. Pair it with `prescale run` for a full picture: audit catches the cheap, static issues before you spend time ramping traffic.
+</Tip>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
