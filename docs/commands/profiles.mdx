@@ -1,0 +1,66 @@
+---
+title: "PreScale Launch Profiles for Realistic Traffic Scenarios"
+sidebarTitle: "Launch profiles"
+description: "Launch profiles map real traffic spikes to peak concurrency, so the verdict reads as 'would survive a Product Hunt launch'."
+---
+
+Abstract user counts are hard to act on. "You break at 90 concurrent users" is accurate, but it doesn't immediately tell you whether that's a problem. Use `--profile` to name the scenario — the verdict then reads as *"would survive a Product Hunt launch: unlikely"* instead of just *"breaks at \~90 users"*. That framing makes it easy to communicate urgency to your team and to set a concrete remediation target.
+
+## Usage
+
+```bash
+prescale run https://staging.myapp.com --i-own-this --profile product-hunt
+prescale profiles      # list all available profiles
+```
+
+## Example output
+
+```text
+Launch  🛑 a Product Hunt #1 launch: unlikely (peaks ~100, you break at ~90).
+```
+
+The verdict is printed alongside the standard capacity report. A 🟢 means you cleared the profile's peak; 🛑 means you did not.
+
+## Available profiles
+
+| Profile name | Scenario | Peak users | Think time |
+| - | - | - | - |
+| `steady-10k-dau` | steady traffic (\~10k daily users) | 25 | 1.0 s |
+| `product-hunt` | a Product Hunt #1 launch | 100 | 0.5 s |
+| `reddit` | a top Reddit post spike | 300 | 0.3 s |
+| `hn-frontpage` | a Hacker News front-page hug | 300 | 0.3 s |
+| `black-friday` | sustained Black Friday load | 500 | 0.5 s |
+
+**Think time** is the pause each virtual user takes between requests. Lower think times increase request concurrency at a given user count, simulating the rapid-fire browsing pattern of a short spike (Reddit, HN) as opposed to a steadier flow.
+
+To see all profiles at any time, run:
+
+```bash
+prescale profiles
+```
+
+## Selecting a profile
+
+Pass the profile name to `--profile` on `prescale run` or `prescale investigate`:
+
+```bash
+prescale run https://staging.myapp.com --i-own-this --profile hn-frontpage
+prescale run https://staging.myapp.com --i-own-this --profile black-friday
+```
+
+You can use any profile with the standard `--fail-under` CI gate to set a scenario-specific floor:
+
+```bash
+prescale run https://staging.myapp.com --i-own-this \
+  --profile product-hunt \
+  --fail-under 100
+```
+
+This exits non-zero if your app cannot survive the full Product Hunt peak.
+
+<Note>
+  Profiles automatically set `--max-users` and `--think-time` to the values listed in the table above — you do not need to specify them yourself. You can still override either flag manually if you want a custom variation. For example, to use the `product-hunt` scenario but ramp slightly higher: `--profile product-hunt --max-users 150`.
+</Note>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
