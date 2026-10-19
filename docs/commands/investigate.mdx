@@ -27,13 +27,14 @@ prescale investigate http://localhost:8000 --json
 After the ramp, PreScale prints a standard verdict followed by the `🔬 Diagnosis` block:
 
 ```text
-Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+ Users   Req/s    p50    p95   vs 2s wall          p99   Errors
+    10     520   18ms   31ms   █            ┆       44ms      0%
+    50     610   46ms  120ms   █            ┆      210ms      0%
+    90     590   80ms  240ms   ██           ┆      900ms      0%
+   150     410  180ms   2.1s   ░░░░░░░░▒▒▒██┆        3.4s      7%
 
- Users   Req/s    p50    p95    p99   Errors
-    10     520   18ms   31ms   44ms      0%
-    50     610   46ms  120ms  210ms      0%
-    90     590   80ms  240ms  900ms      0%
-   150     410  180ms   2.1s   3.4s      7%   ← breaks here
+Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+Traffic         ≈ 590 req/s, roughly 5,900 real visitors (one request per visitor every 10s)
 
 🔬 Diagnosis
 Likely cause: 5xx under load while static assets held — the app/backend is the wall.
@@ -143,6 +144,3 @@ prescale investigate --store /tmp/prescale-ci
 <Note>
   The **Bottleneck Types** reference page at [`reference/bottleneck-types`](/reference/bottleneck-types) describes every classification PreScale can emit — what each bottleneck means, how it is detected, and what "high / medium / low confidence" signifies.
 </Note>
-
-
-This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
