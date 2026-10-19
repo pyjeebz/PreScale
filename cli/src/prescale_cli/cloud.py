@@ -162,6 +162,72 @@ def upload_result(result: dict, creds: Credentials, *, transport=None,
                     content=body, headers=headers)
 
 
+# --- browser sign-in (RFC 8628 device authorization) ------------------------
+
+@dataclass(frozen=True)
+class DeviceLogin:
+    device_code: str
+    user_code: str
+    verification_url: str
+    verification_url_complete: str
+    expires_in: int
+    interval: int
+
+
+def _anonymous_post(url: str, path: str, body: dict, transport=None) -> httpx.Response:
+    try:
+        with httpx.Client(base_url=url, timeout=_TIMEOUT, transport=transport,
+                          headers={"User-Agent": _USER_AGENT}) as client:
+            return client.post(path, json=body)
+    except httpx.HTTPError as exc:
+        raise CloudError(f"Couldn't reach {url}: {exc}") from exc
+
+
+def start_device_login(url: str, device_name: str, platform: str, *,
+                       transport=None) -> DeviceLogin:
+    """Ask the app for a login code to approve in the browser."""
+    response = _anonymous_post(url, "/api/v1/auth/device",
+                               {"device_name": device_name, "platform": platform}, transport)
+    if response.status_code == 404:
+        raise CloudError(f"{url} doesn't support browser sign-in yet. "
+                         "Use `prescale login --paste` with a token from Connect.")
+    try:
+        data = response.json()
+    except ValueError:
+        raise CloudError(f"{url} sent a response PreScale couldn't read.") from None
+    if response.status_code >= 400:
+        raise CloudError(data.get("error") or f"{url} returned HTTP {response.status_code}.")
+    try:
+        return DeviceLogin(
+            device_code=data["device_code"], user_code=data["user_code"],
+            verification_url=data["verification_url"],
+            verification_url_complete=data["verification_url_complete"],
+            expires_in=int(data["expires_in"]), interval=int(data["interval"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        raise CloudError(f"{url} sent a login response PreScale couldn't read.") from None
+
+
+def poll_device_login(url: str, device_code: str, *, transport=None) -> tuple[str, dict]:
+    """One poll. Returns ("approved", {"token", "user"}) or (error_code, {"message"}).
+
+    Error codes follow RFC 8628: authorization_pending, slow_down,
+    access_denied, expired_token (plus invalid_grant for an unknown code).
+    """
+    response = _anonymous_post(url, "/api/v1/auth/device/token",
+                               {"device_code": device_code}, transport)
+    try:
+        data = response.json()
+    except ValueError:
+        raise CloudError(f"{url} sent a response PreScale couldn't read.") from None
+    if response.status_code == 200 and str(data.get("token", "")).startswith(TOKEN_PREFIX):
+        return "approved", data
+    if response.status_code == 400 and data.get("error"):
+        return data["error"], data
+    raise CloudError(data.get("message") or data.get("error")
+                     or f"{url} returned HTTP {response.status_code}.")
+
+
 def require_credentials() -> Credentials:
     creds = load_credentials()
     if creds is None:
