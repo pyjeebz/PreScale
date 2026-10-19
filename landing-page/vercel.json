@@ -17,11 +17,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/_mintlify/:path*", "destination": "https://prescale.mintlify.site/_mintlify/:path*" },
-    { "source": "/api/request", "destination": "https://prescale.mintlify.site/_mintlify/api/request" },
-    { "source": "/docs", "destination": "https://prescale.mintlify.site/docs" },
-    { "source": "/docs/:path*", "destination": "https://prescale.mintlify.site/docs/:path*" },
-    { "source": "/mintlify-assets/:path+", "destination": "https://prescale.mintlify.site/mintlify-assets/:path+" },
     { "source": "/dashboard", "destination": "https://prescale-dashboard.vercel.app/dashboard" },
     { "source": "/dashboard/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/:path*" },
     { "source": "/r/:path*", "destination": "https://prescale-dashboard.vercel.app/dashboard/r/:path*" },
