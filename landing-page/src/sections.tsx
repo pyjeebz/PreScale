@@ -184,7 +184,7 @@ export function Compare() {
 const FAQ: Array<[string, ReactNode]> = [
   [
     "What does PreScale measure?",
-    "How many concurrent users your app survives before errors climb or response times cross the latency wall, with a confidence band around the number. It also names the route that breaks first and, with investigate, why.",
+    "How many concurrent users your app survives before errors climb or response times cross the latency wall, with a confidence band around the number, and the requests per second that means. Virtual users don't pause between clicks the way people do, so PreScale also gives a rough real-visitor equivalent. It names the route that breaks first and, with investigate, why.",
   ],
   [
     "Do I need to write test scripts?",
