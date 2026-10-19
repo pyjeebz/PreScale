@@ -35,18 +35,19 @@ While the ramp is running you'll see a live table that updates at each load leve
 ```text
 PreScale — load testing https://staging.myapp.com  (1 route)
 
- Users   Req/s    p50    p95    p99   Errors
-    10     520   18ms   31ms   44ms      0%
-    50     610   46ms  120ms  210ms      0%
-    90     590   80ms  240ms  900ms      0%
-   150     410  180ms   2.1s   3.4s      7%   ← breaks here
+ Users   Req/s    p50    p95   vs 2s wall          p99   Errors
+    10     520   18ms   31ms   █            ┆       44ms      0%
+    50     610   46ms  120ms   █            ┆      210ms      0%
+    90     590   80ms  240ms   ██           ┆      900ms      0%
+   150     410  180ms   2.1s   ░░░░░░░░▒▒▒██┆        3.4s      7%
 ```
 
-Once the ramp finishes, PreScale prints a verdict:
+Each bar runs from sparse `░` to a solid `█` at that stage's p95, toward the latency wall `┆` (set with `--latency-wall`). Once the ramp finishes, PreScale prints how many requests it sent (on serverless hosts each one is a billed invocation) and a verdict:
 
 ```text
 Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
-
+Ramp            ░░░░░░░░░▒▒▒██         ~90 of 150 users tested
+Traffic         ≈ 590 req/s, roughly 5,900 real visitors (one request per visitor every 10s)
 First failure   errors climb at ~150 users
 Latency wall    p95 crosses 2s at ~150 users
 Likely cause    Server returned 5xx under load — likely an unhandled overload
@@ -209,6 +210,3 @@ Add `.prescale/` to your `.gitignore` to keep run files out of version control, 
 <Tip>
   After `prescale run` identifies what breaks, run `prescale investigate` on the same URL to find out *why* it breaks and get a concrete fix recommendation. `investigate` runs its own ramp plus a targeted second-pass probe of the culprit route.
 </Tip>
-
-
-This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
