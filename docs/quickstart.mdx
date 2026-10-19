@@ -8,19 +8,29 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
 
 <Steps>
   <Step title="Install">
-    Install the PreScale CLI with `pip`:
+    One command, no Python setup needed:
 
-    ```bash
-    pip install prescale
+    <CodeGroup>
+    ```bash macOS and Linux
+    curl -fsSL https://prescale.dev/install | sh
     ```
 
-    Verify the install succeeded:
+    ```powershell Windows
+    irm https://prescale.dev/install.ps1 | iex
+    ```
+
+    ```bash pip
+    pip install prescale
+    ```
+    </CodeGroup>
+
+    Check it worked:
 
     ```bash
     prescale --version
     ```
 
-    You should see `prescale, version 0.2.1`. If you see a "command not found" error, make sure your Python `bin` or `Scripts` directory is on your `PATH`.
+    You should see `prescale, version 1.0.0`. If your shell says "command not found", open a new terminal so it picks up the updated `PATH`. [Installation](/installation) has the details.
   </Step>
 
   <Step title="Run a load test">
@@ -33,18 +43,26 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
     PreScale steps virtual users up from 1 to 200 (by default), measuring throughput, latency percentiles, and error rates at each level. When it finds the first level where errors or latency cross the threshold, it marks the break and prints a verdict:
 
     ```text
-    PreScale — load testing http://localhost:8000 (1 route)
+    PreScale — load testing http://localhost:8000  (1 route)
 
-     Users   Req/s    p50    p95    p99   Errors
-        10     520   18ms   31ms   44ms      0%
-        50     610   46ms  120ms  210ms      0%
-        90     590   80ms  240ms  900ms      0%
-       150     410  180ms   2.1s   3.4s      7%  <- breaks here
+     Users   Req/s    p50    p95   vs 2s wall          p99   Errors
+        10     520   18ms   31ms   █            ┆       44ms      0%
+        50     610   46ms  120ms   █            ┆      210ms      0%
+        90     590   80ms  240ms   ██           ┆      900ms      0%
+       150     410  180ms   2.1s   ░░░░░░░░▒▒▒██┆        3.4s      7%
 
     Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+    Ramp       ░░░░░░░░░▒▒▒██         ~90 of 150 users tested
+    Traffic    ≈ 590 req/s, roughly 5,900 real visitors
     ```
 
-    The verdict includes a confidence band (`75–110`) so you can see how much to trust the number. Every run is saved to `./.prescale/runs/` for later inspection.
+    How to read it:
+
+    - **The verdict** comes with a confidence band (`75–110`), so you can see how much to trust the number.
+    - **Each bar** runs from sparse `░` to a solid `█` at that stage's p95 latency, toward the latency wall `┆` (2s by default). A bar reaching the wall is where users start to feel it.
+    - **Traffic** turns the user count into load: a virtual user sends requests back to back, while a real visitor pauses between clicks, so ~90 users here is roughly 5,900 people browsing (assuming one request per visitor every 10 seconds).
+
+    Every run is saved to `./.prescale/runs/` for later inspection.
   </Step>
 
   <Step title="Investigate why">
@@ -94,6 +112,17 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
 
     This command is cheap enough to run on every commit in CI.
   </Step>
+
+  <Step title="Keep it on every deploy (optional)">
+    Everything above runs on your machine and needs no account. To keep a history of every run and check each pull request, connect the CLI to your free dashboard:
+
+    ```bash
+    prescale login
+    prescale investigate https://staging.myapp.com --i-own-this --upload
+    ```
+
+    Then add the [GitHub Action](/guides/github-action): every preview deploy gets one PR comment with the capacity change against `main`, what breaks first, and the fix. [What gets uploaded](/reference/data-boundary) lists exactly what leaves your machine.
+  </Step>
 </Steps>
 
 <Tip>
@@ -117,14 +146,11 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
     Learn how PreScale diagnoses bottlenecks and what each bottleneck class means for your stack.
   </Card>
 
-  <Card title="CI regression gating" icon="shield-check" href="/guides/ci-regression">
-    Use `--fail-under` and `prescale compare` to catch capacity regressions automatically in your CI pipeline.
+  <Card title="Capacity on every pull request" icon="github" href="/guides/github-action">
+    Load-test every preview deploy and get one PR comment with the capacity change, the culprit route and the fix.
   </Card>
 
   <Card title="Launch readiness guide" icon="rocket" href="/guides/launch-readiness">
     Use `--profile` to frame your results against real launch scenarios like a Product Hunt drop or a HN front page.
   </Card>
 </CardGroup>
-
-
-This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
