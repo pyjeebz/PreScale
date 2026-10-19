@@ -1,6 +1,6 @@
 ---
 title: "Connect the CLI to your dashboard"
-description: "Create a token, run prescale login, and upload runs with --upload. Nothing leaves your machine unless you ask."
+description: "Run prescale login, approve it in your browser, and upload runs with --upload. Nothing leaves your machine unless you ask."
 ---
 
 The CLI works fully offline. Connecting it to your dashboard at
@@ -8,15 +8,13 @@ The CLI works fully offline. Connecting it to your dashboard at
 capacity timeline per site, and shareable reports.
 
 <Steps>
-  <Step title="Create a token">
-    In the dashboard, open **Connect** and click **Create token**. Copy it: it's shown once.
-  </Step>
   <Step title="Log in">
     ```bash
     prescale login
     ```
-    Paste the token when asked. It's checked against the dashboard, then saved to
-    `~/.config/prescale/credentials.json`, readable only by you.
+    Your browser opens on the dashboard with a short code. Check it matches the one in
+    your terminal and click **Approve**. The CLI is signed in a second later; its token is
+    saved to `~/.config/prescale/credentials.json`, readable only by you.
   </Step>
   <Step title="Upload a run">
     ```bash
@@ -45,6 +43,12 @@ prescale investigate https://myapp-git-feat-acme.vercel.app \
   -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" --upload
 ```
 
+## No browser on that machine
+
+On a server or over SSH, `prescale login` prints the approval link instead of opening a
+browser: open it on any device where you're signed in. `--no-browser` does the same
+anywhere. Or create a token under **Connect** and run `prescale login --paste`.
+
 ## In CI
 
 Set `PRESCALE_TOKEN` (and `PRESCALE_URL` if you self-host) instead of running
@@ -52,6 +56,6 @@ Set `PRESCALE_TOKEN` (and `PRESCALE_URL` if you self-host) instead of running
 
 ## Tokens
 
-Revoke a token on the **Connect** page at any time. The CLI using it stops working
-immediately and tells you to log in again. `prescale logout` forgets the saved token on
-this machine.
+Each approved login shows up on the **Connect** page as `CLI · <machine name>`. Revoke a
+token there at any time: the CLI using it stops working immediately and tells you to log
+in again. `prescale logout` forgets the saved token on this machine.
