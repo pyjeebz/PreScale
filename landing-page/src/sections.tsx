@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Ctas, InstallBox, LINKS, Reveal } from "./components/chrome";
 import { CodeBlock, Surface, cn } from "./components/ui";
 import { MiniBar } from "./components/mini-bar";
-import { CALM } from "./components/dots";
 import { FeatureList } from "./components/feature-list";
 import { HeroBars } from "./components/hero-bars";
 import { DashboardDemo } from "./demo/demo";
@@ -227,50 +226,6 @@ export function Faq() {
               </summary>
               <p className="max-w-2xl pb-6 pr-10 text-[15px] leading-relaxed text-muted-foreground">{answer}</p>
             </details>
-          ))}
-        </div>
-      </div>
-    </Reveal>
-  );
-}
-
-/* ── Docs ──────────────────────────────────────────────────────────── */
-
-const DOCS: Array<[string, string, string]> = [
-  ["Quickstart", "Install, run your first test, read the verdict.", "/docs/quickstart"],
-  ["Capacity on every PR", "Set up the GitHub Action for your preview deploys.", "/docs/guides/github-action"],
-  ["Why it breaks", "How investigate finds the bottleneck and the fix.", "/docs/commands/investigate"],
-  ["What gets uploaded", "Exactly what leaves your machine, and what never does.", LINKS.data],
-];
-
-export function Docs() {
-  return (
-    <Reveal id="docs" className="py-16 sm:py-24">
-      <div className={container}>
-        <SectionHead
-          title="Read the docs,"
-          dim="start where you are."
-          lede={<>Every command, flag and guide, on this site. <a href={LINKS.docs} className="text-accent hover:underline">Browse all docs</a>.</>}
-        />
-        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {DOCS.map(([title, line, href], index) => (
-            <a
-              key={href}
-              href={href}
-              className="group flex flex-col gap-4 rounded-[10px] border border-border p-5 transition-colors duration-150 hover:border-foreground/25 hover:bg-white/[0.02]"
-            >
-              {/* The row's bar ramps out on hover, like the feature list. */}
-              <span className="block w-8 transition-[width] duration-300 ease-[var(--ease-out)] group-hover:w-16">
-                <MiniBar color={CALM[index % CALM.length]} style={{ width: "100%" }} />
-              </span>
-              <span>
-                <span className="flex items-center justify-between gap-3 text-[15px] font-medium tracking-[-0.01em]">
-                  {title}
-                  <span aria-hidden className="text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5">→</span>
-                </span>
-                <span className="mt-1.5 block text-sm leading-relaxed text-muted-foreground">{line}</span>
-              </span>
-            </a>
           ))}
         </div>
       </div>
