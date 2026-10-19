@@ -23,6 +23,10 @@ deploy from CI. It still works fully offline, and nothing is uploaded unless you
 - **GitHub Action** `pyjeebz/prescale/action@v1`, a thin wrapper around `prescale ci`.
 - **`investigate --profile <name>`** (ramps to 1.5x the launch's peak) and **`--audit`**
   (the HTTP hygiene checks in the same run): everything Launch Guard needs in one command.
+- **Capacity as traffic:** every verdict now says what "survives ~N users" means in load:
+  requests per second at the highest stage that held, and a rough real-visitor equivalent
+  (assuming one request per visitor every 10s). In the readiness report, `compare` and the PR
+  comment (with the baseline's figure alongside).
 - **PreScale's bars in text** (`░` → `▒` → `█`, `┆` for a threshold): the load-ramp and
   per-route tables gain a p95 bar toward the latency wall (live and final), the readiness
   panel shows how far up the ramp you got (and capacity vs a launch's peak), `compare` and
