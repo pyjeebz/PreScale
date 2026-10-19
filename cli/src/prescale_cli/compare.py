@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from prescale_cli.bars import bar_rows
 from prescale_cli.result import list_results, load_result
+from prescale_cli.throughput import capacity_rps
 
 _DEFAULT_THRESHOLD = 0.2
 
@@ -19,6 +20,7 @@ def _facts(result: dict) -> dict:
         "survives_low": conf.get("survives_low"),
         "survives_high": conf.get("survives_high"),
         "peak_rps": v["peak_rps"],
+        "capacity_rps": capacity_rps(result),
         "onset_users": v["onset_users"],
         "max_tested": v.get("max_tested"),
         "commit": env.get("git_commit"),
