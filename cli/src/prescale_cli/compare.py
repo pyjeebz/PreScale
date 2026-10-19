@@ -3,6 +3,7 @@ and regression gating in CI. Pure logic + operand resolution (no network)."""
 
 from __future__ import annotations
 
+from prescale_cli.bars import bar_rows
 from prescale_cli.result import list_results, load_result
 
 _DEFAULT_THRESHOLD = 0.2
@@ -98,4 +99,12 @@ def to_markdown(cmp: dict) -> str:
         "|---|---:|---:|---|",
         f"| old | {o['survives_users']} | {o['peak_rps']:.0f} | `{o['commit'] or '-'}` |",
         f"| new | {n['survives_users']} | {n['peak_rps']:.0f} | `{n['commit'] or '-'}` |",
+        "",
+        "```text",
+        *bar_rows(
+            [("old", o["survives_users"], f"~{o['survives_users']}"),
+             ("new", n["survives_users"], f"~{n['survives_users']}")],
+            max(o["survives_users"], n["survives_users"], 1) * 1.1,
+        ),
+        "```",
     ])
