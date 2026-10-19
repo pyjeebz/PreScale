@@ -34,12 +34,14 @@ prescale investigate https://staging.myapp.com
 ```
 Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
 
-            Load ramp
- Users   Req/s    p50    p95    p99   Errors
-    10     520   18ms   31ms   44ms      0%
-    50     610   46ms  120ms  210ms      0%
-    90     590   80ms  240ms  900ms      0%
-   150     410  180ms   2.1s   3.4s      7%   <- breaks here
+                          Load ramp
+ Users   Req/s    p50    p95   vs 2s wall           p99   Errors
+    10     520   18ms   31ms   █            ┆        44ms      0%
+    50     610   46ms  120ms   █            ┆       210ms      0%
+    90     590   80ms  240ms   ██           ┆       900ms      0%
+   150     410  180ms   2.1s   ░░░░░░░░▒▒▒██┆         3.4s      7%   <- breaks here
+
+Ramp            ░░░░░░░░░▒▒▒██             ~90 of 150 users tested
 
 First failure   errors climb at ~150 users
 Latency wall    p95 crosses 2s at ~150 users
@@ -47,7 +49,9 @@ Likely cause    Server returned 5xx under load — likely an unhandled overload
                 (DB connection pool, worker queue, or an uncaught error path).
 ```
 
-> Illustrative output — your numbers depend on your app.
+> Illustrative output — your numbers depend on your app. Each bar is PreScale's mark in
+> text: sparse `░` → `▒` → a solid `█` end at the measured value, running toward the
+> latency wall (`┆`).
 
 It isn't a framework you program (like k6 or Locust) — there's nothing to script. Point it, get an answer, fix, repeat.
 
