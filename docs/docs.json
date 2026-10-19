@@ -27,7 +27,14 @@
   },
   "navbar": {
     "links": [
-      { "label": "Dashboard", "href": "https://prescale.dev/dashboard" }
+      {
+        "label": "Home",
+        "href": "https://prescale.dev"
+      },
+      {
+        "label": "Dashboard",
+        "href": "https://prescale.dev/dashboard"
+      }
     ],
     "primary": {
       "type": "github",
@@ -38,7 +45,11 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["introduction", "quickstart", "installation"]
+        "pages": [
+          "introduction",
+          "quickstart",
+          "installation"
+        ]
       },
       {
         "group": "Commands",
@@ -53,7 +64,10 @@
       },
       {
         "group": "Dashboard",
-        "pages": ["dashboard/connect", "dashboard/targets"]
+        "pages": [
+          "dashboard/connect",
+          "dashboard/targets"
+        ]
       },
       {
         "group": "Guides",
@@ -79,7 +93,55 @@
   "footer": {
     "socials": {
       "github": "https://github.com/pyjeebz/PreScale"
-    }
+    },
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          {
+            "label": "Home",
+            "href": "https://prescale.dev"
+          },
+          {
+            "label": "Dashboard",
+            "href": "https://prescale.dev/dashboard"
+          },
+          {
+            "label": "Changelog",
+            "href": "https://github.com/pyjeebz/PreScale/releases"
+          },
+          {
+            "label": "What gets uploaded",
+            "href": "/reference/data-boundary"
+          }
+        ]
+      },
+      {
+        "header": "Developers",
+        "items": [
+          {
+            "label": "GitHub",
+            "href": "https://github.com/pyjeebz/PreScale"
+          },
+          {
+            "label": "GitHub Action",
+            "href": "/guides/github-action"
+          },
+          {
+            "label": "MCP server",
+            "href": "/guides/mcp-agents"
+          },
+          {
+            "label": "PyPI",
+            "href": "https://pypi.org/project/prescale/"
+          },
+          {
+            "label": "License (Apache-2.0)",
+            "href": "https://github.com/pyjeebz/PreScale/blob/main/LICENSE"
+          }
+        ]
+      }
+    ]
   },
   "styling": {
     "codeblocks": "system"
