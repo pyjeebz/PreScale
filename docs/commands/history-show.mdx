@@ -1,0 +1,98 @@
+---
+title: "prescale history & show — Browse and Re-render Saved Runs"
+sidebarTitle: "history & show"
+description: "prescale history lists all saved load test runs. prescale show re-renders a run to the terminal or an HTML report without re-running the test."
+---
+
+Every `prescale run` and `prescale investigate` is automatically saved to `.prescale/runs/<id>.json` in your working directory. Use `history` to list all past runs and `show` to re-render any of them — full terminal output or a self-contained HTML report — without sending a single request to your app.
+
+## Usage
+
+```bash
+prescale history                       # list saved runs, newest first
+prescale show                          # re-render the most recent run
+prescale show <id>                     # re-render a specific run by ID
+prescale show <id> --html report.html  # export to a self-contained HTML report
+```
+
+## history
+
+`prescale history` prints a table of saved runs, newest first. Each row shows the run ID, how long ago it ran, the target host, and a one-line verdict.
+
+```text
+        Saved runs (showing 5 of 12)
+ ──────────────────────────────────────────────────────────────────────
+ ID                        When       Target              Verdict
+ 20260629T114520Z-9c1a2b   just now   staging.myapp.com   survives ~90 · breaks 150 (errors)
+ 20260628T173648Z-3b836f   23h ago    staging.myapp.com   survives ~120 · breaks 200 (latency)
+ 20260627T091210Z-a4d5e6   2d ago     localhost:8000      held up (≥200)
+ 20260626T155032Z-c7f8g9   3d ago     staging.myapp.com   survives ~60 · breaks 80 (errors)
+ 20260625T083401Z-b2h3i4   4d ago     localhost:8000      held up (≥200)
+ ──────────────────────────────────────────────────────────────────────
+
+prescale show <id>  ·  no id = latest
+```
+
+### history options
+
+<ParamField query="-n" type="integer" default="20">
+  Maximum number of runs to display. Pass `0` to show all saved runs.
+</ParamField>
+
+<ParamField query="--json" type="boolean">
+  Emit the run list as a JSON array instead of the default table. Each object in the array contains the full run summary — useful for scripting.
+</ParamField>
+
+<ParamField query="--store" type="string">
+  Directory holding saved runs. Defaults to `./.prescale` in the current working directory.
+</ParamField>
+
+## show
+
+`prescale show` reads a saved result and passes it through the same rendering pipeline used during the original run — the output is identical. Use it to revisit a past run, share a report, or re-export to HTML.
+
+### show options
+
+<ParamField path="id" type="string">
+  The run ID to display. If you omit this, `show` re-renders the most recent saved run. Run IDs are shown in the `prescale history` table.
+</ParamField>
+
+<ParamField query="--html" type="string">
+  Write a self-contained HTML report to the given path. The file embeds all styles and chart data — no server required. Share it by email or attach it to a ticket.
+
+  ```bash
+  prescale show 20260628T173648Z-3b836f --html report.html
+  ```
+</ParamField>
+
+<ParamField query="--json" type="boolean">
+  Emit the full saved result as JSON. The schema is identical to `prescale run --json` output — see the JSON contract below.
+</ParamField>
+
+<ParamField query="--store" type="string">
+  Directory holding saved runs. Defaults to `./.prescale` in the current working directory.
+</ParamField>
+
+## JSON contract
+
+Saved `.json` files and `prescale run --json` output share the **same versioned schema**. This means you can script against results however you prefer — pipe a live run into `jq`, store results in a database, or diff them programmatically.
+
+```bash
+# print the result from the latest run as JSON
+prescale show --json | jq '.verdict'
+
+# save the output of a live run and inspect it immediately
+prescale run https://staging.myapp.com --i-own-this --json | jq '.metrics'
+
+# print the full JSON Schema for a saved result
+prescale schema
+```
+
+The schema is versioned — use `prescale schema` to print it at any time.
+
+<Tip>
+  Pass `--no-save` to `prescale run` or `prescale investigate` to skip writing to `.prescale/runs/` entirely — useful in ephemeral CI containers where you want `--json` output only. Use `--store DIR` on any command to change the save location, for example when you want to keep runs for multiple projects separate.
+</Tip>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
