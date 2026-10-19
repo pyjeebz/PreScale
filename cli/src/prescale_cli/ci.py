@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 
 from prescale_cli.bars import bar_rows, route_rows
+from prescale_cli.throughput import VISITOR_NOTE, capacity_rps, visitors_for
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _TIMEOUT = 15.0
@@ -178,6 +179,7 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
 
     lines = [comment_marker(target)]
     band = f"{conf.get('survives_low')}–{conf.get('survives_high')}"
+    rps = capacity_rps(result)
     survives = f"~{verdict['survives_users']} users ({band})"
 
     if comparison:
@@ -186,6 +188,13 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
         lines.append(f"### {emoji} {title}: {base['survives']} → {verdict['survives_users']} "
                      f"users ({_pct(comparison['pct'])})")
         lines.append(f"`{tested_host}` vs `{comparison['against']}` · **{target}**")
+        if rps:
+            base_rps = base.get("capacityRps")
+            was = (f" (was ≈ {base_rps:,.0f} req/s, roughly {visitors_for(base_rps):,})"
+                   if base_rps else "")
+            lines += ["", f"At capacity this deploy handles ≈ {rps:,.0f} req/s, roughly "
+                          f"{visitors_for(rps):,} real visitors{was}. "
+                          f"<sub>Visitors assume {VISITOR_NOTE}.</sub>"]
         lines += [
             "",
             "| | Survives | Band | Peak req/s | Commit |",
@@ -215,6 +224,9 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
     else:
         lines.append(f"### ⚪ First capacity run: survives {survives}")
         lines.append(f"`{tested_host}` · **{target}**")
+        if rps:
+            lines += ["", f"That's ≈ {rps:,.0f} req/s, roughly {visitors_for(rps):,} real "
+                          f"visitors. <sub>Visitors assume {VISITOR_NOTE}.</sub>"]
         lines += ["", f"No `{baseline_branch}` baseline yet. Later pushes to this PR compare "
                       f"with this run; once `{baseline_branch}` has a run, PRs compare with it."]
 
