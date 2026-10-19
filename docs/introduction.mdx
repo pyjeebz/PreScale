@@ -12,7 +12,7 @@ Most load-testing tools are frameworks: you script a scenario, configure a runne
 
 ### Zero config
 
-There is nothing to write before you run your first test. No test scripts, no YAML, no account, no dashboard to configure. One command and a URL is all PreScale needs to get started.
+There is nothing to write before you run your first test. No test scripts, no YAML, no account. One command and a URL is all PreScale needs to get started.
 
 ```bash
 prescale run http://localhost:8000
@@ -26,8 +26,9 @@ PreScale tests a URL, not a framework. It doesn't care whether your app is runni
 
 Rather than handing you a spreadsheet of percentiles and leaving the interpretation to you, PreScale produces a verdict:
 
-```
+```text
 Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+Traffic          ≈ 590 req/s, roughly 5,900 real visitors
 ```
 
 The `investigate` command goes further — it identifies the bottleneck class, names the culprit route, and suggests a concrete fix.
@@ -40,17 +41,22 @@ Load test results are inherently noisy. PreScale represents that honestly: every
 
 Before hitting any non-local host, PreScale pauses and asks you to confirm you own it. The MCP server goes further — it refuses non-local hosts entirely unless you explicitly allowlist them. You won't accidentally hammer a third-party service or rack up a cloud bill without knowing.
 
+### Every deploy, not just once
+
+Capacity changes with every deploy. The [GitHub Action](/guides/github-action) load-tests each preview deploy and keeps one comment on the pull request: the capacity change against `main`, what breaks first, and the fix. A free dashboard at [prescale.dev/dashboard](https://prescale.dev/dashboard) keeps the history per site. Both are optional: the CLI works fully offline, and nothing leaves your machine unless you ask ([what gets uploaded](/reference/data-boundary)).
+
 ## PreScale vs other load testers
 
 PreScale is not a replacement for full-featured load-testing frameworks — it occupies a different niche. If you need to simulate complex multi-step user journeys with custom logic, k6 or Locust are the right tools. If you need a fast, zero-ceremony answer to *"does my app survive the launch?"*, PreScale is built for exactly that.
 
 | | **PreScale** | **Locust** | **k6** |
 | - | - | - | - |
-| Setup required | None — one `pip install` | Write a Python locustfile | Write a JS test script |
+| Setup required | None — one install command | Write a Python locustfile | Write a JS test script |
 | Output | Plain-English verdict + fix | Charts and statistics | Charts and statistics |
 | Bottleneck diagnosis | ✅ Built in | ❌ Manual interpretation | ❌ Manual interpretation |
 | Scripting | Not needed | Required | Required |
 | Confidence band | ✅ Yes | ❌ No | ❌ No |
+| Check on every PR | ✅ GitHub Action with one PR comment | ❌ Build it yourself | ❌ Build it yourself |
 | Safe by default | ✅ Prompts before non-local | ❌ No prompt | ❌ No prompt |
 | Runs on your machine | ✅ Yes | ✅ Yes | ✅ Yes |
 | Best for | Pre-launch readiness, fast feedback loops | Complex scripted scenarios | Complex scripted scenarios |
@@ -59,13 +65,10 @@ PreScale is not a replacement for full-featured load-testing frameworks — it o
 
 <CardGroup cols={2}>
   <Card title="Install PreScale" icon="download" href="/installation">
-    Install the CLI with a single `pip install` command. Requires Python 3.10+.
+    Install the CLI with one command on macOS, Linux or Windows. No Python setup needed.
   </Card>
 
   <Card title="Quickstart" icon="bolt" href="/quickstart">
     Run your first load test in under 5 minutes and read a plain-English verdict.
   </Card>
 </CardGroup>
-
-
-This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
