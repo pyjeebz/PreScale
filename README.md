@@ -42,6 +42,7 @@ Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
    150     410  180ms   2.1s   ░░░░░░░░▒▒▒██┆         3.4s      7%   <- breaks here
 
 Ramp            ░░░░░░░░░▒▒▒██             ~90 of 150 users tested
+Traffic         ≈ 590 req/s, roughly 5,900 real visitors (one request per visitor every 10s)
 
 First failure   errors climb at ~150 users
 Latency wall    p95 crosses 2s at ~150 users
