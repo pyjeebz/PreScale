@@ -1,5 +1,5 @@
 import { Footer, Nav } from "./components/chrome";
-import { Compare, Faq, Features, FinalCta, Hero, Privacy, Product } from "./sections";
+import { Compare, Docs, Faq, Features, FinalCta, Hero, Privacy, Product } from "./sections";
 
 export default function App() {
   return (
@@ -12,6 +12,7 @@ export default function App() {
         <Privacy />
         <Compare />
         <Faq />
+        <Docs />
         <FinalCta />
       </main>
       <Footer />
