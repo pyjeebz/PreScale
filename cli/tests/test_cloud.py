@@ -24,6 +24,7 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.delenv("PRESCALE_TOKEN", raising=False)
     monkeypatch.delenv("PRESCALE_URL", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
 
 
 def _result(run_id="20261015T120000Z-abc123"):
@@ -241,3 +242,109 @@ def test_login_failure_saves_nothing(monkeypatch):
     result = CliRunner().invoke(cli, ["login", "--token", "psk_bad"])
     assert result.exit_code == 1
     assert cloud.load_credentials() is None
+
+
+# --- browser sign-in ----------------------------------------------------------
+
+_LOGIN = cloud.DeviceLogin(
+    device_code="secret-device-code-1234567890", user_code="WDJB-MJHT",
+    verification_url="http://localhost:3001/dashboard/cli",
+    verification_url_complete="http://localhost:3001/dashboard/cli?code=WDJB-MJHT",
+    expires_in=600, interval=2,
+)
+
+
+def test_device_login_round_trip_over_http():
+    polls = iter([(400, {"error": "authorization_pending"}),
+                  (200, {"token": "psk_new", "user": {"login": "pyjeebz"}})])
+
+    def handler(request):
+        if request.url.path.endswith("/api/v1/auth/device"):
+            body = json.loads(request.content)
+            assert body == {"device_name": "laptop", "platform": "Linux 6.6"}
+            return httpx.Response(200, json={
+                "device_code": _LOGIN.device_code, "user_code": _LOGIN.user_code,
+                "verification_url": _LOGIN.verification_url,
+                "verification_url_complete": _LOGIN.verification_url_complete,
+                "expires_in": 600, "interval": 2})
+        assert json.loads(request.content) == {"device_code": _LOGIN.device_code}
+        status, payload = next(polls)
+        return httpx.Response(status, json=payload)
+
+    transport = httpx.MockTransport(handler)
+    url = "http://localhost:3001/dashboard"
+    login = cloud.start_device_login(url, "laptop", "Linux 6.6", transport=transport)
+    assert login == _LOGIN
+    assert cloud.poll_device_login(url, login.device_code, transport=transport)[0] == \
+        "authorization_pending"
+    status, data = cloud.poll_device_login(url, login.device_code, transport=transport)
+    assert (status, data["token"]) == ("approved", "psk_new")
+
+
+def test_device_login_on_an_older_app_points_at_paste():
+    transport = httpx.MockTransport(lambda request: httpx.Response(404, text="Not found"))
+    with pytest.raises(cloud.CloudError, match="--paste"):
+        cloud.start_device_login("http://old.example", "laptop", "Linux", transport=transport)
+
+
+def _browser_login(monkeypatch, polls, opened=None):
+    replies = iter(polls)
+    sleeps = []
+    monkeypatch.setattr("prescale_cli.commands.login.start_device_login",
+                        lambda url, name, platform: _LOGIN)
+    monkeypatch.setattr("prescale_cli.commands.login.poll_device_login",
+                        lambda url, code: next(replies))
+    monkeypatch.setattr("prescale_cli.commands.login.time.sleep", sleeps.append)
+    monkeypatch.setattr("prescale_cli.commands.login.webbrowser.open",
+                        lambda link: (opened.append(link) if opened is not None else None) or True)
+    return sleeps
+
+
+def test_login_approved_in_browser_saves_token(monkeypatch):
+    opened = []
+    sleeps = _browser_login(monkeypatch, [
+        ("authorization_pending", {}),
+        ("slow_down", {}),
+        ("approved", {"token": "psk_from_browser", "user": {"login": "pyjeebz"}}),
+    ], opened)
+    result = CliRunner().invoke(cli, ["login", "--url", "http://localhost:3001/dashboard"])
+    assert result.exit_code == 0, result.output
+    assert "WDJB-MJHT" in result.output and "@pyjeebz" in result.output
+    assert opened == [_LOGIN.verification_url_complete]
+    assert sleeps == [2, 2, 7]  # slow_down adds 5 seconds to the interval
+    creds = cloud.load_credentials()
+    assert (creds.url, creds.token) == ("http://localhost:3001/dashboard", "psk_from_browser")
+
+
+def test_login_cancelled_in_browser_saves_nothing(monkeypatch):
+    _browser_login(monkeypatch, [("access_denied", {"message": "cancelled"})])
+    result = CliRunner().invoke(cli, ["login"])
+    assert result.exit_code == 1
+    assert "Cancelled in the browser" in result.output
+    assert cloud.load_credentials() is None
+
+
+def test_login_expired_code_saves_nothing(monkeypatch):
+    _browser_login(monkeypatch, [("expired_token", {"message": "The login code expired."})])
+    result = CliRunner().invoke(cli, ["login"])
+    assert result.exit_code == 1
+    assert "expired" in result.output
+    assert cloud.load_credentials() is None
+
+
+def test_login_over_ssh_prints_the_link_instead_of_opening_a_browser(monkeypatch):
+    monkeypatch.setenv("SSH_CONNECTION", "10.0.0.1 22 10.0.0.2 22")
+    opened = []
+    _browser_login(monkeypatch, [("approved", {"token": "psk_x", "user": {}})], opened)
+    result = CliRunner().invoke(cli, ["login"])
+    assert result.exit_code == 0, result.output
+    assert opened == []
+    assert _LOGIN.verification_url_complete in result.output.replace("\n", "")
+
+
+def test_login_paste_keeps_the_token_flow(monkeypatch):
+    monkeypatch.setattr("prescale_cli.commands.login.whoami",
+                        lambda creds: {"user": {"login": "pyjeebz"}})
+    result = CliRunner().invoke(cli, ["login", "--paste"], input="psk_pasted\n")
+    assert result.exit_code == 0, result.output
+    assert cloud.load_credentials().token == "psk_pasted"
