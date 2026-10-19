@@ -15,6 +15,8 @@ from pathlib import Path
 
 import httpx
 
+from prescale_cli.bars import bar_rows, route_rows
+
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _TIMEOUT = 15.0
 
@@ -192,6 +194,16 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
             f"{round(base['peakRps'])} | `{base.get('commit') or '-'}` |",
             f"| this deploy | ~{verdict['survives_users']} | {conf.get('survives_low')}–"
             f"{conf.get('survives_high')} | {round(verdict['peak_rps'])} | `{commit or '-'}` |",
+            "",
+            # The same comparison in PreScale's bar: ░ sparse → ▒ → █ the measured capacity.
+            "```text",
+            *bar_rows(
+                [(comparison["against"], base["survives"], f"~{base['survives']}"),
+                 ("this deploy", verdict["survives_users"],
+                  f"~{verdict['survives_users']}  {_pct(comparison['pct'])}")],
+                max(base["survives"], base.get("high") or 0, verdict["survives_users"], 1) * 1.1,
+            ),
+            "```",
         ]
         if comparison["kind"] == "inconclusive":
             lines += ["", f"This run held to all {verdict['max_tested']} users it tested, below "
@@ -219,6 +231,13 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
                          f"({investigation['confidence']} confidence) · {investigation['summary']}")
             if investigation.get("remediation"):
                 lines += ["", "**Fix:**"] + [f"- {fix}" for fix in investigation["remediation"]]
+        # The routes at the stage that broke, as bars toward the latency wall (│).
+        stages = result.get("stages", [])
+        stage = next((s for s in stages if s.get("users") == verdict["onset_users"]), None)
+        wall = (result.get("config") or {}).get("latency_wall_s", 2.0)
+        if stage and len(stage.get("routes") or {}) > 1:
+            caption = f"p95 per route at {stage['users']} users · ┆ = the {wall:g}s latency wall"
+            lines += ["", f"<sub>{caption}</sub>", "", "```text", *route_rows(stage, wall), "```"]
 
     links = [f"[Open the run]({upload['url']})"] if upload.get("url") else []
     if target_info.get("url"):
