@@ -12,7 +12,7 @@ from rich.live import Live
 from rich.table import Table
 
 from prescale_cli.loadtest import StageResult
-from prescale_cli.render import _err, _ms
+from prescale_cli.render import _err, _ms, latency_bar
 
 
 def _ramp_table(rows: list[tuple[int, StageResult | None]], latency_wall: float,
@@ -24,12 +24,13 @@ def _ramp_table(rows: list[tuple[int, StageResult | None]], latency_wall: float,
     table.add_column("Req/s", justify="right")
     table.add_column("p50", justify="right")
     table.add_column("p95", justify="right")
+    table.add_column(f"vs {latency_wall:g}s wall", no_wrap=True)
     table.add_column("p99", justify="right")
     table.add_column("Errors", justify="right")
     for users, stage in rows:
         if stage is None:
             dim = "[dim]…[/dim]"
-            table.add_row(str(users), dim, dim, dim, dim, "[dim]running…[/dim]")
+            table.add_row(str(users), dim, dim, dim, dim, dim, "[dim]running…[/dim]")
             continue
         p95 = stage.pct(0.95) * 1000
         crossed = stage.error_rate >= 0.02 or p95 >= latency_wall * 1000
@@ -38,6 +39,7 @@ def _ramp_table(rows: list[tuple[int, StageResult | None]], latency_wall: float,
             f"{stage.rps:.0f}",
             _ms(stage.pct(0.5) * 1000),
             _ms(p95),
+            latency_bar(p95, latency_wall, broke=crossed),
             _ms(stage.pct(0.99) * 1000),
             _err(stage.error_rate),
             style="bold red" if crossed else None,
