@@ -60,6 +60,9 @@ const MENU_DEV = [
   { label: "Changelog", href: LINKS.releases },
 ];
 
+const GITHUB_ICON =
+  "M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.7 5.4-5.26 5.68.41.35.77 1.05.77 2.12 0 1.53-.01 2.76-.01 3.14 0 .31.21.68.8.56A11.52 11.52 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z";
+
 const SECTIONS = MENU_MAIN.filter((link) => link.href.startsWith("#")).map((link) => link.href.slice(1));
 
 /** The section currently under the nav, so the menu can mark it. */
@@ -146,7 +149,15 @@ export function Nav() {
             <RampLogo />
           </a>
 
-          <div ref={menu} className="pointer-events-auto absolute left-1/2 top-2.5 -translate-x-1/2">
+          <div
+            ref={menu}
+            className={cn(
+              // z-20: the open panel covers the right-hand buttons on narrow screens.
+              "pointer-events-auto absolute top-2.5 z-20 sm:left-1/2 sm:-translate-x-1/2",
+              // Phones have no room for a centred pill next to the right-hand actions.
+              open ? "left-4" : "left-[76px]",
+            )}
+          >
             <div
               className={cn(
                 "relative rounded-[28px] p-1.5 transition-[width] duration-[450ms] ease-[var(--ease-out)] motion-reduce:transition-none",
@@ -232,9 +243,14 @@ export function Nav() {
                         </MenuGroup>
                       </div>
                       <div className="mx-4 flex items-center justify-between border-t border-border/70 py-3.5 text-[13px] text-muted-foreground">
-                        <a href={LINKS.data} onClick={close} className="transition-colors duration-150 hover:text-foreground">
-                          What gets uploaded
-                        </a>
+                        <span className="flex items-center gap-4">
+                          <a href={LINKS.dashboard} onClick={close} className="font-medium text-foreground sm:hidden">
+                            Log in
+                          </a>
+                          <a href={LINKS.data} onClick={close} className="transition-colors duration-150 hover:text-foreground">
+                            What gets uploaded
+                          </a>
+                        </span>
                         <span className="font-mono text-[11px]">Apache-2.0</span>
                       </div>
                     </motion.nav>
@@ -244,12 +260,32 @@ export function Nav() {
             </div>
           </div>
 
-          <a
-            href={LINKS.dashboard}
-            className="pointer-events-auto inline-flex h-10 items-center rounded-full bg-foreground px-4 text-sm font-medium text-background shadow-[inset_0_1px_0_rgb(255_255_255/0.5),0_8px_20px_-10px_rgb(0_0_0/0.8)] transition-[background-color,transform] duration-150 ease-[var(--ease-out)] active:scale-[.97] [@media(hover:hover)]:hover:bg-white"
-          >
-            Get started
-          </a>
+          <div className="pointer-events-auto flex items-center gap-2">
+            {/* Open source and free: say so in the bar, not only in the menu. */}
+            <a
+              href={LINKS.repo}
+              {...external(LINKS.repo)}
+              aria-label="PreScale on GitHub (open source)"
+              className="glass-control inline-flex h-10 items-center gap-2 rounded-full px-3 text-sm font-medium transition-[transform,opacity] duration-150 ease-[var(--ease-out)] active:scale-[.97] md:px-4 [@media(hover:hover)]:hover:opacity-85"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
+                <path d={GITHUB_ICON} />
+              </svg>
+              <span className="hidden md:inline">GitHub</span>
+            </a>
+            <a
+              href={LINKS.dashboard}
+              className="hidden h-10 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground sm:inline-flex"
+            >
+              Log in
+            </a>
+            <a
+              href={LINKS.dashboard}
+              className="inline-flex h-10 items-center rounded-full bg-foreground px-4 text-sm font-medium text-background shadow-[inset_0_1px_0_rgb(255_255_255/0.5),0_8px_20px_-10px_rgb(0_0_0/0.8)] transition-[background-color,transform] duration-150 ease-[var(--ease-out)] active:scale-[.97] [@media(hover:hover)]:hover:bg-white"
+            >
+              Get started
+            </a>
+          </div>
         </div>
       </header>
     </MotionConfig>
