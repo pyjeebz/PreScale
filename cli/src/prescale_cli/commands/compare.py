@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from prescale_cli.bars import text_bar
 from prescale_cli.compare import compare_results, resolve, to_markdown
 from prescale_cli.result import AmbiguousResultError, ResultNotFoundError
 
@@ -79,11 +80,16 @@ def _render(cmp: dict) -> None:
     table = Table(show_header=True, header_style="bold magenta", title="Capacity compare")
     table.add_column("")
     table.add_column("Survives", justify="right")
+    table.add_column("Capacity", no_wrap=True)
     table.add_column("Peak req/s", justify="right")
     table.add_column("Commit")
     table.add_column("When")
+    # Both runs on one scale, in the brand's bar: the drop (or gain) is visible at a glance.
+    scale = max(o["survives_users"], n["survives_users"], 1) * 1.1
     for label, f in (("old", o), ("new", n)):
-        table.add_row(label, str(f["survives_users"]), f"{f['peak_rps']:.0f}",
+        tone = "cyan" if label == "old" else color
+        bar = f"[{tone}]{text_bar(f['survives_users'], scale, width=24)}[/{tone}]"
+        table.add_row(label, str(f["survives_users"]), bar, f"{f['peak_rps']:.0f}",
                       f["commit"] or "-", f["created_at"] or "-")
     console.print(table)
     note = "" if (cmp["confident"] or not cmp["regressed"]) else \
