@@ -4,6 +4,7 @@ import { CALM, checker, sparse } from "./dots";
 import { Logo, RampLogo } from "./logo";
 import { MiniBar } from "./mini-bar";
 import { CopyButton, buttonPrimary, buttonSecondary, cn } from "./ui";
+import { DOGFOOD, type DogfoodRun } from "../data/dogfood";
 
 export const LINKS = {
   dashboard: "/dashboard",
@@ -397,13 +398,35 @@ const dots = (cell: string) => `conic-gradient(${WORD_COLOR} 25%, transparent 0)
 const checks = (cell: string) =>
   `conic-gradient(${WORD_COLOR} 25%, transparent 0 50%, ${WORD_COLOR} 0 75%, transparent 0) 0 0 / ${cell} ${cell}`;
 
+/*
+ * With a real run on prescale.dev (data/dogfood.ts), the word is our own load
+ * test instead: one vertical slice per ramp stage, left to right, filled by that
+ * stage's p95 on a log scale from the run's fastest stage to its slowest.
+ */
+function dogfoodLayers(run: DogfoodRun, cell: string): Array<[string, string]> {
+  const p95s = run.stages.map((stage) => stage.p95);
+  const low = Math.log(Math.min(...p95s));
+  const span = Math.log(Math.max(...p95s)) - low || 1;
+  const width = 100 / run.stages.length;
+  return run.stages.map((stage, index) => {
+    const t = (Math.log(stage.p95) - low) / span;
+    const fill = t < 1 / 3 ? dots(cell) : t < 2 / 3 ? checks(cell) : WORD_COLOR;
+    // A hair of overlap so neighbouring slices don't leave a seam.
+    const left = Math.max(index * width - 0.05, 0);
+    const right = Math.max(100 - (index + 1) * width - 0.05, 0);
+    return [fill, `inset(0 ${right.toFixed(2)}% 0 ${left.toFixed(2)}%)`];
+  });
+}
+
 function DotWordmark() {
   const cell = "var(--cell)";
-  const layers: Array<[string, string]> = [
-    [dots(cell), "inset(0 46% 0 0)"],
-    [checks(cell), "inset(0 20% 0 54%)"],
-    [WORD_COLOR, "inset(0 0 0 80%)"],
-  ];
+  const layers: Array<[string, string]> = DOGFOOD
+    ? dogfoodLayers(DOGFOOD, cell)
+    : [
+        [dots(cell), "inset(0 46% 0 0)"],
+        [checks(cell), "inset(0 20% 0 54%)"],
+        [WORD_COLOR, "inset(0 0 0 80%)"],
+      ];
   return (
     <div
       aria-hidden
@@ -420,6 +443,28 @@ function DotWordmark() {
         </span>
       ))}
     </div>
+  );
+}
+
+const ms = (value: number) => (value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`);
+
+/** Says where the wordmark's dots come from, and links to the run. */
+function DogfoodCaption({ run }: { run: DogfoodRun }) {
+  const p95s = run.stages.map((stage) => stage.p95);
+  const date = new Date(run.measuredAt).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
+  const text = `The wordmark below is our own load test: p95 per stage on ${run.host}, ${ms(Math.min(...p95s))} to ${ms(Math.max(...p95s))}, ${date}.`;
+  return (
+    <p className="text-xs text-muted-foreground">
+      {text}
+      {run.report && (
+        <>
+          {" "}
+          <a href={run.report} className="underline decoration-border underline-offset-4 transition-colors duration-150 hover:text-foreground">
+            See the run
+          </a>
+        </>
+      )}
+    </p>
   );
 }
 
@@ -451,8 +496,9 @@ export function Footer() {
           </div>
         ))}
       </div>
-      <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
+      <div className="mx-auto flex max-w-[1200px] flex-wrap justify-between gap-x-8 gap-y-2 px-4 sm:px-8">
         <p className="text-xs text-muted-foreground">© 2026 PreScale. The CLI is open source under Apache-2.0.</p>
+        {DOGFOOD && <DogfoodCaption run={DOGFOOD} />}
       </div>
       <DotWordmark />
     </footer>
