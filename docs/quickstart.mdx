@@ -1,0 +1,130 @@
+---
+title: "PreScale Quickstart: Run Your First Load Test Fast"
+sidebarTitle: "Quickstart"
+description: "Install PreScale and run your first load test in minutes. Ramp traffic at a local or staging URL and get a plain-English capacity verdict."
+---
+
+PreScale is designed to give you a meaningful load-test result as fast as possible. You don't write any scripts or configure anything — you install the CLI, point it at a URL, and read the verdict. This guide walks you through the four most useful commands from a cold start.
+
+<Steps>
+  <Step title="Install">
+    Install the PreScale CLI with `pip`:
+
+    ```bash
+    pip install prescale
+    ```
+
+    Verify the install succeeded:
+
+    ```bash
+    prescale --version
+    ```
+
+    You should see `prescale, version 0.2.1`. If you see a "command not found" error, make sure your Python `bin` or `Scripts` directory is on your `PATH`.
+  </Step>
+
+  <Step title="Run a load test">
+    Point PreScale at your local app and ramp traffic up until something breaks:
+
+    ```bash
+    prescale run http://localhost:8000
+    ```
+
+    PreScale steps virtual users up from 1 to 200 (by default), measuring throughput, latency percentiles, and error rates at each level. When it finds the first level where errors or latency cross the threshold, it marks the break and prints a verdict:
+
+    ```text
+    PreScale — load testing http://localhost:8000 (1 route)
+
+     Users   Req/s    p50    p95    p99   Errors
+        10     520   18ms   31ms   44ms      0%
+        50     610   46ms  120ms  210ms      0%
+        90     590   80ms  240ms  900ms      0%
+       150     410  180ms   2.1s   3.4s      7%  <- breaks here
+
+    Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+    ```
+
+    The verdict includes a confidence band (`75–110`) so you can see how much to trust the number. Every run is saved to `./.prescale/runs/` for later inspection.
+  </Step>
+
+  <Step title="Investigate why">
+    `prescale run` tells you *what* breaks. `prescale investigate` tells you *why* and *how to fix it*. It finds the culprit route, probes it under load vs at baseline, classifies the bottleneck, and prescribes a concrete fix — all locally, with no LLM involved:
+
+    ```bash
+    prescale investigate http://localhost:8000
+    ```
+
+    Example output:
+
+    ```text
+    🔬 Diagnosis
+    Likely cause: 5xx under load while static assets held — the app/backend is the wall.
+    Bottleneck  connection_pool (high confidence)  ·  culprit /api/search
+    Evidence
+      • culprit p95 28ms at 1 user vs 2100ms at 150 users
+      • static /assets/app.js held at 150 users
+      • errors under load: 5xx (180)
+    Try this
+      → Increase the DB/upstream connection-pool size.
+      → Add a pooler (e.g. pgbouncer) and check the pool checkout timeout.
+    ```
+
+    You can also re-investigate the most recent saved run without re-running the ramp:
+
+    ```bash
+    prescale investigate
+    ```
+  </Step>
+
+  <Step title="Audit HTTP hygiene">
+    Before you worry about concurrency, make sure your app isn't leaving performance on the table at the HTTP layer. `prescale audit` runs a fast, load-free check of compression, caching, CDN presence, and HTTP version — no traffic ramp required:
+
+    ```bash
+    prescale audit https://myapp.com
+    ```
+
+    Example output:
+
+    ```text
+    ✓ Compression           Responses are compressed (br).
+    ⚠ HTTP version          Served over HTTP/1.1.
+    ⚠ Static asset caching  2 of 6 sampled assets have no caching headers.
+    ✓ CDN / edge cache      Detected (Cloudflare).
+    ```
+
+    This command is cheap enough to run on every commit in CI.
+  </Step>
+</Steps>
+
+<Tip>
+  When testing a staging URL you own, add `--i-own-this` to skip the confirmation prompt:
+
+  ```bash
+  prescale run https://staging.myapp.com --i-own-this
+  ```
+
+  This is especially useful in CI pipelines, where there's no interactive terminal to respond to a prompt.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="run command reference" icon="play" href="/commands/run">
+    Explore all options for the `run` command: user counts, latency walls, RPS caps, HTML reports, and more.
+  </Card>
+
+  <Card title="investigate command reference" icon="microscope" href="/commands/investigate">
+    Learn how PreScale diagnoses bottlenecks and what each bottleneck class means for your stack.
+  </Card>
+
+  <Card title="CI regression gating" icon="shield-check" href="/guides/ci-regression">
+    Use `--fail-under` and `prescale compare` to catch capacity regressions automatically in your CI pipeline.
+  </Card>
+
+  <Card title="Launch readiness guide" icon="rocket" href="/guides/launch-readiness">
+    Use `--profile` to frame your results against real launch scenarios like a Product Hunt drop or a HN front page.
+  </Card>
+</CardGroup>
+
+
+This documentation is built and hosted on [Mintlify](https://mintlify.com), a developer documentation platform.
