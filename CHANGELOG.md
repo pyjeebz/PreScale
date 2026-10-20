@@ -5,6 +5,23 @@
 PreScale 1.0: the CLI can now send runs to your PreScale dashboard and check every
 deploy from CI. It still works fully offline, and nothing is uploaded unless you ask.
 
+### Highlights
+- **A capacity check on every pull request.** The GitHub Action load-tests each preview
+  deploy and keeps one comment on the PR: how many users this deploy survives compared with
+  `main`, what breaks first, why, and the fix.
+- **A free dashboard at [prescale.dev/dashboard](https://prescale.dev/dashboard).** Each site
+  gets a capacity timeline that names the commit where a regression started. Runs are private
+  until you share one.
+- **Launch Guard.** Pick a launch (Product Hunt, Hacker News, Black Friday) and get GO, RISKY
+  or NO-GO, with the fix when it isn't GO. Sign off a GO and add a live README badge that
+  turns red if capacity drops.
+- **Capacity as traffic.** Every verdict says what "survives ~N users" means in requests per
+  second and roughly how many real visitors that is.
+- **One-line install, one-click login.** No Python setup, and `prescale login` is approved
+  in your browser.
+- **Still local first.** Nothing is uploaded unless you ask, and
+  `prescale upload --dry-run` shows the exact payload first.
+
 ### Added
 - **One-line install**, no Python setup: `curl -fsSL https://prescale.dev/install | sh`
   (macOS, Linux) or `irm https://prescale.dev/install.ps1 | iex` (Windows). Installs into
