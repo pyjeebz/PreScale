@@ -30,7 +30,7 @@
   h1 .dim { color: var(--muted); font-weight: 400; }
 
   /* The ramp: one row per load stage. */
-  .chart { position: absolute; left: 64px; right: 64px; top: 312px; }
+  .chart { position: absolute; left: 64px; right: 64px; top: 340px; }
   .row { display: grid; grid-template-columns: 92px 1fr; align-items: center; height: 18px; margin-bottom: 21px; }
   .users { font-size: 13px; color: var(--dim); }
   .track { position: relative; height: 18px; }
@@ -41,17 +41,12 @@
   .ms { position: absolute; top: 1px; font-size: 13px; color: var(--muted); white-space: nowrap; }
 
   /* The latency wall, and the bar that goes through it. */
-  .wall { position: absolute; top: 300px; height: 238px; width: 1px;
+  .wall { position: absolute; top: 328px; height: 238px; width: 1px;
           background: linear-gradient(var(--dim) 55%, transparent 0) 0 0 / 1px 7px; }
-  .wall-label { position: absolute; top: 276px; font-size: 13px; color: var(--dim); transform: translateX(-50%); white-space: nowrap; }
+  .wall-label { position: absolute; top: 304px; font-size: 13px; color: var(--dim); transform: translateX(-50%); white-space: nowrap; }
   .glow { position: absolute; width: 420px; height: 200px; border-radius: 50%;
           background: radial-gradient(closest-side, rgb(238 75 68 / .22), transparent); filter: blur(6px); }
   .break { color: var(--red); }
-  /* The why, in the CLI's voice. */
-  .verdict { position: absolute; left: 64px; top: 558px; font-size: 15px; color: var(--muted); white-space: nowrap; }
-  .verdict .fg { color: var(--fg); }
-  .verdict .red { color: var(--red); }
-  .verdict .sep { color: var(--dim); padding: 0 6px; }
 </style>
 </head>
 <body>
@@ -60,13 +55,12 @@
     <div class="url mono">prescale.dev</div>
   </div>
 
-  <h1><span>Load-test your app</span><span class="dim">and find out why it breaks.</span></h1>
+  <h1><span>Capacity checks that</span><span class="dim">run themselves.</span></h1>
 
   <div class="chart" id="chart"></div>
   <div class="glow" id="glow"></div>
   <div class="wall" id="wall"></div>
   <div class="wall-label mono" id="wallLabel">2s latency wall</div>
-  <div class="verdict mono"><span class="fg">survives ~100 users</span><span class="sep">·</span>breaks at <span class="red">/api/search</span><span class="sep">→</span><span class="fg">DB connection pool exhausted</span></div>
 
   <script>
     const CALM = ["#3FD3DE", "#A56EF7", "#F05BAA", "#4B8EF3", "#C9CBF2"];
@@ -102,7 +96,7 @@
     const wallX = 64 + 92 + width * wallAt;
     Object.assign(document.getElementById("wall").style, { left: `${wallX}px` });
     Object.assign(document.getElementById("wallLabel").style, { left: `${wallX}px` });
-    const lastRowY = 312 + 5 * 39 + 9;
+    const lastRowY = 340 + 5 * 39 + 9;
     Object.assign(document.getElementById("glow").style, { left: `${wallX - 150}px`, top: `${lastRowY - 100}px` });
   </script>
 </body>
