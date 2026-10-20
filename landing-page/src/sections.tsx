@@ -37,10 +37,10 @@ export function Hero() {
       <HeroBars />
       <div className={cn(container, "relative flex flex-col items-center py-20 text-center")}>
         <h1 className="max-w-[1000px] text-[clamp(40px,7.4vw,84px)] leading-[1.02] tracking-[-0.035em] text-balance">
-          <span className="block font-medium text-foreground">Load-test your app</span>
-          <span className="block font-normal text-muted-foreground">and find out why it breaks</span>
+          <span className="block font-medium text-foreground">Capacity checks that</span>
+          <span className="block font-normal text-muted-foreground">run themselves.</span>
         </h1>
-        <p className="mt-7 text-lg text-muted-foreground sm:text-xl">Then again on every deploy.</p>
+        <p className="mt-7 max-w-[700px] text-lg text-pretty text-muted-foreground sm:text-xl">One command load-tests every deploy and tells you why it breaks.</p>
         <div id="install" className="mt-9 flex w-full scroll-mt-24 flex-col items-center gap-4">
           <InstallBox />
           <Ctas />
