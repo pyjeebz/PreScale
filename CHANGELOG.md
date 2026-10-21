@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — Unreleased
+## 1.0.0 — 2026-10-20
 
 PreScale 1.0: the CLI can now send runs to your PreScale dashboard and check every
 deploy from CI. It still works fully offline, and nothing is uploaded unless you ask.
