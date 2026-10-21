@@ -23,7 +23,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from prescale_cli import __version__
-from prescale_cli.loadtest import RunReport, StageResult, generator_saturation, route_label
+from prescale_cli.loadtest import (
+    RunReport,
+    StageResult,
+    edge_notes,
+    generator_saturation,
+    route_label,
+)
 
 SCHEMA_VERSION = 1
 
@@ -60,6 +66,9 @@ def build_result(report: RunReport, *, url: str, targets: list[str],
         note = (f"PreScale's own machine was the bottleneck from ~{users} users (it fell "
                 f"{lag:.0f}ms behind), so results above that level may understate your app. "
                 "Try --max-rps, fewer users, or a bigger machine.")
+        warning = f"{warning} {note}" if warning else note
+    # A CDN that blocked or cached the test shaped the result, not the app: say so.
+    for note in edge_notes(report.stages):
         warning = f"{warning} {note}" if warning else note
     return {
         "schema_version": SCHEMA_VERSION,
