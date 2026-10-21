@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.1 — 2026-10-21
+
+### Fixed
+- **Sites behind a CDN no longer get blamed for the CDN's limits.** Load-testing a site on
+  Vercel or Cloudflare from one machine can trip the CDN's DDoS protection, or measure its
+  cache instead of your app. PreScale now tells you:
+  - Responses marked by the CDN's firewall (`x-vercel-mitigated`, `cf-mitigated`) count as
+    *blocked by Vercel's firewall* (or Cloudflare's), not as fast successes, and the report
+    says from which level and how to exempt your IP for the test.
+  - If the first request is already blocked, PreScale stops before sending any load.
+  - Routes answered from the CDN's cache (`x-vercel-cache`, `cf-cache-status`, `x-cache`)
+    are called out: a slowdown there is the CDN limiting one IP, not your app's capacity.
+  - `investigate` reports these as `edge_protection` with fixes that apply, instead of a
+    concurrency ceiling.
+
 ## 1.0.0 — 2026-10-20
 
 PreScale 1.0: the CLI can now send runs to your PreScale dashboard and check every
