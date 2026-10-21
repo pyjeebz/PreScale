@@ -186,6 +186,9 @@ class RouteStat:
     latencies: list[float] = field(default_factory=list)  # successful, seconds
     status_counts: dict[int, int] = field(default_factory=dict)
     error_kinds: dict[str, int] = field(default_factory=dict)
+    # Successful responses a CDN served from its cache, so the app never saw them.
+    cache_hits: int = 0
+    cache_source: str | None = None
 
     @property
     def error_rate(self) -> float:
@@ -287,11 +290,17 @@ class _Sink:
     def _kind(self, stat: RouteStat, kind: str) -> None:
         stat.error_kinds[kind] = stat.error_kinds.get(kind, 0) + 1
 
-    def record_response(self, target: str, status: int, latency: float) -> None:
+    def record_response(self, target: str, status: int, latency: float,
+                        headers=None) -> None:
         stat = self._stat(target)
         stat.total += 1
         stat.status_counts[status] = stat.status_counts.get(status, 0) + 1
-        if status >= 500:
+        blocker = edge_blocker(headers)
+        if blocker:
+            # A challenge or block page from the CDN's firewall: the app never answered.
+            stat.errors += 1
+            self._kind(stat, f"blocked by {blocker}")
+        elif status >= 500:
             stat.errors += 1
             self._kind(stat, "5xx")
         elif status == 429:
@@ -299,6 +308,10 @@ class _Sink:
             self._kind(stat, "rate limited (429)")
         else:
             stat.latencies.append(latency)
+            source = cache_source(headers)
+            if source:
+                stat.cache_hits += 1
+                stat.cache_source = source
 
     def record_error(self, target: str, kind: str) -> None:
         stat = self._stat(target)
@@ -347,7 +360,8 @@ async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
         start = time.perf_counter()
         try:
             resp = await client.request(method, target)
-            sink.record_response(target, resp.status_code, time.perf_counter() - start)
+            sink.record_response(target, resp.status_code, time.perf_counter() - start,
+                                 resp.headers)
         except httpx.TimeoutException:
             sink.record_error(target, "timeout")
         except httpx.ConnectError:
@@ -431,6 +445,8 @@ def _merge_stages(group: list[StageResult]) -> StageResult:
                 m.status_counts[code] = m.status_counts.get(code, 0) + n
             for kind, n in rs.error_kinds.items():
                 m.error_kinds[kind] = m.error_kinds.get(kind, 0) + n
+            m.cache_hits += rs.cache_hits
+            m.cache_source = m.cache_source or rs.cache_source
     return StageResult(users=group[0].users, duration=sum(s.duration for s in group),
                        routes=merged, samples=len(group),
                        loop_lag_ms=max(s.loop_lag_ms for s in group))
@@ -477,6 +493,15 @@ async def run_loadtest(
             preflight = await client.request(method, targets[0])
         except httpx.HTTPError as exc:
             raise LoadError(f"Couldn't reach {targets[0]}: {exc}") from exc
+        blocker = edge_blocker(preflight.headers)
+        if blocker:
+            # Load now would only measure the firewall, and deepen the block.
+            raise LoadError(
+                f"{_capitalize(blocker)} is blocking requests from this machine (it answered "
+                f"the first request with HTTP {preflight.status_code}), so a load test would "
+                f"only measure the firewall. Exempt your IP for the test ({_BYPASS_HINT}), "
+                "or wait for the block to lift, then run again."
+            )
         if preflight.status_code >= 400:
             warning = (
                 f"First request returned HTTP {preflight.status_code} — "
@@ -530,6 +555,66 @@ async def measure_route(client: httpx.AsyncClient, url: str, *, users: int,
     return await _run_stage(client, [url], method, users, seconds)
 
 
+# A CDN's firewall marks the challenge or block pages it serves instead of the app.
+_MITIGATION_HEADERS = {"x-vercel-mitigated": "Vercel's firewall",
+                       "cf-mitigated": "Cloudflare's firewall"}
+# Cache headers, and the values that mean the CDN answered from its cache.
+_CACHE_HEADERS = {"x-vercel-cache": "Vercel", "cf-cache-status": "Cloudflare",
+                  "x-cache": "the CDN"}
+_CACHE_HITS = {"hit", "stale", "prerender", "revalidated"}
+_BYPASS_HINT = "on Vercel: vercel firewall system-bypass add <your-ip>, removed afterwards"
+_CACHED_SHARE = 0.9
+
+
+def _capitalize(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
+def edge_blocker(headers) -> str | None:
+    """Which firewall answered instead of the app, if any."""
+    if headers is None:
+        return None
+    return next((label for name, label in _MITIGATION_HEADERS.items() if headers.get(name)),
+                None)
+
+
+def cache_source(headers) -> str | None:
+    """The CDN that served this response from its cache, if any."""
+    if headers is None:
+        return None
+    for name, label in _CACHE_HEADERS.items():
+        words = (headers.get(name) or "").lower().replace("_", " ").split()
+        if _CACHE_HITS.intersection(words):
+            return label
+    return None
+
+
+def edge_notes(stages: list[StageResult]) -> list[str]:
+    """Plain-English warnings when a CDN, not the app, shaped the result: its
+    firewall blocked the test, or it answered most requests from its cache."""
+    notes: list[str] = []
+    blocked = next(((stage.users, kind.removeprefix("blocked by "))
+                    for stage in stages for route in stage.routes.values()
+                    for kind in route.error_kinds if kind.startswith("blocked by ")), None)
+    if blocked:
+        users, blocker = blocked
+        notes.append(f"{_capitalize(blocker)} started blocking this test at ~{users} users: it "
+                     "treats load from one IP as an attack, so results from there measure the "
+                     f"firewall, not your app. Exempt your IP for the test ({_BYPASS_HINT}) "
+                     "and run again.")
+    routes = [route for stage in stages for route in stage.routes.values()]
+    served = sum(len(route.latencies) for route in routes)
+    hits = sum(route.cache_hits for route in routes)
+    if served and hits / served >= _CACHED_SHARE:
+        source = next(route.cache_source for route in routes if route.cache_source)
+        notes.append(f"{hits / served:.0%} of responses came from {source}'s cache, so this "
+                     f"mostly tested {source}, not your app. If latency climbed, that's "
+                     f"{source} limiting traffic from one IP. For your app's capacity, test a "
+                     "route that isn't cached (an API, or a page rendered per request), or "
+                     "exempt your IP for the test.")
+    return notes
+
+
 def detect_saturation(stages: list[StageResult]) -> SaturationInfo:
     """Throughput plateau: if rps stops climbing while users keep rising, the
     target has hit a concurrency ceiling (capacity) — not just slow responses."""
@@ -544,6 +629,13 @@ def detect_saturation(stages: list[StageResult]) -> SaturationInfo:
 
 
 def _bottleneck_hint(stat: RouteStat, reason: str, sat: SaturationInfo) -> str:
+    served = len(stat.latencies)
+    if reason == "latency" and served and stat.cache_hits / served >= _CACHED_SHARE:
+        source = stat.cache_source
+        return (
+            f"Served from {source}'s cache, so your app never saw these requests: the "
+            f"slowdown is {source} limiting traffic from one IP, not your app's capacity."
+        )
     if reason == "latency":
         if sat.saturated:
             return (
@@ -556,6 +648,12 @@ def _bottleneck_hint(stat: RouteStat, reason: str, sat: SaturationInfo) -> str:
             "still climbing. Often a slow query, an N+1, or a missing cache."
         )
     kind = max(stat.error_kinds, key=stat.error_kinds.get) if stat.error_kinds else ""
+    if kind.startswith("blocked by "):
+        return (
+            f"{_capitalize(kind.removeprefix('blocked by '))} blocked the test: it treats load "
+            "from one IP as an attack, so this measures the firewall, not your app. Exempt "
+            f"your IP for the test ({_BYPASS_HINT}) and run again."
+        )
     if kind == "5xx":
         server_errors = {c: n for c, n in stat.status_counts.items() if c >= 500}
         if server_errors and max(server_errors, key=server_errors.get) == 503:
