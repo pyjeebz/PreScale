@@ -271,6 +271,8 @@ It's self-contained (httpx + asyncio) — no external load tool or server requir
 
 Load testing sends real traffic and can cause real outages or bills. PreScale defaults to safe — it prompts before hitting any non-local host (and the MCP server refuses non-local hosts unless you allowlist them). Point it at a **staging / preview** URL, not production, unless you know what you're doing.
 
+**Behind a CDN (Vercel, Cloudflare)?** Load from one machine can look like an attack, and the CDN's DDoS protection may slow or challenge it. PreScale spots the firewall and cached responses and says so instead of blaming your app. For a clean measurement, exempt your IP for the test (Vercel: `vercel firewall system-bypass add <your-ip>`, removed afterwards) and test routes that aren't cached, where your app's capacity is decided.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Latest: **0.2.0**.
