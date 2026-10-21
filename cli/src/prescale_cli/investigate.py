@@ -17,6 +17,7 @@ from prescale_cli.loadtest import (
     analyze,
     build_targets,
     default_levels,
+    edge_blocker,
     measure_route,
     open_client,
     route_label,
@@ -26,6 +27,7 @@ from prescale_cli.profiles import scenario_block
 from prescale_cli.result import build_result, write_result
 
 _PROBE_SECONDS = 2.0
+_CACHED_SHARE = 0.9
 _SLOW_BASELINE_MS = 800.0   # >= 0.8s at 1 VU => intrinsically slow
 _LATENCY_WALL_S = 2.0
 _ERROR_THRESHOLD = 0.02
@@ -44,6 +46,11 @@ class Probes:
     cdn: str | None = None
     error_kinds: dict = field(default_factory=dict)
     status_counts: dict = field(default_factory=dict)
+    # A CDN's firewall that blocked the ramp or the probes, e.g. "Vercel's firewall".
+    edge_blocker: str | None = None
+    # Share of the culprit's successful responses a CDN served from cache, and which CDN.
+    cache_share: float | None = None
+    cache_source: str | None = None
 
 
 @dataclass
@@ -52,6 +59,10 @@ class Diagnosis:
     confidence: str          # "high" | "medium" | "low"
     summary: str
     evidence: list[str]
+
+
+def _capitalize(text: str) -> str:
+    return text[:1].upper() + text[1:]
 
 
 def _evidence(p: Probes) -> list[str]:
@@ -67,6 +78,10 @@ def _evidence(p: Probes) -> list[str]:
         ev.append("errors under load: " + ", ".join(f"{k} ({v})" for k, v in worst))
     if p.throughput_plateaued:
         ev.append("throughput plateaued while users kept rising")
+    if p.edge_blocker:
+        ev.append(f"{p.edge_blocker} answered instead of your app")
+    if p.cache_share is not None and p.cache_share >= _CACHED_SHARE:
+        ev.append(f"{p.cache_share:.0%} of {p.culprit_route} came from {p.cache_source}'s cache")
     if p.server:
         ev.append(f"server: {p.server}")
     return ev
@@ -80,6 +95,18 @@ def classify(p: Probes) -> Diagnosis:
     has_503 = 503 in p.status_counts
     has_other_5xx = any(c >= 500 and c != 503 for c in p.status_counts)
 
+    # A CDN in the way shapes everything below, so it wins: from one IP, its firewall
+    # or its cache explain a slowdown better than anything in the app.
+    if p.edge_blocker:
+        return Diagnosis("edge_protection", "high",
+                         f"{_capitalize(p.edge_blocker)} blocked the test: it treats load "
+                         "from one IP as an attack, so this measures the firewall, not "
+                         "your app.", ev)
+    if p.cache_share is not None and p.cache_share >= _CACHED_SHARE and not has_other_5xx:
+        return Diagnosis("edge_protection", "medium",
+                         f"{p.culprit_route} came from {p.cache_source}'s cache, so your app "
+                         "never saw most of these requests. A slowdown on a cached route "
+                         f"usually means {p.cache_source} limiting traffic from one IP.", ev)
     if dominant == "rate limited (429)":
         return Diagnosis("rate_limited", "high",
                          "A rate limiter (429) is throttling requests under load.", ev)
@@ -127,6 +154,13 @@ def classify(p: Probes) -> Diagnosis:
 
 
 _REMEDIATION = {
+    "edge_protection": [
+        "Exempt your IP for the test: on Vercel, vercel firewall system-bypass add "
+        "<your-ip> (remove it afterwards); on Cloudflare, a WAF skip rule for your IP.",
+        "Or test a route that isn't cached (an API, or a page rendered per request): "
+        "that's where your app's capacity is decided.",
+        "Real visitors come from many IPs, so this limit isn't what they'd hit.",
+    ],
     "rate_limited": [
         "A 429 limiter kicked in — confirm it's intentional.",
         "If it's yours, raise the limit (or exempt internal/health traffic) for spikes.",
@@ -189,12 +223,12 @@ async def _headers(client, url):
     try:
         r = await client.get(url)
     except httpx.HTTPError:
-        return None, None
+        return None, None, None
     h = {k.lower(): v for k, v in r.headers.items()}
     cdn = next((label for marker, label in _CDN_MARKERS.items() if marker in h), None)
     if not cdn and "cloudflare" in h.get("server", "").lower():
         cdn = "Cloudflare"
-    return h.get("server"), cdn
+    return h.get("server"), cdn, edge_blocker(r.headers)
 
 
 async def _static_probe(client, base_url, onset):
@@ -225,11 +259,21 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None,
         error_kinds=dict(cstat.error_kinds) if cstat else {},
         status_counts=dict(cstat.status_counts) if cstat else {},
     )
+    # How much of the culprit a CDN answered, and whether its firewall stepped in.
+    culprit_stats = [s.routes[culprit] for s in stages if culprit in s.routes]
+    served = sum(len(r.latencies) for r in culprit_stats)
+    if served:
+        p.cache_share = sum(r.cache_hits for r in culprit_stats) / served
+        p.cache_source = next((r.cache_source for r in culprit_stats if r.cache_source), None)
+    p.edge_blocker = next((kind.removeprefix("blocked by ") for r in culprit_stats
+                           for kind in r.error_kinds if kind.startswith("blocked by ")), None)
     async with open_client(max_conns=onset + 10, transport=transport,
                            headers=headers) as client:
         base = await measure_route(client, culprit_url, users=1, seconds=_PROBE_SECONDS)
         p.baseline_p95_ms = base.pct(0.95) * 1000 if base.routes else None
-        p.server, p.cdn = await _headers(client, culprit_url)
+        p.server, p.cdn, probe_blocker = await _headers(client, culprit_url)
+        # The firewall often steps in only after the ramp, so the probe may be what sees it.
+        p.edge_blocker = p.edge_blocker or probe_blocker
         p.static_route, p.static_ok = await _static_probe(client, base_url, onset)
     return p
 
