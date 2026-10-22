@@ -25,6 +25,7 @@ from prescale_cli.ci import (
     upsert_pr_comment,
 )
 from prescale_cli.cloud import CloudError, parse_headers, require_credentials, upload_result
+from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.hosts import PERMISSION_ENV
 from prescale_cli.investigate import investigate as run_investigate
 from prescale_cli.loadtest import HostPolicyError, LoadError, default_levels
@@ -65,15 +66,20 @@ def _annotate(level: str, message: str) -> None:
 @click.option("--host-permission", "host_permission", is_flag=True, envvar=PERMISSION_ENV,
               help="Confirm the deploy's host allows load testing (Vercel, Netlify and "
                    f"Cloudflare restrict it; otherwise PreScale skips). Env: {PERMISSION_ENV}=1.")
+@app_option
+@app_timeout_option
 @click.option("--store", "store", type=click.Path(file_okay=False), default=None,
               help="Directory for saved runs (default: ./.prescale).")
 def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tuple[str, ...],
        max_users: int, stage_seconds: float, max_rps: float | None, fail_on_regression: bool,
-       comment: bool, allow_production: bool, host_permission: bool,
-       store: str | None) -> None:
+       comment: bool, allow_production: bool, host_permission: bool, app: str | None,
+       app_timeout: float, store: str | None) -> None:
     """Capacity-check a deploy from CI, upload it, and comment on the PR.
 
-    With no URL, uses the deploy URL from a GitHub `deployment_status` event.
+    With no URL, uses the deploy URL from a GitHub `deployment_status` event. With
+    --app, PreScale builds and starts your app in the job and tests it at
+    http://localhost:3000 (or the URL you pass), so no deploy is needed: run it on
+    `pull_request`, and on pushes to main for the baseline.
     Needs PRESCALE_TOKEN; PRESCALE_URL points at your dashboard if it isn't the
     default. Production deploys are skipped unless you pass --allow-production, and
     deploys on hosts that restrict load testing unless you pass --host-permission.
@@ -81,6 +87,10 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     \b
     Example (GitHub Actions, on: deployment_status):
         prescale ci --target staging.myapp.com --fail-on-regression
+
+    \b
+    Example (replica mode, on: pull_request):
+        prescale ci --target myapp.com --app "npm run build && npm start"
     """
     ctx = github_context()
 
@@ -95,7 +105,7 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
         _annotate("notice", "PreScale skipped a production deploy.")
         return
 
-    url = url or ctx.deployment_url
+    url = url or ("http://localhost:3000" if app else ctx.deployment_url)
     if not url:
         raise click.UsageError("No URL to test. Pass one, or run on a deployment_status event.")
 
@@ -122,6 +132,9 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     if branch:
         os.environ["PRESCALE_GIT_BRANCH"] = branch
 
+    if app:
+        start_replica(app, url, timeout=app_timeout, console=console, quiet=False)
+
     extra_paths = tuple(paths) + tuple(_lines(os.environ.get("PRESCALE_PATHS")))
     console.print(f"[bold]PreScale[/bold] — capacity check of [cyan]{url}[/cyan] for "
                   f"[bold]{target}[/bold]"
@@ -133,7 +146,8 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     try:
         result = asyncio.run(run_investigate(
             url, max_users=max_users, paths=extra_paths, stage_seconds=stage_seconds,
-            max_rps=max_rps, store=store, headers=headers, host_permission=host_permission))
+            max_rps=max_rps, store=store, headers=headers, host_permission=host_permission,
+            replica=bool(app)))
     except HostPolicyError as exc:
         _skip_restricted_host(exc.rule, target=target, ctx=ctx, comment=comment,
                               pr_number=pr_number, github_token=github_token)
