@@ -174,7 +174,7 @@ export const TARGETS: Target[] = [
     change: { kind: "regressed", pct: "−33%", arrow: "150 → 100", against: "main @ 71aa0c9" },
     regressedSince: "since a41f9c2",
     baselineBranch: "main",
-    previewPattern: "shop-*-acme.vercel.app",
+    previewPattern: "pr-*.staging.acme.dev",
     verifiedVia: "DNS",
     runs: shopRuns,
   },
