@@ -1,8 +1,9 @@
-"""Live-updating ramp table shown while `run` / `investigate` ramp, in a TTY.
+"""Progress while `run`, `investigate` and `ci` ramp.
 
-Renders the same Load-ramp table as `render.py`, but fills it in stage-by-stage
-so you watch latency and errors climb as the load rises — instead of a bare
-spinner. Non-TTY and `--json` callers skip this entirely.
+In a terminal, a live Load-ramp table (the same one `render.py` prints) fills in
+stage by stage, so you watch latency and errors climb as the load rises. In CI
+logs and pipes, where a table can't redraw, each finished stage prints one line,
+so a minute-long ramp is never silent. `--json` prints nothing until the result.
 """
 
 from __future__ import annotations
@@ -87,3 +88,59 @@ class LiveRamp:
 
     def __exit__(self, *exc: object) -> None:
         self._live.__exit__(*exc)
+
+
+class PlainRamp:
+    """One line per finished stage, for CI logs and pipes."""
+
+    def __init__(self, console: Console, *, latency_wall: float = 2.0) -> None:
+        self.console = console
+        self.latency_wall = latency_wall
+
+    def starting(self, users: int) -> None:
+        pass
+
+    def finished(self, stage: StageResult) -> None:
+        p95 = stage.pct(0.95) * 1000
+        crossed = stage.error_rate >= 0.02 or p95 >= self.latency_wall * 1000
+        line = (f"  {stage.users:>4} users · {stage.rps:,.0f} req/s · p95 {_ms(p95)} · "
+                f"{stage.error_rate:.0%} errors")
+        self.console.print(f"[red]{line}[/red]" if crossed else line, highlight=False)
+
+    def diagnosing(self) -> None:
+        self.console.print("  diagnosing the culprit route…", highlight=False)
+
+    def __enter__(self) -> PlainRamp:
+        self.console.print("[dim]Ramping load…[/dim]")
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        pass
+
+
+class QuietRamp:
+    """No progress: `--json` keeps stdout for the result alone."""
+
+    def starting(self, users: int) -> None:
+        pass
+
+    def finished(self, stage: StageResult) -> None:
+        pass
+
+    def diagnosing(self) -> None:
+        pass
+
+    def __enter__(self) -> QuietRamp:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        pass
+
+
+def ramp_progress(console: Console, *, latency_wall: float = 2.0, as_json: bool = False):
+    """The progress display for this output: live table, plain lines, or nothing."""
+    if as_json:
+        return QuietRamp()
+    if console.is_terminal:
+        return LiveRamp(console, latency_wall=latency_wall)
+    return PlainRamp(console, latency_wall=latency_wall)
