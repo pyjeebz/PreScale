@@ -19,7 +19,7 @@ from prescale_cli.cloud import CloudError, require_credentials
 from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
-from prescale_cli.live import LiveRamp
+from prescale_cli.live import LiveRamp, ramp_progress
 from prescale_cli.loadtest import (
     LoadError,
     analyze,
@@ -186,23 +186,16 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
 
     levels = default_levels(max_users)
 
-    live_mode = console.is_terminal and not as_json
+    progress = ramp_progress(console, latency_wall=latency_wall, as_json=as_json)
+    live_mode = isinstance(progress, LiveRamp)
     try:
-        if live_mode:
-            with LiveRamp(console, latency_wall=latency_wall) as live:
-                stages, warning = asyncio.run(run_loadtest(
-                    targets, levels=levels, stage_seconds=stage_seconds,
-                    method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
-                    repeat=repeat, think_time=think_time, headers=headers,
-                    host_permission=True,
-                    progress_cb=live.starting, on_stage=live.finished,
-                ))
-        else:
+        with progress:
             stages, warning = asyncio.run(run_loadtest(
                 targets, levels=levels, stage_seconds=stage_seconds,
                 method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
                 repeat=repeat, think_time=think_time, headers=headers,
                 host_permission=True,
+                progress_cb=progress.starting, on_stage=progress.finished,
             ))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
