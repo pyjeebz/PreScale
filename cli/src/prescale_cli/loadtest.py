@@ -20,10 +20,20 @@ from urllib.robotparser import RobotFileParser
 import httpx
 
 from prescale_cli import __version__
+from prescale_cli.hosts import HostRule, detect_host, refusal
 
 
 class LoadError(Exception):
     """Raised when the target can't be reached at all (nothing to test)."""
+
+
+class HostPolicyError(LoadError):
+    """The target's host restricts load testing and the user hasn't confirmed
+    permission. Raised after the single preflight request, before any load."""
+
+    def __init__(self, rule: HostRule) -> None:
+        super().__init__(refusal(rule))
+        self.rule = rule
 
 
 _USER_AGENT = f"prescale/{__version__}"
@@ -474,10 +484,14 @@ async def run_loadtest(
     on_stage=None,
     transport: httpx.AsyncBaseTransport | None = None,
     headers: dict[str, str] | None = None,
+    host_permission: bool = False,
 ) -> tuple[list[StageResult], str | None]:
     """Preflight the target, then ramp through `levels`, spreading each stage's
     load across `targets`. Stops early once a stage is more than `hard_stop_rate`
-    failed. Returns (stages, warning)."""
+    failed. Returns (stages, warning).
+
+    A host that restricts load testing (Vercel, Netlify, Cloudflare) stops the run
+    after the preflight unless `host_permission` says the user has permission."""
     if not targets:
         raise LoadError("No targets to test.")
     max_conns = max(levels) + 50
@@ -499,9 +513,11 @@ async def run_loadtest(
             raise LoadError(
                 f"{_capitalize(blocker)} is blocking requests from this machine (it answered "
                 f"the first request with HTTP {preflight.status_code}), so a load test would "
-                f"only measure the firewall. Exempt your IP for the test ({_BYPASS_HINT}), "
-                "or wait for the block to lift, then run again."
+                f"only measure the firewall. {_INSTEAD}"
             )
+        rule = detect_host(preflight.headers)
+        if rule and not host_permission:
+            raise HostPolicyError(rule)
         if preflight.status_code >= 400:
             warning = (
                 f"First request returned HTTP {preflight.status_code} — "
@@ -543,6 +559,20 @@ def open_client(*, timeout: float = 10.0, max_conns: int = 64,
                              headers=client_headers(headers), transport=transport)
 
 
+async def probe_host(url: str, *, timeout: float = 10.0,
+                     headers: dict[str, str] | None = None,
+                     transport: httpx.AsyncBaseTransport | None = None) -> HostRule | None:
+    """One normal request to learn whether the target's host restricts load testing.
+    Unreachable means unknown: the run's own preflight reports that properly."""
+    async with open_client(timeout=timeout, max_conns=1, transport=transport,
+                           headers=headers) as client:
+        try:
+            response = await client.get(url)
+        except httpx.HTTPError:
+            return None
+    return detect_host(response.headers)
+
+
 def client_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
     """PreScale's User-Agent plus any `--header` values. The extra headers only
     ever go to the target; they're never written into a Result."""
@@ -562,7 +592,10 @@ _MITIGATION_HEADERS = {"x-vercel-mitigated": "Vercel's firewall",
 _CACHE_HEADERS = {"x-vercel-cache": "Vercel", "cf-cache-status": "Cloudflare",
                   "x-cache": "the CDN"}
 _CACHE_HITS = {"hit", "stale", "prerender", "revalidated"}
-_BYPASS_HINT = "on Vercel: vercel firewall system-bypass add <your-ip>, removed afterwards"
+# What to do when a CDN is in the way: test where load testing is allowed.
+_INSTEAD = ("Test your app locally or on staging you're allowed to load, or arrange the "
+            "test with your host first (Vercel only permits it on Enterprise plans, with "
+            "notice).")
 _CACHED_SHARE = 0.9
 
 
@@ -600,8 +633,7 @@ def edge_notes(stages: list[StageResult]) -> list[str]:
         users, blocker = blocked
         notes.append(f"{_capitalize(blocker)} started blocking this test at ~{users} users: it "
                      "treats load from one IP as an attack, so results from there measure the "
-                     f"firewall, not your app. Exempt your IP for the test ({_BYPASS_HINT}) "
-                     "and run again.")
+                     f"firewall, not your app. {_INSTEAD}")
     routes = [route for stage in stages for route in stage.routes.values()]
     served = sum(len(route.latencies) for route in routes)
     hits = sum(route.cache_hits for route in routes)
@@ -610,8 +642,8 @@ def edge_notes(stages: list[StageResult]) -> list[str]:
         notes.append(f"{hits / served:.0%} of responses came from {source}'s cache, so this "
                      f"mostly tested {source}, not your app. If latency climbed, that's "
                      f"{source} limiting traffic from one IP. For your app's capacity, test a "
-                     "route that isn't cached (an API, or a page rendered per request), or "
-                     "exempt your IP for the test.")
+                     "route that isn't cached (an API, or a page rendered per request), on "
+                     "staging you're allowed to load.")
     return notes
 
 
@@ -651,8 +683,7 @@ def _bottleneck_hint(stat: RouteStat, reason: str, sat: SaturationInfo) -> str:
     if kind.startswith("blocked by "):
         return (
             f"{_capitalize(kind.removeprefix('blocked by '))} blocked the test: it treats load "
-            "from one IP as an attack, so this measures the firewall, not your app. Exempt "
-            f"your IP for the test ({_BYPASS_HINT}) and run again."
+            f"from one IP as an attack, so this measures the firewall, not your app. {_INSTEAD}"
         )
     if kind == "5xx":
         server_errors = {c: n for c, n in stat.status_counts.items() if c >= 500}
