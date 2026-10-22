@@ -1,0 +1,172 @@
+---
+title: "Bottleneck types and their fixes"
+sidebarTitle: "Bottleneck types"
+description: "PreScale classifies failures into 7 bottleneck types. Learn what each means, how it's detected, and what remediation steps to take."
+---
+
+When `prescale investigate` diagnoses a failure, it classifies the bottleneck into one of several distinct types. Each type has a unique signature — a combination of latency behaviour, error kinds, throughput patterns, and infrastructure signals — and a specific set of fixes. Understanding which type you're dealing with is the difference between guessing and knowing what to change.
+
+The classifier is fully local and deterministic — no LLM, no network calls. It runs active probes against the culprit route (baseline vs loaded latency, static-vs-dynamic comparison, error/header forensics) and uses a first-match rule set to arrive at a verdict.
+
+***
+
+## Bottleneck classes
+
+<AccordionGroup>
+  <Accordion title="connection_pool — DB or upstream pool exhausted">
+    **What it means**
+
+    Your application ran out of connections to a downstream dependency — most commonly a database connection pool, a Redis pool, or an HTTP client pool to an upstream API. Under load, threads or async workers pile up waiting for a free connection, which manifests as 5xx errors or request timeouts while the rest of your infrastructure remains healthy.
+
+    **How it's detected**
+
+    PreScale identifies this class when either:
+
+    * 5xx errors dominate under load **and** a static asset (CSS, JS) continues to respond normally at the same user level — meaning the bottleneck is inside the app, not at the network or server level.
+    * Requests time out while the static probe holds — indicating that something behind the app (a DB or upstream service) is blocking request completion.
+
+    **How to fix it**
+
+    * Increase the pool size in your application config (e.g. `DATABASE_POOL_SIZE`, `pool_size=` in SQLAlchemy, `max` in node-postgres).
+    * Add a connection pooler such as [PgBouncer](https://www.pgbouncer.org/) (for PostgreSQL) to multiplex many app connections onto fewer server connections.
+    * Check that connections are always released after a request — connection leaks shrink your effective pool over time.
+    * Audit the connection checkout timeout; a tight timeout causes cascading failures when the pool is briefly full.
+    * If you run gunicorn, increase `--workers`. If you run uvicorn, run it under `gunicorn -k uvicorn.workers.UvicornWorker -w N`.
+  </Accordion>
+
+  <Accordion title="concurrency_ceiling — thread or worker pool saturated">
+    **What it means**
+
+    Your server has a fixed number of threads, workers, or coroutine slots — and under load, you hit that ceiling. New requests queue behind busy workers, which is why latency climbs steeply while throughput flattens: the server is processing requests as fast as it can, but there are more arrivals than capacity.
+
+    **How it's detected**
+
+    PreScale identifies this class when:
+
+    * Throughput plateaued (throughput stopped rising even though virtual users kept increasing) **and** latency climbed — the classic queuing-theory signature of a saturated server.
+    * Alternatively: no saturation was detected, but loaded p95 latency is 3× or more the baseline p95 at a single user, with no dominant error class pointing elsewhere.
+
+    **How to fix it**
+
+    * Raise the worker or thread count for your server process — extra users are literally queuing.
+    * Check for a global lock or a serialised resource (e.g. a Python GIL-bound sync path in an async framework) that prevents true parallelism.
+    * If a single process can't go wider, scale out: put multiple instances behind a load balancer and distribute traffic.
+    * For gunicorn: increase `--workers` (and optionally `--threads`). For uvicorn: use `gunicorn -k uvicorn.workers.UvicornWorker -w N`.
+  </Accordion>
+
+  <Accordion title="connection_ceiling — infrastructure-level connection limit">
+    **What it means**
+
+    The server (or the OS) has a hard limit on the number of simultaneous TCP connections it will accept, and you hit it. Unlike a connection pool (which is an application-layer limit), this is a network or OS-level ceiling: `somaxconn`, `listen` backlog, `worker_connections`, or an upstream load-balancer concurrency cap.
+
+    **How it's detected**
+
+    PreScale identifies this class when:
+
+    * Connection refusal or network errors dominate under load — `"connection refused"` or generic `"network"` errors.
+    * **Or** timeouts dominate **and** the static-asset probe **also** degrades — meaning the ceiling is before the app, at the server or load balancer layer.
+
+    Confidence is `high` when static assets degrade too (unambiguous infra-level signal) and `medium` when only the culprit route suffers.
+
+    **How to fix it**
+
+    * Raise the server's TCP connection limit: for nginx, increase `worker_connections`; for the OS, tune `net.core.somaxconn` and the application's listen backlog.
+    * Add instances behind a load balancer to spread connections across multiple origin servers.
+    * If a CDN is in front, the ceiling is likely at your origin — investigate origin capacity separately.
+  </Accordion>
+
+  <Accordion title="rate_limited — 429 responses from a limiter">
+    **What it means**
+
+    A rate limiter is returning `429 Too Many Requests` under load. This could be intentional (your own rate limit protecting the service) or a surprise (a third-party API, an upstream service, or a gateway you forgot was configured).
+
+    **How it's detected**
+
+    PreScale identifies this class when `429` responses are the dominant error type under load. Confidence is `high` — the HTTP status code is unambiguous.
+
+    **How to fix it**
+
+    * Confirm whether the limiter is intentional. If it's yours, decide whether the limit should be raised for the expected load, or whether you need to handle `429` gracefully in your client code.
+    * If the limiter is on internal or health-check traffic, exempt those routes or source IPs.
+    * For third-party rate limits, implement request queuing with exponential back-off rather than flooding the upstream.
+  </Accordion>
+
+  <Accordion title="overload_shedding — 503s from a proxy or load balancer">
+    **What it means**
+
+    A proxy or load balancer in front of your application is shedding load — returning `503 Service Unavailable` rather than forwarding requests to the origin. This happens when the LB's queue fills up, its upstream health checks fail, or a connection timeout fires before the origin responds.
+
+    **How it's detected**
+
+    PreScale identifies this class when `503` responses appear under load. Confidence is `high` — a `503` from a proxy is a clear load-shedding signal.
+
+    **How to fix it**
+
+    * Add origin capacity or enable auto-scaling so the LB has healthy upstreams to route to.
+    * Tune the LB's queue depth or connection timeout to shed later, giving the origin more time to respond during traffic spikes.
+    * Investigate whether your origin health checks are too aggressive (false negatives under load).
+  </Accordion>
+
+  <Accordion title="slow_endpoint — intrinsically slow at any load">
+    **What it means**
+
+    The culprit route is slow even with a single virtual user — before any contention or queuing. This points to an application-level problem: a slow database query, an N+1 query loop, missing indexes, or a synchronous computation on the request path. Every concurrent user makes the problem worse by amplifying the already-high base latency.
+
+    **How it's detected**
+
+    PreScale probes the culprit route at exactly 1 virtual user (baseline measurement). If p95 at 1 user is ≥ 800 ms, the endpoint is classified as `slow_endpoint` with `high` confidence — the baseline measurement is unambiguous.
+
+    **How to fix it**
+
+    * Profile the endpoint directly — this class is diagnosed before any load is applied, so the problem exists regardless of scale.
+    * Check the database query plan for the route; look for sequential scans, missing indexes, or N+1 patterns (e.g. with `EXPLAIN ANALYZE`).
+    * Add caching for expensive computations or frequently-read data.
+    * Move heavy work off the synchronous request path (background jobs, async tasks).
+    * Add pagination if the route fetches unbounded result sets.
+  </Accordion>
+
+  <Accordion title="unknown — no clear pattern matched">
+    **What it means**
+
+    The target degraded under load, but the combination of signals — error kinds, latency profile, throughput curve, static probe — doesn't match any of the known bottleneck patterns. This usually means the failure is subtle, intermittent, or involves a combination of factors that individually don't cross a diagnostic threshold.
+
+    **How it's detected**
+
+    `unknown` is the fallback class when none of the other classifiers fired. Confidence is always `low`.
+
+    **How to fix it**
+
+    * Re-run with `--repeat 3` to pool multiple ramps and get a tighter read on the failure point.
+    * Try `--stage-seconds 10` to give each load level more time and reduce measurement noise.
+    * Inspect the per-route breakdown in `verdict.stages[].routes` to see which route degrades fastest.
+    * Check application logs and database/connection metrics around the `onset_users` level — the signal you need may not be visible from the outside.
+  </Accordion>
+</AccordionGroup>
+
+***
+
+## Confidence levels
+
+Every diagnosis includes a `confidence` field — `"high"`, `"medium"`, or `"low"` — that tells you how certain PreScale is about the classification.
+
+| Level | What it means | What to do |
+| - | - | - |
+| `high` | The dominant signal was unambiguous (e.g. 429s, 503s, a slow baseline, clear throughput plateau) | Trust the verdict; follow the remediation steps |
+| `medium` | The signal points in a clear direction but wasn't definitive (e.g. timeouts without a confirming static probe) | The diagnosis is likely correct; validate with app metrics before making changes |
+| `low` | No pattern matched clearly; the failure is real but the cause is unclear | Re-run with `--repeat 3` and `--stage-seconds 10`; inspect logs around `onset_users` |
+
+When you get `low` confidence, the most useful next steps are:
+
+```bash
+# Pool 3 ramps for a tighter signal
+prescale investigate https://staging.myapp.com --repeat 3 --i-own-this
+
+# Longer hold at each level to reduce noise
+prescale investigate https://staging.myapp.com --stage-seconds 10 --i-own-this
+```
+
+***
+
+<Note>
+  Bottleneck classes are stored in `result.investigation.bottleneck_class` in the saved JSON. The values match exactly what you see here — so you can filter saved runs by class, build CI gates around specific types, or pass the field directly to another tool. See the [Result Schema](/reference/result-schema) for the full shape of the `investigation` object.
+</Note>
