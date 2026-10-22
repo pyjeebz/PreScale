@@ -1,0 +1,56 @@
+---
+title: "Launch Guard, sign-off and badge"
+sidebarTitle: "Launch Guard"
+description: "Get a GO or NO-GO for a Product Hunt, Hacker News or Black Friday launch, sign it off, and show it with a live README badge."
+---
+
+## Launch Guard
+
+Pick a target and a launch in the dashboard's **Launch Guard** and get a clear call:
+
+| Call | Means |
+|---|---|
+| **GO** | Even the low end of the confidence band clears the launch's peak |
+| **RISKY** | Only the average clears it; the band dips below |
+| **NO-GO** | It doesn't clear the peak |
+| **UNTESTED** | The run never ramped as high as the peak |
+
+A checklist backs the call: capacity vs the peak, whether you tested that high, how
+confident the measurement is, what breaks first and how to fix it, HTTP hygiene, and
+ownership.
+
+Test exactly for a launch in one command:
+
+```bash
+prescale investigate https://staging.myapp.com --profile product-hunt --audit --i-own-this --upload
+```
+
+`--profile` ramps to 1.5× the launch's peak so you can see your headroom. `--audit` adds the
+load-free HTTP checks (compression, caching, CDN, HTTP/2) to the same run.
+
+| Profile | Peak |
+|---|---|
+| `steady-10k-dau` | ~25 users |
+| `product-hunt` | ~100 users |
+| `reddit` | ~300 users |
+| `hn-frontpage` | ~300 users |
+| `black-friday` | ~500 users |
+
+## Sign-off
+
+On a **verified** target, sign off a run from its page, or sign off a GO from Launch Guard
+for that launch. PreScale publishes a page stating the capacity (or the launch it's ready
+for), the commit, who signed it off and when.
+
+A sign-off is your statement as the verified owner: PreScale verifies that you control the
+domain, and the measurement comes from PreScale's open-source CLI on your own
+infrastructure. The sign-off page says exactly that. You can revoke it at any time.
+
+## README badge
+
+After your first sign-off, the target page shows a badge and the Markdown to paste into
+your README. It keeps itself honest:
+
+- **Green** while the sign-off holds.
+- **Red** if capacity drops, for certain, below the signed-off level.
+- **Gray** 30 days after the sign-off, or once 5 newer runs land without a new sign-off.
