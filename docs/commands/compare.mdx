@@ -1,0 +1,114 @@
+---
+title: "prescale compare"
+sidebarTitle: "prescale compare"
+description: "prescale compare diffs two saved runs by capacity and flags regressions, so a CI build can fail when capacity drops."
+---
+
+`prescale compare` loads two saved results and diffs their capacity — how many concurrent users each survived — and flags whether the change is a real regression or just noise. Use it to prevent a deploy from going out if load-carrying capacity has quietly dropped, or to track improvements over time.
+
+## Usage
+
+```bash
+prescale compare                                                         # diff the two most recent saved runs
+prescale compare <new-id> <old-id>                                       # diff two specific runs by ID
+prescale compare --baseline prescale-baseline.json --fail-on-regression  # gate CI on a committed baseline
+prescale compare --markdown > cmp.md                                     # emit a PR-comment-ready markdown block
+```
+
+## Example output
+
+```text
+             Capacity compare
+ ──────────────────────────────────────────────────────────────
+         Survives   Peak req/s   Commit     When
+ old        120        610       a1b2c3d    2d ago
+ new         90        590       f4e5d6c    just now
+ ──────────────────────────────────────────────────────────────
+
+ ✗ Regression: capacity dropped from ~120 to ~90 users (25%).
+```
+
+A summary panel is printed below the table. Its border is red when a confident regression is detected, yellow when the confidence bands overlap, and green when capacity improved.
+
+## Options
+
+<ParamField path="new" type="string">
+  The result ID or `.json` path for the newer run to compare. Defaults to the most recently saved run.
+</ParamField>
+
+<ParamField path="old" type="string">
+  The result ID or `.json` path for the older run to compare. Defaults to the second-most-recently saved run. Mutually exclusive with `--baseline`.
+</ParamField>
+
+<ParamField query="--baseline" type="string">
+  Path to a `.json` file or a result ID to use as the "old" baseline. Convenient for committing a known-good result and comparing every PR against it.
+</ParamField>
+
+<ParamField query="--regression-threshold" type="float" default="0.2">
+  Fractional drop in `survives_users` that counts as a regression. The default of `0.2` means a 20% drop in capacity is required to trigger the flag. Decrease this to make the gate stricter.
+</ParamField>
+
+<ParamField query="--fail-on-regression" type="boolean">
+  Exit with a non-zero status code if a regression is detected. Use this to fail a CI job or block a deploy.
+</ParamField>
+
+<ParamField query="--json" type="boolean">
+  Emit the full comparison result as a JSON object instead of the default terminal table.
+</ParamField>
+
+<ParamField query="--markdown" type="boolean">
+  Emit a PR-comment-ready markdown block. Combine with `--fail-on-regression` and a `gh pr comment` step to post capacity diffs directly to pull requests.
+</ParamField>
+
+<ParamField query="--store" type="string">
+  Directory holding saved runs. Defaults to `./.prescale` in the current working directory. Override this when your runs are saved elsewhere.
+</ParamField>
+
+## CI usage
+
+The most common pattern is to save a baseline on the default branch and compare every pull request against it. Here is a complete GitHub Actions example:
+
+```yaml
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PreScale
+        run: pip install prescale
+
+      # On PRs: run against staging, compare to baseline, comment the diff
+      - name: Run load test
+        run: prescale run https://staging.myapp.com --i-own-this
+
+      - name: Compare to baseline
+        run: |
+          prescale compare \
+            --baseline prescale-baseline.json \
+            --fail-on-regression \
+            --markdown > cmp.md
+
+      - name: Post PR comment
+        run: gh pr comment "${{ github.event.number }}" --body-file cmp.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+```
+
+To refresh the baseline on merges to `main`, add a separate job:
+
+```yaml
+      - name: Refresh baseline
+        if: github.ref == 'refs/heads/main'
+        run: |
+          prescale run https://staging.myapp.com --i-own-this --json > prescale-baseline.json
+          git config user.email "ci@example.com"
+          git config user.name "CI"
+          git add prescale-baseline.json
+          git commit -m "chore: refresh load test baseline" || true
+          git push
+```
+
+<Note>
+  The regression check uses confidence bands from the ramp results — it won't fail the build on noise when the bands from the two runs overlap. You only see a confident failure when the capacity drop is real and statistically clear. This means a flaky test environment won't produce false positives.
+</Note>
