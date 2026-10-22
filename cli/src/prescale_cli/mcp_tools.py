@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import httpx
 
 from prescale_cli.audit import run_audit
+from prescale_cli.hosts import permission_from_env
 from prescale_cli.investigate import investigate
 from prescale_cli.loadtest import analyze, build_targets, default_levels, run_loadtest
 from prescale_cli.result import build_result, list_results, load_result, write_result
@@ -106,9 +107,11 @@ async def run_summary(url: str, *, allow: set[str], max_users: int = MCP_DEFAULT
 
     targets = build_targets(url, paths=tuple(paths))
     levels = default_levels(max_users)
+    # A host that restricts load testing raises HostPolicyError, which the agent sees:
+    # permission comes only from whoever started the server (PRESCALE_HOST_PERMISSION=1).
     stages, warning = await run_loadtest(
         targets, levels=levels, stage_seconds=stage_seconds, max_rps=max_rps,
-        transport=transport,
+        transport=transport, host_permission=permission_from_env(),
     )
     report = analyze(stages, latency_wall=2.0, error_threshold=0.02,
                      rate_capped=max_rps is not None)
@@ -135,7 +138,8 @@ async def investigate_summary(url: str, *, allow: set[str],
         max_rps = MCP_DEFAULT_MAX_RPS
     result = await investigate(
         url, max_users=max_users, paths=tuple(paths), stage_seconds=stage_seconds,
-        max_rps=max_rps, store=store, transport=transport)
+        max_rps=max_rps, store=store, transport=transport,
+        host_permission=permission_from_env())
     summary = summarize_result(result)
     summary["investigation"] = result.get("investigation")
     return summary
