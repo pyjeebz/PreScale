@@ -356,3 +356,33 @@ def test_ci_host_permission_flag_reaches_the_test(monkeypatch, tmp_path):
     monkeypatch.setenv("PRESCALE_HOST_PERMISSION", "1")
     CliRunner().invoke(cli, ["ci", "--target", "staging.myapp.com"])
     assert seen["host_permission"] is True
+
+
+def test_ci_replica_mode_starts_tests_and_stops_the_app(monkeypatch, tmp_path):
+    import shlex
+    import socket
+    import sys
+
+    _github_env(monkeypatch, tmp_path, _deployment())
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    url = f"http://127.0.0.1:{port}/"
+    seen = {}
+
+    def fake_upload(result, creds, *, pr, target):
+        seen["result"] = result
+        return _upload()
+
+    monkeypatch.setattr("prescale_cli.commands.ci.upload_result", fake_upload)
+    monkeypatch.setattr("prescale_cli.commands.ci.upsert_pr_comment",
+                        lambda *args, **kwargs: "created")
+    monkeypatch.setattr("prescale_cli.commands.ci.find_pull_request", lambda ctx, token: None)
+    app = f"{shlex.quote(sys.executable)} -m http.server {port} --bind 127.0.0.1"
+    result = CliRunner().invoke(cli, ["ci", url, "--target", "myapp.com", "--app", app,
+                                      "-u", "2", "-s", "0.2", "--store", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert seen["result"]["config"]["replica"] is True
+    assert "http.server" not in str(seen["result"])  # the command is never uploaded
+    with pytest.raises(httpx.HTTPError):
+        httpx.get(url, timeout=1.0)  # stopped after the run
