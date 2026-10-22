@@ -1,0 +1,127 @@
+---
+title: "Load-test from your coding agent"
+sidebarTitle: "AI agents (MCP)"
+description: "Add the PreScale MCP server to Claude Code, Cursor, or any MCP-compatible agent and load-test your app mid-build without leaving the editor."
+---
+
+PreScale ships an MCP server so AI coding agents can load-test your local dev server mid-build — run a test, get a verdict, fix the bottleneck, repeat. Instead of switching to a terminal to run load tests manually, your agent calls PreScale directly as a tool, reads the structured result, and acts on it in the same coding session.
+
+## Install
+
+The MCP server is an optional dependency. Install it alongside the base CLI:
+
+<CodeGroup>
+```bash Installer
+curl -fsSL https://prescale.dev/install | PRESCALE_EXTRAS=mcp sh
+```
+
+```bash pip
+pip install 'prescale[mcp]'
+```
+</CodeGroup>
+
+<Note>
+  The `mcp` extra installs the FastMCP transport layer. If you already have `prescale` installed without it, re-run either command above — it upgrades in place.
+</Note>
+
+## Register with Claude Code
+
+```bash
+claude mcp add prescale -- prescale mcp
+```
+
+This registers `prescale mcp` as a stdio-transport MCP server. Claude Code will start the process automatically when it needs to call a PreScale tool.
+
+For other MCP-compatible agents (Cursor, Windsurf, etc.), register the server as a process command pointing to `prescale mcp` — consult your agent's MCP configuration docs for the exact syntax.
+
+<Warning>
+  The PreScale MCP server uses **stdio transport** — it communicates over standard input/output as a subprocess. You must register it as a process command, not as a URL. Pointing your agent at an HTTP endpoint will not work.
+</Warning>
+
+## Available MCP tools
+
+Once registered, your agent can call any of the following tools:
+
+### `load_test`
+
+```text
+load_test(url, max_users=100, paths=[], stage_seconds=3.0, max_rps=None)
+```
+
+Ramps traffic against `url` up to `max_users` concurrent virtual users. Returns a compact verdict summary and a `run_id` you can pass to `get_run` for the full breakdown. Use this when you want a fast capacity check without deep diagnosis.
+
+| Parameter | Default | Description |
+| - | - | - |
+| `url` | — | Target URL (e.g. `http://localhost:8000`) |
+| `max_users` | `100` | Peak concurrent users to ramp to |
+| `paths` | `[]` | Additional routes to test, relative to the base URL |
+| `stage_seconds` | `3.0` | Seconds to hold each load level |
+| `max_rps` | `None` | Optional cap on aggregate requests/sec |
+
+### `investigate`
+
+```text
+investigate(url, max_users=100, paths=[], stage_seconds=3.0, max_rps=None)
+```
+
+Runs a full ramp *and* diagnoses the bottleneck. Returns the verdict summary plus an `investigation` block containing the bottleneck class, supporting evidence, and a plain-English fix recommendation. Use this when you want the agent to understand *why* something broke and act on it.
+
+### `audit`
+
+```text
+audit(url)
+```
+
+A static HTTP hygiene check — no load sent. Returns a list of findings (pass / warn / fail) covering compression, static-asset caching, CDN presence, HTTP version, and cookie hygiene. Cheap enough to call on every build.
+
+### `list_runs`
+
+```text
+list_runs()
+```
+
+Returns a list of recent saved runs, newest first. Each entry includes the run `id`, timestamp, host, and a one-line verdict. Use this to orient the agent to past results without re-testing.
+
+### `get_run`
+
+```text
+get_run(run_id)
+```
+
+Returns the full `Result` envelope for a given run ID — per-level metrics, per-route breakdown, verdict, confidence band, and investigation block. Use this when the agent needs the raw numbers to reason about a result in depth.
+
+## Safety
+
+PreScale's MCP server is conservative about what it will load-test on the agent's behalf.
+
+**Local hosts are always allowed.** Anything on `localhost`, `127.0.0.1`, or `::1` can be tested freely — no extra configuration needed.
+
+**Non-local hosts are refused by default.** If the agent tries to load-test a staging or production host without explicit permission, the server returns a `HostNotAllowedError` rather than sending traffic.
+
+To allow a specific staging host, either set the `PRESCALE_MCP_ALLOW` environment variable when starting the server, or pass `--allow` on the `prescale mcp` command:
+
+```bash
+# Via environment variable
+PRESCALE_MCP_ALLOW=staging.myapp.com prescale mcp
+
+# Via flag (repeatable for multiple hosts)
+prescale mcp --allow staging.myapp.com
+```
+
+You can combine both: the env var and any `--allow` flags are merged. To allow multiple hosts via the env var, use a comma-separated list:
+
+```bash
+PRESCALE_MCP_ALLOW=staging.myapp.com,preview.myapp.com prescale mcp
+```
+
+## Example agent workflow
+
+Here is what a typical agent-assisted performance loop looks like once PreScale is registered:
+
+1. **Agent writes a new endpoint** and spins up the local dev server on `http://localhost:8000`.
+2. **Agent calls `load_test("http://localhost:8000/api/checkout")`** — PreScale ramps traffic and returns a verdict. The app breaks at 40 concurrent users.
+3. **Agent calls `investigate("http://localhost:8000/api/checkout")`** — the investigation block comes back: `connection_pool` bottleneck on `/api/checkout`, p95 latency jumps from 20 ms at 1 user to 3.2 s at 40 users, fix suggestion is to increase the DB connection pool size.
+4. **Agent edits the database config**, restarts the server, and calls `load_test` again.
+5. **The new result clears 100 users** — the agent moves on.
+
+The agent never leaves the editor. The full test-diagnose-fix-retest loop happens in the same session, with structured data at each step.
