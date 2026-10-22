@@ -157,6 +157,16 @@ def test_analyze_fails_immediately():
     assert report.survives_users == 0
 
 
+def test_routes_queueing_behind_one_process_blame_the_costly_one():
+    # One Node process: the slow search blocks "/", which then queues longest.
+    stages = [
+        _stage(1, {"/": _route(100, 0, 0.004), "/api/search": _route(100, 0, 0.060)}),
+        _stage(50, {"/": _route(100, 0, 5.2), "/api/search": _route(100, 0, 4.0)}),
+    ]
+    report = analyze(stages, latency_wall=2.0, error_threshold=0.05)
+    assert report.culprit_route == "/api/search"
+
+
 def test_analyze_attributes_culprit_route():
     # one healthy route, one failing route in the same stage
     stages = [
