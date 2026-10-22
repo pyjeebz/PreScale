@@ -1,8 +1,50 @@
 # PreScale capacity check (GitHub Action)
 
-Load-tests every preview deploy, uploads the verdict to your PreScale
-dashboard, and keeps one comment on the PR with the capacity change vs your
-baseline branch, the route that breaks first, why, and the fix.
+Load-tests every pull request, uploads the verdict to your PreScale dashboard,
+and keeps one comment on the PR with the capacity change vs your baseline
+branch, the route that breaks first, why, and the fix.
+
+## Replica mode (recommended): no deploy, no host
+
+The action builds the pull request in the job, starts it, tests it on localhost,
+and stops it. No host is involved, so no host's load-testing rules apply and no
+CDN shapes the result.
+
+```yaml
+# .github/workflows/capacity.yml
+name: Capacity
+on:
+  pull_request:
+  push:
+    branches: [main]          # the baseline PRs compare against
+
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read          # find the PR for the commit
+      pull-requests: write    # the capacity comment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - uses: pyjeebz/prescale/action@v1
+        with:
+          token: ${{ secrets.PRESCALE_TOKEN }}
+          target: myapp.com
+          app: npm run build && npm start      # tested at http://localhost:3000
+          fail-on-regression: true
+        env:
+          # The app runs with these: point them at dev or staging, never production.
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+```
+
+Results say they were measured on a replica (no serverless cold starts). The
+`app` command is never saved or uploaded.
+
+## Testing a deployed staging URL
 
 **Your host's rules come first.** Vercel only permits load testing on Enterprise
 plans with prior notice, Netlify needs its express permission, and Cloudflare
@@ -12,8 +54,6 @@ permission. Use it on staging you're allowed to load: your own servers, or a
 host that permits load testing.
 
 ```yaml
-# .github/workflows/capacity.yml
-name: Capacity
 on: deployment_status
 
 jobs:
@@ -22,8 +62,8 @@ jobs:
     if: github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: read         # find the PR for the deployed commit
-      pull-requests: write   # the capacity comment
+      contents: read
+      pull-requests: write
     steps:
       - uses: pyjeebz/prescale/action@v1
         with:
@@ -40,9 +80,9 @@ jobs:
 
 ## How it works
 
-1. A preview deploy finishes; GitHub sends `deployment_status`.
-2. `prescale ci` ramps load against the preview URL and diagnoses the first
-   route to break (`prescale investigate`).
+1. A pull request is pushed (replica mode) or a deploy finishes (`deployment_status`).
+2. `prescale ci` ramps load against the app (the replica on localhost, or the
+   deploy URL) and diagnoses the first route to break (`prescale investigate`).
 3. The Result is uploaded to PreScale and attached to `target`. PreScale
    compares it with the latest run on the target's baseline branch (`main` by
    default), using the same rule as the dashboard: a change of more than 20%,
@@ -79,5 +119,8 @@ uploaded is the run's Result file, which you can inspect with
 | `comment` | `true` | Post/update the PR comment |
 | `allow-production` | `false` | Also test production deploys |
 | `host-permission` | `false` | You have the host's permission to load-test (Vercel, Netlify, Cloudflare restrict it; otherwise the action skips) |
+| `app` | — | Replica mode: build-and-start command, tested at `url` (default `http://localhost:3000`) |
+| `app-timeout` | `600` | Seconds to wait for the app to answer |
+| `working-directory` | `.` | Where to run `app` (monorepos) |
 | `app-url` | `https://prescale.dev/dashboard` | Dashboard URL |
 | `prescale-version` | latest | CLI version |
