@@ -1,0 +1,74 @@
+---
+title: "Replica mode: test your app, not your host"
+sidebarTitle: "Replica mode"
+description: "PreScale starts your app's own build, load-tests it on localhost, and stops it. No deploy, no host, no CDN in the way."
+---
+
+Most capacity problems live in your app's code and database: a slow query, a small
+connection pool, a blocking call. You don't need your host to find them, and many hosts
+don't allow load tests anyway (Vercel only permits them on Enterprise plans). So PreScale can
+run your app itself:
+
+```bash
+prescale investigate http://localhost:3000 --app "npm run build && npm start"
+```
+
+PreScale:
+
+1. Starts the command in your project, the same way you would.
+2. Waits until the URL answers. Production builds take a while, so it waits up to 10 minutes
+   (`--app-timeout`).
+3. Runs the test against `localhost`.
+4. Stops the app **and everything it started**, even after an error or Ctrl-C.
+
+No host is involved, so no host's load-testing rules apply and no CDN's cache or firewall
+shapes the result.
+
+## On your machine
+
+`--app` works on [`run`](/commands/run), [`investigate`](/commands/investigate) and `ci`.
+
+```bash
+# A Next.js app
+prescale investigate http://localhost:3000 --app "npm run build && npm start" --upload
+
+# A Python API on another port, with the routes that matter
+prescale run http://localhost:8000 --app "gunicorn app:app -b 127.0.0.1:8000" \
+  --path /api/search --path /api/checkout
+```
+
+The URL must be local. If something is already answering there, PreScale stops instead of
+testing it, so you always test the build it started. If the app crashes or never comes up,
+you get its exit code and the end of its log.
+
+## In CI, on every pull request
+
+In CI, replica mode needs no deploy at all: the [GitHub Action](/guides/github-action)
+builds the pull request in the job, tests it there and comments the capacity change on the
+pull request. Pushes to `main` record the baseline.
+
+```yaml
+- uses: pyjeebz/prescale/action@v1
+  with:
+    token: ${{ secrets.PRESCALE_TOKEN }}
+    target: myapp.com
+    app: npm run build && npm start
+  env:
+    DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+```
+
+## Good to know
+
+<Warning>
+Your app runs with your environment. Point `DATABASE_URL` and API keys at a dev or staging
+database, never production: the load reaches whatever your app talks to.
+</Warning>
+
+- **What it measures:** your app's own build on that machine. Serverless behaviour such as
+  cold starts isn't included, and the absolute numbers depend on the machine. The change
+  between two runs on the same kind of machine (`main` against a pull request) is the signal.
+- **Results are marked:** `config.replica` is `true` in the [result](/reference/result-schema),
+  and the report says it was measured on a local replica.
+- **The command stays private:** it's never saved or uploaded, since it may carry secrets.
+- **Coming next:** throwaway database branches (Neon first, then Supabase), so the replica
+  gets realistic data without touching your real database.
