@@ -12,6 +12,7 @@ from rich.panel import Panel
 
 from prescale_cli.cloud import CloudError, require_credentials
 from prescale_cli.commands.audit import _ICONS as _AUDIT_ICONS
+from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.investigate import _LATENCY_WALL_S
 from prescale_cli.investigate import investigate as run_investigate
@@ -46,12 +47,13 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
                    "its peak to show headroom.")
 @click.option("--audit", "with_audit", is_flag=True,
               help="Also run the load-free HTTP hygiene audit (what Launch Guard shows).")
+@host_permission_option
 @header_option
 @upload_option
 def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                 stage_seconds: float, max_rps: float | None, yes: bool,
                 as_json: bool, store: str | None, fail_under: int | None,
-                profile_name: str | None, with_audit: bool,
+                profile_name: str | None, with_audit: bool, host_permission: bool,
                 headers: dict[str, str], upload: bool) -> None:
     """Find what breaks first, then probe it to explain WHY - and how to fix it.
 
@@ -109,6 +111,9 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
             title="⚠️  Heads up", border_style="yellow"))
         if not click.confirm("Proceed?", default=False):
             raise SystemExit(0)
+    if host not in _LOCAL_HOSTS:
+        confirm_host(url, console=console, permitted=host_permission, as_json=as_json,
+                     headers=headers)
 
     live_mode = console.is_terminal and not as_json
     try:
@@ -118,14 +123,15 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                     url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                     max_rps=max_rps, store=store, headers=headers,
                     think_time=prof.think_time_s if prof else 0.0, profile=prof,
-                    audit=with_audit,
+                    audit=with_audit, host_permission=True,
                     progress_cb=live.starting, on_stage=live.finished,
                     on_probe=live.diagnosing))
         else:
             result = asyncio.run(run_investigate(
                 url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                 max_rps=max_rps, store=store, headers=headers,
-                think_time=prof.think_time_s if prof else 0.0, profile=prof, audit=with_audit))
+                think_time=prof.think_time_s if prof else 0.0, profile=prof, audit=with_audit,
+                host_permission=True))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1)
