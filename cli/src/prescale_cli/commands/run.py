@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from prescale_cli.cloud import CloudError, require_credentials
+from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.live import LiveRamp
 from prescale_cli.loadtest import (
@@ -80,6 +81,7 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Exit non-zero if it survives fewer than N users (a CI gate).")
 @click.option("--profile", "profile_name", default=None,
               help="Frame the run as a launch scenario (see `prescale profiles`).")
+@host_permission_option
 @header_option
 @upload_option
 def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
@@ -88,7 +90,8 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
         store: str | None, no_save: bool, fail_under: int | None,
-        profile_name: str | None, headers: dict[str, str], upload: bool) -> None:
+        profile_name: str | None, host_permission: bool, headers: dict[str, str],
+        upload: bool) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -137,6 +140,9 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         ))
         if not click.confirm("Proceed?", default=False):
             raise SystemExit(0)
+    if not is_local:
+        confirm_host(url, console=console, permitted=host_permission, as_json=as_json,
+                     timeout=timeout, headers=headers)
 
     extra: list[str] = []
     if from_sitemap:
@@ -181,6 +187,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
                     targets, levels=levels, stage_seconds=stage_seconds,
                     method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
                     repeat=repeat, think_time=think_time, headers=headers,
+                    host_permission=True,
                     progress_cb=live.starting, on_stage=live.finished,
                 ))
         else:
@@ -188,6 +195,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
                 targets, levels=levels, stage_seconds=stage_seconds,
                 method=method, timeout=timeout, max_rps=max_rps, warmup=warmup,
                 repeat=repeat, think_time=think_time, headers=headers,
+                host_permission=True,
             ))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
