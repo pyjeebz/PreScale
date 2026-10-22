@@ -17,6 +17,7 @@ from rich.panel import Panel
 
 from prescale_cli.cloud import CloudError, require_credentials
 from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
+from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.live import LiveRamp
 from prescale_cli.loadtest import (
@@ -81,6 +82,8 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Exit non-zero if it survives fewer than N users (a CI gate).")
 @click.option("--profile", "profile_name", default=None,
               help="Frame the run as a launch scenario (see `prescale profiles`).")
+@app_option
+@app_timeout_option
 @host_permission_option
 @header_option
 @upload_option
@@ -90,8 +93,8 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
         store: str | None, no_save: bool, fail_under: int | None,
-        profile_name: str | None, host_permission: bool, headers: dict[str, str],
-        upload: bool) -> None:
+        profile_name: str | None, app: str | None, app_timeout: float,
+        host_permission: bool, headers: dict[str, str], upload: bool) -> None:
     """Load test URL and report what breaks first.
 
     \b
@@ -101,6 +104,7 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         prescale run https://staging.myapp.com --from-sitemap -u 500 --i-own-this
         prescale run https://staging.myapp.com --i-own-this --html report.html
         prescale run https://staging.myapp.com --i-own-this --upload
+        prescale run http://localhost:3000 --app "npm run build && npm start"
     """
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
@@ -123,6 +127,9 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     if prof is not None:
         max_users = prof.peak_users
         think_time = prof.think_time_s
+
+    if app:
+        start_replica(app, url, timeout=app_timeout, console=console, quiet=as_json)
 
     host = (parsed.hostname or "").lower()
     is_local = host in _LOCAL_HOSTS
@@ -217,7 +224,8 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         "fail_under": fail_under,
         "profile": prof.name if prof else None,
     }
-    result = build_result(report, url=url, targets=targets, config=config, warning=warning)
+    result = build_result(report, url=url, targets=targets, config=config, warning=warning,
+                          replica=bool(app))
     if prof is not None:
         result["profile"] = scenario_block(prof, report.survives_users)
     saved_path = None if no_save else write_result(result, store=store)
