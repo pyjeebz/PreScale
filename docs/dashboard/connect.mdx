@@ -35,13 +35,13 @@ prescale upload --dry-run          # print exactly what would be sent, send noth
 
 An upload is the saved run file, unchanged. See [what gets uploaded](/reference/data-boundary).
 
-## Protected previews and logged-in routes
+## Logged-in routes
 
 Pass request headers with `-H`. They go to your site only and are never saved or uploaded.
 
 ```bash
-prescale investigate https://myapp-git-feat-acme.vercel.app \
-  -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" --upload
+prescale investigate https://staging.myapp.com --path /api/orders \
+  -H "authorization: Bearer $STAGING_TOKEN" --upload
 ```
 
 ## No browser on that machine
