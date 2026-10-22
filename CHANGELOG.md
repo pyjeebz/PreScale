@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.0.1 — 2026-10-21
+## 1.0.2 — 2026-10-21
+
+### Added
+- **PreScale checks your host's rules before sending load.** Vercel only permits load
+  testing on Enterprise plans with prior notice, Netlify needs its express permission, and
+  Cloudflare blocks load tests unless arranged. PreScale recognises these hosts from the first
+  response and won't send load until you confirm you have permission:
+  - In a terminal, `run` and `investigate` explain the rule and ask (the default is no).
+  - In `--json` mode and scripts, pass `--host-permission` (or `PRESCALE_HOST_PERMISSION=1`).
+  - `prescale ci` and the GitHub Action skip these deploys, say why in the PR comment and the
+    job summary, and pass the check. Set `host-permission: true` if you have permission.
+  - The MCP server refuses them unless it was started with `PRESCALE_HOST_PERMISSION=1`.
+
+### Changed
+- When a CDN's firewall blocks a test, PreScale now suggests testing locally or on staging
+  you're allowed to load, or arranging the test with your host, instead of exempting your IP.
+
 
 ### Fixed
 - **Sites behind a CDN no longer get blamed for the CDN's limits.** Load-testing a site on
