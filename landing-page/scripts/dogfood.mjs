@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Draw the footer wordmark from PreScale's own run on prescale.dev.
+// Draw the footer wordmark from PreScale's own run on its dashboard.
 //
-//   node scripts/dogfood.mjs ../.prescale/runs/<id>.json https://prescale.dev/r/<slug>
+//   node scripts/dogfood.mjs ../.prescale/runs/<id>.json [https://prescale.dev/r/<slug>]
 //
-// Writes src/data/dogfood.ts. Only a real run against prescale.dev is accepted:
-// the wordmark claims to be our own measurement, so it never shows anything else.
+// Writes src/data/dogfood.ts. Only our own measurement is accepted: a run against
+// prescale.dev, or a replica-mode run (`prescale run --app`) of a local build of
+// the dashboard. Vercel doesn't allow load tests on our plan, so in practice it's
+// the replica, and the caption says so.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const [path, report = null] = process.argv.slice(2);
@@ -14,11 +16,15 @@ if (!path) {
 }
 
 const result = JSON.parse(readFileSync(path, "utf8"));
-const host = new URL(result.target.url).hostname;
-if (host !== "prescale.dev" && !host.endsWith(".prescale.dev")) {
-  console.error(`refusing ${host}: the wordmark only shows PreScale's own run on prescale.dev`);
+const target = new URL(result.target.url).hostname;
+const local = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(target);
+const ours = target === "prescale.dev" || target.endsWith(".prescale.dev");
+if (!ours && !(local && result.config?.replica)) {
+  console.error(`refusing ${target}: the wordmark only shows PreScale's own run ` +
+    "(prescale.dev, or a replica-mode run of the dashboard)");
   process.exit(1);
 }
+const host = ours ? target : "a local build of prescale.dev/dashboard";
 
 const stages = result.stages
   .filter((stage) => stage.total && stage.p95_ms > 0)
