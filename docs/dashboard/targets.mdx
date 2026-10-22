@@ -1,0 +1,45 @@
+---
+title: "Targets and ownership"
+sidebarTitle: "Targets"
+description: "Add the sites you test and prove you own them with a DNS record, a file, or a response header."
+---
+
+A target is a site you test, like `staging.myapp.com`. Every run against it lands on its
+capacity timeline.
+
+## Add a target
+
+**Targets → Add target**, then paste the URL. Or just upload a run: the first upload for a
+new site adds it automatically.
+
+## Verify ownership
+
+PreScale only signs off capacity for sites their owners have verified. Pick one method on
+the target's page, add the record it shows, then click **Check now**.
+
+| Method | Add this |
+|---|---|
+| DNS | A `TXT` record at `_prescale.<your host>` with value `prescale-verify=<token>` |
+| HTML file | Serve `prescale-verify=<token>` at `/.well-known/prescale-<token>.txt` |
+| Header | Return `x-prescale-verification: <token>` from your site |
+
+DNS changes can take a few minutes to show up. If a check fails, PreScale says exactly why.
+A later failed recheck never removes an earlier verification.
+
+## Preview deploys
+
+Give a target a **preview pattern** such as `myapp-*-acme.vercel.app` and uploads from
+matching preview URLs land on the same timeline. Patterns that would claim a whole platform
+(`*.vercel.app`) aren't allowed. The [GitHub Action](/guides/github-action) names its
+target explicitly, so it doesn't need a pattern.
+
+## Status and regressions
+
+Each target is **Healthy**, **Watch** or **Regressed**, judged against its baseline branch
+(`main` by default, changeable on the target page):
+
+- A drop of more than 20% vs the latest run on the baseline branch is a regression. It's
+  confirmed when the confidence bands don't overlap; otherwise the target is on Watch.
+- A regression stays open until the baseline branch gets back to where it was.
+- A run that never broke but was tested below the baseline's level is *inconclusive* and
+  doesn't change the status.
