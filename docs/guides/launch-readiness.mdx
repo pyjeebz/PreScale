@@ -7,7 +7,7 @@ description: "Use PreScale to find your capacity ceiling before launch: run a lo
 Before a product launch, a marketing push, or a Hacker News post, use PreScale to find your capacity ceiling, understand what breaks first, and fix it — before users find out. A broken launch during peak interest is expensive to recover from. An hour of load testing beforehand is not.
 
 <Warning>
-  Always run PreScale against a **staging or preview URL**, not production. Load testing sends real traffic and can cause real outages or unexpected bills. PreScale will prompt you to confirm ownership of any non-local host; pass `--i-own-this` to skip the prompt in automated or rehearsed runs.
+  Always run PreScale against a **staging URL** or a local build, not production. Load testing sends real traffic and can cause real outages or unexpected bills. PreScale will prompt you to confirm ownership of any non-local host; pass `--i-own-this` to skip the prompt in automated or rehearsed runs.
 </Warning>
 
 ## Step-by-step launch prep
@@ -16,7 +16,7 @@ Before a product launch, a marketing push, or a Hacker News post, use PreScale t
   <Step title="Start your staging server">
     Point PreScale at a staging or preview environment that mirrors production as closely as possible — same runtime, same database tier, same environment variables. The closer the staging environment is to production, the more actionable the results will be.
 
-    If you are deploying to a platform like Vercel, Fly, or Railway, use the preview URL for your current branch. For a VPS or Kubernetes setup, deploy a recent build to a staging namespace or instance first.
+    For a VPS or Kubernetes setup, deploy a recent build to a staging namespace or instance first. On a platform, check its rules before load-testing a preview: Vercel, Netlify and Cloudflare only allow it by arrangement ([host rules](/reference/host-rules)). Without that, test your app's own production build with [replica mode](/guides/replica-mode): `prescale investigate http://localhost:3000 --app "npm run build && npm start"`.
   </Step>
 
   <Step title="Run the load test">
