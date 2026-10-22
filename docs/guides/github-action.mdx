@@ -1,25 +1,36 @@
 ---
 title: "Capacity on every pull request"
 sidebarTitle: "GitHub Action"
-description: "Load-test every preview deploy and get one PR comment with the capacity change, the culprit route and the fix."
+description: "Build and load-test every pull request in CI, then get one PR comment with the capacity change, the culprit route and the fix."
 ---
 
-The PreScale GitHub Action runs when a preview deploy finishes, load-tests it, uploads the
-result, and keeps **one** comment on the pull request up to date:
+The PreScale GitHub Action load-tests each pull request, uploads the result, and keeps
+**one** comment on the pull request up to date:
 
-> ### 🔴 Capacity regressed: 150 → 100 users (−33%)
+> ### 🔴 Capacity regressed: 100 → 50 users (−50%)
 > ```text
-> main @ 71aa0c9  ░░░░░░░░░░░░░░▒▒▒██       ~150
-> this deploy     ░░░░░░░▒▒▒██              ~100  −33%
+> main @ da050db  ░░░░░░░░░░░░░░░░░▒▒▒██    ~100
+> this build      ░░░░░░▒▒▒██               ~50  −50%
 > ```
-> **Breaks first:** `/api/search` · errors climbed at ~150 users
-> **Why:** `connection_pool` (high confidence) · **Fix:** increase the DB connection-pool size.
+> **Breaks first:** `/api/search?q=shoe` · p95 crossed the latency wall at ~75 users
+> **Why:** `concurrency_ceiling` (high confidence) · **Fix:** raise the worker count, or scale out.
 
 The bars are PreScale's mark in text: sparse `░` → `▒` → a solid `█` end at the capacity
-measured. When the deploy breaks on more than one route, the comment also shows each
-route's p95 as a bar toward the latency wall (`┆`).
+measured. When more than one route is tested, the comment also shows each route's p95 as a
+bar toward the latency wall (`┆`).
 
-## Set it up
+There are two ways to run it:
+
+- **[Replica mode](#replica-mode-recommended)** (recommended): the Action builds the pull
+  request in the job and tests it on localhost. No deploy, no host, nothing to arrange.
+- **[A deployed staging URL](#testing-a-deployed-staging-url)**: the Action tests a deploy
+  once it finishes. Only for staging you're allowed to load-test.
+
+## Replica mode (recommended)
+
+The Action starts your app in the job with your build-and-start command, waits for it to
+answer, tests it, and stops it. No host is involved, so no host's load-testing rules apply
+and no CDN shapes the result. See [Replica mode](/guides/replica-mode) for how it works.
 
 <Steps>
   <Step title="Add a token as a secret">
@@ -27,89 +38,135 @@ route's p95 as a bar toward the latency wall (`┆`).
     repository secret.
   </Step>
   <Step title="Add your target">
-    Add the site the deploys belong to (for example `staging.myapp.com`) in the dashboard.
+    Add a target for the app in the dashboard (for example `myapp.com`). Runs from every pull
+    request attach to it, and its timeline shows how capacity changes over time.
   </Step>
   <Step title="Commit the workflow">
     ```yaml .github/workflows/capacity.yml
     name: Capacity
-    on: deployment_status
+    on:
+      pull_request:
+      push:
+        branches: [main]          # the baseline pull requests compare against
 
     jobs:
       capacity:
-        if: github.event.deployment_status.state == 'success'
         runs-on: ubuntu-latest
         permissions:
-          contents: read          # find the PR for the deployed commit
+          contents: read          # find the PR for the commit
           pull-requests: write    # the capacity comment
         steps:
+          - uses: actions/checkout@v4
+          - uses: actions/setup-node@v4
+            with:
+              node-version: 22
+          - run: npm ci
           - uses: pyjeebz/prescale/action@v1
             with:
               token: ${{ secrets.PRESCALE_TOKEN }}
-              target: staging.myapp.com
+              target: myapp.com
+              app: npm run build && npm start   # tested at http://localhost:3000
               paths: |
                 /api/search
-                /checkout
-              headers: |
-                x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
               fail-on-regression: true
+            env:
+              # Your app runs with these: point them at dev or staging, never production.
+              DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
     ```
   </Step>
 </Steps>
 
-Vercel, Netlify and other platforms report preview deploys as `deployment_status` events,
-so the workflow runs on every preview.
+Pushes to `main` record the baseline; each pull request is compared with it. The app's
+command is never saved or uploaded, and results say they were measured on a build of the
+commit in CI, so serverless behaviour such as cold starts isn't included.
 
-## Give pull requests a baseline
+<Tip>
+Not a Node app? Any command that starts a production server works, such as
+`gunicorn app:app -b 127.0.0.1:3000` or `bin/rails server -e production -p 3000`. Set `url` if
+it listens somewhere other than `http://localhost:3000`, and `working-directory` if the app
+lives in a subfolder.
+</Tip>
 
-Pull requests compare with the latest run on your baseline branch (`main`). Give it one by
-running the check on pushes to `main` against your staging URL:
+## Testing a deployed staging URL
 
-```yaml
-on:
-  push:
-    branches: [main]
+<Warning>
+**Your host's rules come first.** Vercel only permits load testing on Enterprise plans, with
+prior notice. Netlify needs its express permission, and Cloudflare blocks load tests unless
+they're arranged. See [Hosts that restrict load testing](/reference/host-rules).
+</Warning>
+
+On deploys hosted by Vercel, Netlify or Cloudflare, the Action skips the test, says why on
+the pull request and in the job summary, and passes. Set `host-permission: true` only if you
+have that host's permission. Use this mode for staging you're allowed to load: your own
+servers, or a host that permits load testing.
+
+```yaml .github/workflows/capacity.yml
+name: Capacity
+on: deployment_status
+
 jobs:
-  baseline:
+  capacity:
+    # Most deploy platforms report deploys to GitHub as deployment statuses.
+    if: github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: pyjeebz/prescale/action@v1
         with:
           token: ${{ secrets.PRESCALE_TOKEN }}
           target: staging.myapp.com
-          url: https://staging.myapp.com
-          comment: false
+          paths: |
+            /api/search
+            /checkout
+          # Logged-in or protected routes: headers go to your site only.
+          headers: |
+            authorization: Bearer ${{ secrets.STAGING_TOKEN }}
+          fail-on-regression: true
 ```
 
-Until there is one, each push compares with the previous push on the same pull request.
+To give these pull requests a baseline, also run the check on pushes to `main` against your
+staging URL (set `url` and `comment: false`). Until there is one, each push compares with
+the previous push on the same pull request.
 
 ## Safety and cost
 
 <Warning>
-Previews often point at the same database as production. If yours do, the load reaches it
-too. Check before turning this on.
+In replica mode the app uses the job's environment; on a deploy it uses the deploy's.
+Either way the load reaches whatever database the app talks to. Point it at dev or staging,
+never production.
 </Warning>
 
 - **Production deploys are skipped** unless you set `allow-production: true`.
-- **Gentle by default:** 100 virtual users per check. On serverless every request is a billed
-  invocation; the job log says how many requests each check sent.
-- **Headers stay private:** sent to your site only, never saved or uploaded.
-- `fail-on-regression` fails the check only on a **confirmed** drop. Uncertain drops show as
-  a warning.
+- **Restricted hosts are skipped** unless you set `host-permission: true`.
+- **Gentle by default:** 100 virtual users per check. On a serverless deploy every request
+  is a billed invocation; the job log says how many requests each check sent.
+- **Headers and the app command stay private:** headers go to your site only, and neither is
+  saved or uploaded.
+- `fail-on-regression` fails the check only on a **confirmed** drop (more than 20%, with
+  confidence bands that don't overlap). Uncertain drops show as a warning.
 
 ## Inputs
 
 | Input | Default | |
 |---|---|---|
 | `token` | — | PreScale API token (required) |
-| `target` | — | The target hostname the deploy belongs to (required) |
-| `url` | deploy URL | URL to test |
+| `target` | — | The target hostname runs attach to (required) |
+| `app` | — | Replica mode: the command that builds and starts your app in the job |
+| `app-timeout` | `600` | Seconds to wait for the app to answer (builds take a while) |
+| `working-directory` | `.` | Where to run `app` (monorepos) |
+| `url` | `http://localhost:3000` with `app`, else the deploy URL | URL to test |
 | `paths` | — | Extra routes, one per line |
-| `headers` | — | `Name: value` per line |
+| `headers` | — | `Name: value` per line, sent to your site only |
 | `max-users` | `100` | Peak virtual users |
 | `stage-seconds` | `5` | Seconds per load level |
 | `fail-on-regression` | `false` | Fail on a confirmed regression |
 | `comment` | `true` | Post or update the PR comment |
 | `allow-production` | `false` | Also test production deploys |
+| `host-permission` | `false` | You have the host's permission to load-test it (Vercel, Netlify, Cloudflare) |
 | `app-url` | `https://prescale.dev/dashboard` | Dashboard URL |
+| `prescale-version` | latest | CLI version to install |
 
-Not on GitHub? `prescale ci --target staging.myapp.com <url>` does the same from any CI.
+Not on GitHub? `prescale ci --target myapp.com --app "npm run build && npm start"` does the
+same from any CI.
