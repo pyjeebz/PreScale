@@ -52,6 +52,18 @@ inputs:
     description: PreScale dashboard URL.
     required: false
     default: https://prescale.dev/dashboard
+  app:
+    description: "Replica mode: the command that builds and starts your app in this job (e.g. 'npm run build && npm start'). PreScale tests it on the local URL (default http://localhost:3000) and stops it after, so no deploy and no host are involved. Never saved or uploaded."
+    required: false
+    default: ""
+  app-timeout:
+    description: Seconds to wait for the app to answer (builds can take minutes).
+    required: false
+    default: "600"
+  working-directory:
+    description: Where to run the app command (for monorepos).
+    required: false
+    default: "."
   prescale-version:
     description: PreScale CLI version to install (default latest).
     required: false
@@ -76,6 +88,7 @@ runs:
 
     - name: Capacity check
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
         PRESCALE_TOKEN: ${{ inputs.token }}
         PRESCALE_URL: ${{ inputs.app-url }}
@@ -90,11 +103,14 @@ runs:
         INPUT_COMMENT: ${{ inputs.comment }}
         INPUT_ALLOW_PRODUCTION: ${{ inputs.allow-production }}
         INPUT_HOST_PERMISSION: ${{ inputs.host-permission }}
+        INPUT_APP: ${{ inputs.app }}
+        INPUT_APP_TIMEOUT: ${{ inputs.app-timeout }}
       run: |
         args=(--max-users "$INPUT_MAX_USERS" --stage-seconds "$INPUT_STAGE_SECONDS" --store "$RUNNER_TEMP/prescale")
         [ "$INPUT_FAIL" = "true" ] && args+=(--fail-on-regression)
         [ "$INPUT_COMMENT" = "true" ] || args+=(--no-comment)
         [ "$INPUT_ALLOW_PRODUCTION" = "true" ] && args+=(--allow-production)
         [ "$INPUT_HOST_PERMISSION" = "true" ] && args+=(--host-permission)
+        [ -n "$INPUT_APP" ] && args+=(--app "$INPUT_APP" --app-timeout "$INPUT_APP_TIMEOUT")
         [ -n "$INPUT_URL" ] && args+=("$INPUT_URL")
         prescale ci "${args[@]}"
