@@ -98,6 +98,8 @@ PreScale's MCP server is conservative about what it will load-test on the agent'
 
 **Non-local hosts are refused by default.** If the agent tries to load-test a staging or production host without explicit permission, the server returns a `HostNotAllowedError` rather than sending traffic.
 
+**Hosts that restrict load testing are refused too.** Even an allowed host on Vercel, Netlify or Cloudflare is refused unless the server was started with `PRESCALE_HOST_PERMISSION=1`, because those hosts only allow load tests by arrangement ([host rules](/reference/host-rules)).
+
 To allow a specific staging host, either set the `PRESCALE_MCP_ALLOW` environment variable when starting the server, or pass `--allow` on the `prescale mcp` command:
 
 ```bash
