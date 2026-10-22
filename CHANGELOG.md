@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.0.2 — 2026-10-21
+## 1.1.0 — 2026-10-22
+
+### Added
+- **Replica mode: test your app, not your host.** `--app "npm run build && npm start"` on
+  `run`, `investigate` and `ci` starts your app's own build, waits until the local URL answers,
+  runs the test on localhost, and stops the app and everything it started (also on errors and
+  Ctrl-C). No host is involved, so no host's load-testing rules apply and no CDN shapes the
+  result.
+  - Only local URLs; it refuses if something is already answering there, and shows the end of
+    the app's log if it crashes or never comes up. `--app-timeout` (default 600s) covers slow
+    builds.
+  - Results carry `config.replica: true` and say they were measured on a local replica (no
+    serverless cold starts). The command is never saved or uploaded.
+- **The GitHub Action runs on pull requests with no deploy:** the new `app` input builds and
+  tests the PR in the job (`app-timeout` and `working-directory` too). Pushes to `main` give PRs
+  their baseline.
+
 
 ### Added
 - **PreScale checks your host's rules before sending load.** Vercel only permits load
