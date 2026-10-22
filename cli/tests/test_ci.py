@@ -382,6 +382,7 @@ def test_ci_replica_mode_starts_tests_and_stops_the_app(monkeypatch, tmp_path):
     result = CliRunner().invoke(cli, ["ci", url, "--target", "myapp.com", "--app", app,
                                       "-u", "2", "-s", "0.2", "--store", str(tmp_path)])
     assert result.exit_code == 0, result.output
+    assert "Previews often share" not in result.output  # it's a local build, not a preview
     assert seen["result"]["config"]["replica"] is True
     assert "http.server" not in str(seen["result"])  # the command is never uploaded
     with pytest.raises(httpx.HTTPError):
