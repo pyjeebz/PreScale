@@ -62,8 +62,10 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
             )
         console.print(table)
         sent = sum(stage.get("total", 0) for stage in stages)
-        console.print(f"[dim]Sent {sent:,} requests while measuring "
-                      "(on serverless, each one is a billed invocation).[/dim]")
+        # A local replica bills nothing; a deployed serverless app bills every request.
+        billed = ("" if result.get("config", {}).get("replica")
+                  else " (on serverless, each one is a billed invocation)")
+        console.print(f"[dim]Sent {sent:,} requests while measuring{billed}.[/dim]")
         console.print()
 
     if onset_users is None:
