@@ -44,6 +44,10 @@ inputs:
     description: Also run on production deploys. Off by default; PreScale ramps load on previews and staging.
     required: false
     default: "false"
+  host-permission:
+    description: Confirm the deploy's host allows load testing. Vercel only permits it on Enterprise plans with notice, and Netlify and Cloudflare need it arranged; without this, PreScale skips their deploys and says why on the PR.
+    required: false
+    default: "false"
   app-url:
     description: PreScale dashboard URL.
     required: false
@@ -85,10 +89,12 @@ runs:
         INPUT_FAIL: ${{ inputs.fail-on-regression }}
         INPUT_COMMENT: ${{ inputs.comment }}
         INPUT_ALLOW_PRODUCTION: ${{ inputs.allow-production }}
+        INPUT_HOST_PERMISSION: ${{ inputs.host-permission }}
       run: |
         args=(--max-users "$INPUT_MAX_USERS" --stage-seconds "$INPUT_STAGE_SECONDS" --store "$RUNNER_TEMP/prescale")
         [ "$INPUT_FAIL" = "true" ] && args+=(--fail-on-regression)
         [ "$INPUT_COMMENT" = "true" ] || args+=(--no-comment)
         [ "$INPUT_ALLOW_PRODUCTION" = "true" ] && args+=(--allow-production)
+        [ "$INPUT_HOST_PERMISSION" = "true" ] && args+=(--host-permission)
         [ -n "$INPUT_URL" ] && args+=("$INPUT_URL")
         prescale ci "${args[@]}"
