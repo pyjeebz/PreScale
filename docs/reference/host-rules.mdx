@@ -1,0 +1,60 @@
+---
+title: "Hosts that restrict load testing"
+sidebarTitle: "Host rules"
+description: "Vercel, Netlify and Cloudflare only allow load tests by arrangement. How PreScale recognises them, and what to do instead."
+---
+
+A load test sends far more traffic than a normal visitor, so some hosts only allow one when
+you've arranged it with them first. PreScale respects that: it recognises these hosts from
+the first response and sends no load until you confirm you have permission.
+
+| Host | Their rule | Source |
+|---|---|---|
+| **Vercel** | Load testing is only permitted on Enterprise plans, with prior notice to Vercel. | [Vercel's load-testing policy](https://vercel.com/kb/guide/what-s-vercel-s-policy-regarding-load-testing-deployments) |
+| **Netlify** | No load testing without Netlify's express permission, arranged in advance. | [Netlify's acceptable use policy](https://www.netlify.com/legal/acceptable-use-policy/) |
+| **Cloudflare** | Load tests are treated as attacks and blocked unless arranged with Cloudflare first. | [Cloudflare on scans and tests](https://developers.cloudflare.com/fundamentals/reference/scans-penetration/) |
+
+Other platforms have their own terms. Most allow you to load-test resources you own within
+their acceptable-use limits, but check yours before you start.
+
+## How PreScale checks
+
+Before any load, PreScale makes **one normal request**, the same as opening the page in a
+browser, and reads the response headers:
+
+- Vercel: `x-vercel-id`, or `server: Vercel`
+- Netlify: `x-nf-request-id`, or a `server` header starting with `Netlify`
+- Cloudflare: `cf-ray`, or `server: cloudflare`
+
+A site behind more than one (Vercel behind Cloudflare, say) is matched to the platform
+closest to your app.
+
+## What happens next
+
+| Where | Without permission | With permission |
+|---|---|---|
+| `run` / `investigate` in a terminal | Explains the rule and asks. The default answer is no. | `--host-permission` skips the question |
+| `--json` and scripts | Stops with the rule and exits 1 | `--host-permission`, or `PRESCALE_HOST_PERMISSION=1` |
+| `prescale ci` and the [GitHub Action](/guides/github-action) | Skips the deploy, says why on the pull request and in the job summary, and passes | `host-permission: true` |
+| The [MCP server](/guides/mcp-agents) | Refuses | Start the server with `PRESCALE_HOST_PERMISSION=1` |
+
+Only pass `--host-permission` if you really have the host's permission. It's your statement,
+and the host's terms still apply.
+
+## What to do instead
+
+- **Test your app, not your host.** [Replica mode](/guides/replica-mode) starts your app's
+  own build on your machine or in CI and tests it on localhost. What usually breaks under
+  load is your code and database, and you'll find that without involving your host at all.
+- **Use staging you're allowed to load:** your own servers, or a host that permits load
+  testing.
+- **Arrange it.** On Vercel Enterprise, give Vercel notice first; on Netlify and Cloudflare,
+  ask them.
+
+## Why this exists
+
+We load-tested our own site, prescale.dev, from one laptop. Vercel's DDoS protection slowed
+the test, then blocked our IP, and PreScale 1.0.0 blamed a "concurrency ceiling" in a site
+with no workers. Then we read Vercel's policy. Since 1.0.1, PreScale reports a CDN's
+firewall blocks and cached responses for what they are, and since 1.0.2 it checks the host's
+rules first.
