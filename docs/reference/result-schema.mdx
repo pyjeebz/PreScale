@@ -25,7 +25,7 @@ The root object has the following properties. Fields marked **required** must be
 </ResponseField>
 
 <ResponseField name="tool_version" type="string" required>
-  The version of `prescale` that produced this result (e.g. `"1.0.0"`).
+  The version of `prescale` that produced this result (e.g. `"1.1.2"`).
 </ResponseField>
 
 <ResponseField name="created_at" type="string" required>
@@ -146,6 +146,10 @@ The `config` object records every tunable that governed the run. You can reprodu
 
 <ResponseField name="config.think_time_s" type="number">
   Simulated pause (seconds) each virtual user waited between requests.
+</ResponseField>
+
+<ResponseField name="config.replica" type="boolean">
+  `true` when the run tested a local build that PreScale started with `--app` ([replica mode](/guides/replica-mode)). Absent otherwise. The command itself is never recorded.
 </ResponseField>
 
 <ResponseField name="config.fail_under" type="integer | null">
@@ -311,7 +315,7 @@ A minimal result for a successful run against a local app:
   "schema_version": 1,
   "kind": "run",
   "id": "20260628T173648Z",
-  "tool_version": "1.0.0",
+  "tool_version": "1.1.2",
   "created_at": "2026-06-28T17:36:48Z",
   "warning": null,
   "target": {
