@@ -52,7 +52,7 @@ const FEATURES: Feature[] = [
   },
   {
     title: "Capacity on every pull request",
-    body: "The GitHub Action tests each preview deploy and keeps one comment on the PR: the change against main, what breaks first, and how to fix it.",
+    body: "The GitHub Action builds each pull request, tests it right there in CI, and keeps one comment on the PR: the change against main, what breaks first, and how to fix it. No deploy needed.",
     window: "Pull request #42",
     Preview: PrCommentPreview,
   },
