@@ -74,10 +74,11 @@ def test_firewall_that_starts_mid_ramp_is_named_with_the_fix(tmp_path):
     result = _run(handler, tmp_path)
     assert result["verdict"]["onset_reason"] == "errors"
     assert "Vercel's firewall started blocking this test" in result["warning"]
-    assert "vercel firewall system-bypass add" in result["warning"]
+    assert "on staging you're allowed to load" in result["warning"]
+    assert "system-bypass" not in result["warning"]  # never suggest getting around the host
     investigation = result["investigation"]
     assert investigation["bottleneck_class"] == "edge_protection"
-    assert any("system-bypass" in line for line in investigation["remediation"])
+    assert investigation["remediation"][0].startswith("Load-test your app locally")
 
 
 def test_firewall_seen_only_by_the_probe_still_wins(tmp_path):
@@ -88,7 +89,7 @@ def test_firewall_seen_only_by_the_probe_still_wins(tmp_path):
     diagnosis = classify(probes)
     assert diagnosis.bottleneck_class == "edge_protection" and diagnosis.confidence == "high"
     assert "Vercel's firewall answered instead of your app" in diagnosis.evidence
-    assert remediate(diagnosis, {"server": "Vercel"})[0].startswith("Exempt your IP")
+    assert remediate(diagnosis, {"server": "Vercel"})[0].startswith("Load-test your app locally")
 
 
 def test_app_errors_on_a_cached_route_still_blame_the_app():
