@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 — 2026-10-22
+
+### Fixed
+- **The GitHub Action loads again.** An example in an input's description used a
+  `secrets` expression, which GitHub evaluates and rejects, so `pyjeebz/prescale/action@v1`
+  failed before running. The description no longer contains one.
+- In replica mode, `prescale ci` no longer warns that previews share production's database:
+  the load reaches whatever the job's environment points your app at.
+
 ## 1.1.0 — 2026-10-22
 
 ### Added
@@ -17,6 +26,7 @@
   tests the PR in the job (`app-timeout` and `working-directory` too). Pushes to `main` give PRs
   their baseline.
 
+## 1.0.2 — 2026-10-21
 
 ### Added
 - **PreScale checks your host's rules before sending load.** Vercel only permits load
@@ -33,6 +43,7 @@
 - When a CDN's firewall blocks a test, PreScale now suggests testing locally or on staging
   you're allowed to load, or arranging the test with your host, instead of exempting your IP.
 
+## 1.0.1 — 2026-10-21
 
 ### Fixed
 - **Sites behind a CDN no longer get blamed for the CDN's limits.** Load-testing a site on
