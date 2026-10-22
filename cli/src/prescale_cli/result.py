@@ -30,6 +30,7 @@ from prescale_cli.loadtest import (
     generator_saturation,
     route_label,
 )
+from prescale_cli.replica import NOTE as REPLICA_NOTE
 
 SCHEMA_VERSION = 1
 
@@ -52,8 +53,9 @@ class AmbiguousResultError(ResultError):
 # --- building -------------------------------------------------------------
 
 def build_result(report: RunReport, *, url: str, targets: list[str],
-                 config: dict, warning: str | None) -> dict:
-    """Turn a finished `RunReport` plus its inputs into the `Result` envelope."""
+                 config: dict, warning: str | None, replica: bool = False) -> dict:
+    """Turn a finished `RunReport` plus its inputs into the `Result` envelope.
+    `replica` marks a run against the app's own build started by PreScale."""
     now = datetime.now(timezone.utc)
     parsed = urlparse(url)
     # A busy generator inflates measured latency, so it can fake a latency onset;
@@ -70,6 +72,9 @@ def build_result(report: RunReport, *, url: str, targets: list[str],
     # A CDN that blocked or cached the test shaped the result, not the app: say so.
     for note in edge_notes(report.stages):
         warning = f"{warning} {note}" if warning else note
+    if replica:
+        config = {**config, "replica": True}
+        warning = f"{warning} {REPLICA_NOTE}" if warning else REPLICA_NOTE
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "run",
