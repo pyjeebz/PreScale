@@ -199,8 +199,8 @@ const FAQ: Array<[string, ReactNode]> = [
     <>Nothing, unless you upload a run. An upload is the saved run file: the verdict, timings, diagnosis, the URL and the git commit. Never bodies, cookies, header values or your code. <a href={LINKS.data} className="text-accent hover:underline">Details</a>.</>,
   ],
   [
-    "Does it work on Vercel and other serverless hosts?",
-    "Yes. The Action runs on every preview deploy and can pass a protection-bypass header. Every request is a billed invocation on serverless, so PreScale tells you how many requests each check sent.",
+    "Can I load-test a site on Vercel, Netlify or Cloudflare?",
+    "Only with your host's permission. Vercel permits load testing on Enterprise plans with prior notice, and Netlify and Cloudflare need it arranged. PreScale recognises these hosts and asks before sending any load, and the GitHub Action skips their deploys unless you confirm. Without permission, test your app locally or on staging you're allowed to load.",
   ],
   [
     "What if my laptop is the bottleneck?",
