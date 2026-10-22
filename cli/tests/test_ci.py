@@ -170,6 +170,15 @@ def test_regression_comment_has_change_culprit_cause_and_fix():
     assert "Measured on a preview deploy" in body
 
 
+def test_replica_comment_says_it_measured_a_build_not_a_deploy():
+    result = _result()
+    result["config"] = {"replica": True}
+    body = ci_mod.render_comment(result, _upload(), target="staging.myapp.com", sha=SHA)
+    assert "| this build | ~100 |" in body and "this deploy" not in body
+    assert "Measured on a build of this commit in CI" in body
+    assert "preview deploy" not in body
+
+
 def test_possible_regression_says_it_may_be_noise():
     body = ci_mod.render_comment(_result(), _upload(kind="possible"),
                                  target="staging.myapp.com", sha=SHA)
