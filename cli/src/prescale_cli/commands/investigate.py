@@ -13,6 +13,7 @@ from rich.panel import Panel
 from prescale_cli.cloud import CloudError, require_credentials
 from prescale_cli.commands.audit import _ICONS as _AUDIT_ICONS
 from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
+from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.investigate import _LATENCY_WALL_S
 from prescale_cli.investigate import investigate as run_investigate
@@ -47,14 +48,17 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
                    "its peak to show headroom.")
 @click.option("--audit", "with_audit", is_flag=True,
               help="Also run the load-free HTTP hygiene audit (what Launch Guard shows).")
+@app_option
+@app_timeout_option
 @host_permission_option
 @header_option
 @upload_option
 def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                 stage_seconds: float, max_rps: float | None, yes: bool,
                 as_json: bool, store: str | None, fail_under: int | None,
-                profile_name: str | None, with_audit: bool, host_permission: bool,
-                headers: dict[str, str], upload: bool) -> None:
+                profile_name: str | None, with_audit: bool, app: str | None,
+                app_timeout: float, host_permission: bool, headers: dict[str, str],
+                upload: bool) -> None:
     """Find what breaks first, then probe it to explain WHY - and how to fix it.
 
     With no URL, re-investigates the latest saved run's target.
@@ -66,6 +70,7 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
         prescale investigate https://staging.myapp.com --i-own-this --upload
         prescale investigate https://staging.myapp.com --profile hn-frontpage --audit
         prescale investigate            # re-investigate the latest saved run
+        prescale investigate http://localhost:3000 --app "npm run build && npm start"
     """
     if upload:
         try:
@@ -98,6 +103,9 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                       "(expected e.g. http://localhost:8000).")
         raise SystemExit(1)
 
+    if app:
+        start_replica(app, url, timeout=app_timeout, console=console, quiet=as_json)
+
     host = (parsed.hostname or "").lower()
     if host not in _LOCAL_HOSTS and not yes:
         if as_json:
@@ -123,7 +131,7 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                     url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                     max_rps=max_rps, store=store, headers=headers,
                     think_time=prof.think_time_s if prof else 0.0, profile=prof,
-                    audit=with_audit, host_permission=True,
+                    audit=with_audit, host_permission=True, replica=bool(app),
                     progress_cb=live.starting, on_stage=live.finished,
                     on_probe=live.diagnosing))
         else:
@@ -131,7 +139,7 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                 url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                 max_rps=max_rps, store=store, headers=headers,
                 think_time=prof.think_time_s if prof else 0.0, profile=prof, audit=with_audit,
-                host_permission=True))
+                host_permission=True, replica=bool(app)))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1)
