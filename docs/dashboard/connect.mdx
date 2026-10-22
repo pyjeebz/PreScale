@@ -1,0 +1,62 @@
+---
+title: "Connect the CLI to your dashboard"
+sidebarTitle: "Connect the CLI"
+description: "Run prescale login, approve it in your browser, then upload runs to your dashboard. Nothing leaves your machine unless you ask."
+---
+
+The CLI works fully offline. Connecting it to your dashboard at
+[prescale.dev/dashboard](https://prescale.dev/dashboard) keeps a history of every run, a
+capacity timeline per site, and shareable reports.
+
+<Steps>
+  <Step title="Log in">
+    ```bash
+    prescale login
+    ```
+    Your browser opens on the dashboard with a short code. Check it matches the one in
+    your terminal and click **Approve**. The CLI is signed in a second later; its token is
+    saved to `~/.config/prescale/credentials.json`, readable only by you.
+  </Step>
+  <Step title="Upload a run">
+    ```bash
+    prescale investigate https://staging.myapp.com --i-own-this --upload
+    ```
+    The CLI prints a link to the run. The first upload for a new site adds it as a target.
+  </Step>
+</Steps>
+
+## Upload later, or check first
+
+```bash
+prescale upload                    # the latest saved run
+prescale upload 20261015T1200Z     # a specific run (id or unique prefix)
+prescale upload --dry-run          # print exactly what would be sent, send nothing
+```
+
+An upload is the saved run file, unchanged. See [what gets uploaded](/reference/data-boundary).
+
+## Protected previews and logged-in routes
+
+Pass request headers with `-H`. They go to your site only and are never saved or uploaded.
+
+```bash
+prescale investigate https://myapp-git-feat-acme.vercel.app \
+  -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" --upload
+```
+
+## No browser on that machine
+
+On a server or over SSH, `prescale login` prints the approval link instead of opening a
+browser: open it on any device where you're signed in. `--no-browser` does the same
+anywhere. Or create a token under **Connect** and run `prescale login --paste`.
+
+## In CI
+
+Set `PRESCALE_TOKEN` (and `PRESCALE_URL` if you self-host) instead of running
+`prescale login`. For pull requests, use the [GitHub Action](/guides/github-action).
+
+## Tokens
+
+Each approved login shows up on the **Connect** page as `CLI · <machine name>`. Revoke a
+token there at any time: the CLI using it stops working immediately and tells you to log
+in again. `prescale logout` forgets the saved token on this machine.
