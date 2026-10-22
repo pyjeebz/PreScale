@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.3 — 2026-10-22
 
 ### Added
 - **The ramp is never silent in CI.** In GitHub Actions logs, pipes and anywhere a live table
