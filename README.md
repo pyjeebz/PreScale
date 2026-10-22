@@ -59,7 +59,7 @@ It isn't a framework you program (like k6 or Locust) — there's nothing to scri
 ## Why PreScale
 
 - **Zero config.** No test scripts, no YAML, no account. One command against a URL.
-- **Stack-agnostic.** It tests a URL, so it doesn't care what's behind it — Vercel, Fly, Railway, Kubernetes, a VPS, serverless, anything.
+- **Stack-agnostic.** It tests a URL, so it doesn't care what's behind it: Fly, Railway, Kubernetes, a VPS, your laptop. It checks your host's rules before sending load.
 - **An answer, not a histogram.** "You're good to ~90 users, your DB is the wall" — and [`investigate`](#investigate--and-why) tells you how to fix it.
 - **Honest about uncertainty.** The verdict is a calibrated range with a stable/uncertain flag, not false precision.
 - **Safe by default.** It won't hammer a non-local host until you confirm you own it.
@@ -271,7 +271,7 @@ It's self-contained (httpx + asyncio) — no external load tool or server requir
 
 Load testing sends real traffic and can cause real outages or bills. PreScale defaults to safe — it prompts before hitting any non-local host (and the MCP server refuses non-local hosts unless you allowlist them). Point it at a **staging / preview** URL, not production, unless you know what you're doing.
 
-**Behind a CDN (Vercel, Cloudflare)?** Load from one machine can look like an attack, and the CDN's DDoS protection may slow or challenge it. PreScale spots the firewall and cached responses and says so instead of blaming your app. For a clean measurement, exempt your IP for the test (Vercel: `vercel firewall system-bypass add <your-ip>`, removed afterwards) and test routes that aren't cached, where your app's capacity is decided.
+**Check your host's rules first.** Some hosts restrict load testing: Vercel only permits it on Enterprise plans with prior notice, Netlify needs its express permission, and Cloudflare blocks it unless arranged. PreScale recognises these hosts from their first response and won't send load until you confirm you have permission (`--host-permission`; in the GitHub Action, `host-permission: true`). Otherwise, test your app locally or on staging you're allowed to load. Behind a CDN, PreScale also spots firewall blocks and cached responses, so the CDN's limits aren't blamed on your app.
 
 ## Changelog
 
