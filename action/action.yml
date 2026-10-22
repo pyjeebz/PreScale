@@ -21,7 +21,7 @@ inputs:
     required: false
     default: ""
   headers:
-    description: "Extra request headers for the target, one 'Name: value' per line, e.g. 'x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}'. Never saved or uploaded."
+    description: "Extra request headers for the target, one 'Name: value' per line, e.g. 'x-api-key: ' followed by a secret from your workflow. Never saved or uploaded."
     required: false
     default: ""
   max-users:
