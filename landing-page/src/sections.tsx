@@ -200,7 +200,7 @@ const FAQ: Array<[string, ReactNode]> = [
   ],
   [
     "Can I load-test a site on Vercel, Netlify or Cloudflare?",
-    "Only with your host's permission. Vercel permits load testing on Enterprise plans with prior notice, and Netlify and Cloudflare need it arranged. PreScale recognises these hosts and asks before sending any load, and the GitHub Action skips their deploys unless you confirm. Without permission, test your app locally or on staging you're allowed to load.",
+    "Only with your host's permission. Vercel permits load testing on Enterprise plans with prior notice, and Netlify and Cloudflare need it arranged. PreScale recognises these hosts and asks before sending any load, and the GitHub Action skips their deploys unless you confirm. Without it, let PreScale build and test your app itself, on your machine or in CI, with no host involved.",
   ],
   [
     "What if my laptop is the bottleneck?",
