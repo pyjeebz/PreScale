@@ -302,3 +302,57 @@ def test_ci_defaults_to_a_gentle_ramp_and_reports_requests(monkeypatch, tmp_path
     assert seen["max_users"] == 100
     assert "Ramp: up to 100 users" in result.output
     assert "Sent 4,600 requests" in result.output
+
+
+def test_ci_skips_a_restricted_host_and_says_why_on_the_pr(monkeypatch, tmp_path):
+    from prescale_cli.hosts import VERCEL
+    from prescale_cli.loadtest import HostPolicyError
+
+    summary = _github_env(monkeypatch, tmp_path, _deployment())
+    seen = {}
+
+    async def fake_investigate(url, **kwargs):
+        seen["host_permission"] = kwargs["host_permission"]
+        raise HostPolicyError(VERCEL)
+
+    def fake_upsert(ctx, token, pr_number, body, marker):
+        seen["comment"] = (pr_number, body, marker)
+        return "created"
+
+    def no_upload(*args, **kwargs):
+        raise AssertionError("nothing to upload when no load was sent")
+
+    monkeypatch.setattr("prescale_cli.commands.ci.run_investigate", fake_investigate)
+    monkeypatch.setattr("prescale_cli.commands.ci.upload_result", no_upload)
+    monkeypatch.setattr("prescale_cli.commands.ci.upsert_pr_comment", fake_upsert)
+    monkeypatch.setattr("prescale_cli.commands.ci.find_pull_request",
+                        lambda ctx, token: {"number": 42, "head": {"ref": "feat/search"}})
+
+    result = CliRunner().invoke(cli, ["ci", "--target", "staging.myapp.com",
+                                      "--fail-on-regression"])
+    assert result.exit_code == 0, result.output  # nobody's CI breaks
+    assert seen["host_permission"] is False
+    number, body, marker = seen["comment"]
+    assert number == 42 and marker in body
+    assert "PreScale skipped this deploy" in body and "host-permission: true" in body
+    assert "Enterprise plans" in summary.read_text()
+    assert "::notice::PreScale skipped this Vercel deploy" in result.output
+
+
+def test_ci_host_permission_flag_reaches_the_test(monkeypatch, tmp_path):
+    _github_env(monkeypatch, tmp_path, _deployment())
+    seen = {}
+
+    async def fake_investigate(url, **kwargs):
+        seen["host_permission"] = kwargs["host_permission"]
+        return _result()
+
+    monkeypatch.setattr("prescale_cli.commands.ci.run_investigate", fake_investigate)
+    monkeypatch.setattr("prescale_cli.commands.ci.upload_result",
+                        lambda result, creds, *, pr, target: _upload())
+    monkeypatch.setattr("prescale_cli.commands.ci.upsert_pr_comment",
+                        lambda *args, **kwargs: "created")
+    monkeypatch.setattr("prescale_cli.commands.ci.find_pull_request", lambda ctx, token: None)
+    monkeypatch.setenv("PRESCALE_HOST_PERMISSION", "1")
+    CliRunner().invoke(cli, ["ci", "--target", "staging.myapp.com"])
+    assert seen["host_permission"] is True
