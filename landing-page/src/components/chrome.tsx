@@ -451,7 +451,8 @@ const ms = (value: number) => (value >= 1000 ? `${(value / 1000).toFixed(1)}s` :
 /** Says where the wordmark's dots come from, and links to the run. */
 function DogfoodCaption({ run }: { run: DogfoodRun }) {
   const p95s = run.stages.map((stage) => stage.p95);
-  const date = new Date(run.measuredAt).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
+  // UTC, so the pre-rendered page and every visitor's time zone show the same date.
+  const date = new Date(run.measuredAt).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   const text = `The wordmark below is our own load test: p95 per stage on ${run.host}, ${ms(Math.min(...p95s))} to ${ms(Math.max(...p95s))}, ${date}.`;
   return (
     <p className="text-xs text-muted-foreground">
