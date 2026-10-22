@@ -8,13 +8,13 @@ import { DOGFOOD, type DogfoodRun } from "../data/dogfood";
 
 export const LINKS = {
   dashboard: "/dashboard",
-  docs: "https://github.com/pyjeebz/prescale#readme",
+  docs: "/docs",
   repo: "https://github.com/pyjeebz/prescale",
   releases: "https://github.com/pyjeebz/prescale/releases",
   action: "https://github.com/pyjeebz/prescale/tree/main/action",
   pypi: "https://pypi.org/project/prescale/",
-  mcp: "https://github.com/pyjeebz/prescale#coding-agents-mcp",
-  data: "https://github.com/pyjeebz/prescale#what-gets-uploaded",
+  mcp: "/docs/guides/mcp-agents",
+  data: "/docs/reference/data-boundary",
 };
 
 const external = (href: string) => (href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {});
