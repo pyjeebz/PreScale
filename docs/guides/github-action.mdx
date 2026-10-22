@@ -1,0 +1,115 @@
+---
+title: "Capacity on every pull request"
+sidebarTitle: "GitHub Action"
+description: "Load-test every preview deploy and get one PR comment with the capacity change, the culprit route and the fix."
+---
+
+The PreScale GitHub Action runs when a preview deploy finishes, load-tests it, uploads the
+result, and keeps **one** comment on the pull request up to date:
+
+> ### 🔴 Capacity regressed: 150 → 100 users (−33%)
+> ```text
+> main @ 71aa0c9  ░░░░░░░░░░░░░░▒▒▒██       ~150
+> this deploy     ░░░░░░░▒▒▒██              ~100  −33%
+> ```
+> **Breaks first:** `/api/search` · errors climbed at ~150 users
+> **Why:** `connection_pool` (high confidence) · **Fix:** increase the DB connection-pool size.
+
+The bars are PreScale's mark in text: sparse `░` → `▒` → a solid `█` end at the capacity
+measured. When the deploy breaks on more than one route, the comment also shows each
+route's p95 as a bar toward the latency wall (`┆`).
+
+## Set it up
+
+<Steps>
+  <Step title="Add a token as a secret">
+    Create a token on the dashboard's **Connect** page and save it as the `PRESCALE_TOKEN`
+    repository secret.
+  </Step>
+  <Step title="Add your target">
+    Add the site the deploys belong to (for example `staging.myapp.com`) in the dashboard.
+  </Step>
+  <Step title="Commit the workflow">
+    ```yaml .github/workflows/capacity.yml
+    name: Capacity
+    on: deployment_status
+
+    jobs:
+      capacity:
+        if: github.event.deployment_status.state == 'success'
+        runs-on: ubuntu-latest
+        permissions:
+          contents: read          # find the PR for the deployed commit
+          pull-requests: write    # the capacity comment
+        steps:
+          - uses: pyjeebz/prescale/action@v1
+            with:
+              token: ${{ secrets.PRESCALE_TOKEN }}
+              target: staging.myapp.com
+              paths: |
+                /api/search
+                /checkout
+              headers: |
+                x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+              fail-on-regression: true
+    ```
+  </Step>
+</Steps>
+
+Vercel, Netlify and other platforms report preview deploys as `deployment_status` events,
+so the workflow runs on every preview.
+
+## Give pull requests a baseline
+
+Pull requests compare with the latest run on your baseline branch (`main`). Give it one by
+running the check on pushes to `main` against your staging URL:
+
+```yaml
+on:
+  push:
+    branches: [main]
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pyjeebz/prescale/action@v1
+        with:
+          token: ${{ secrets.PRESCALE_TOKEN }}
+          target: staging.myapp.com
+          url: https://staging.myapp.com
+          comment: false
+```
+
+Until there is one, each push compares with the previous push on the same pull request.
+
+## Safety and cost
+
+<Warning>
+Previews often point at the same database as production. If yours do, the load reaches it
+too. Check before turning this on.
+</Warning>
+
+- **Production deploys are skipped** unless you set `allow-production: true`.
+- **Gentle by default:** 100 virtual users per check. On serverless every request is a billed
+  invocation; the job log says how many requests each check sent.
+- **Headers stay private:** sent to your site only, never saved or uploaded.
+- `fail-on-regression` fails the check only on a **confirmed** drop. Uncertain drops show as
+  a warning.
+
+## Inputs
+
+| Input | Default | |
+|---|---|---|
+| `token` | — | PreScale API token (required) |
+| `target` | — | The target hostname the deploy belongs to (required) |
+| `url` | deploy URL | URL to test |
+| `paths` | — | Extra routes, one per line |
+| `headers` | — | `Name: value` per line |
+| `max-users` | `100` | Peak virtual users |
+| `stage-seconds` | `5` | Seconds per load level |
+| `fail-on-regression` | `false` | Fail on a confirmed regression |
+| `comment` | `true` | Post or update the PR comment |
+| `allow-production` | `false` | Also test production deploys |
+| `app-url` | `https://prescale.dev/dashboard` | Dashboard URL |
+
+Not on GitHub? `prescale ci --target staging.myapp.com <url>` does the same from any CI.
