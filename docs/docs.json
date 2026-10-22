@@ -114,7 +114,7 @@
           },
           {
             "label": "What gets uploaded",
-            "href": "/reference/data-boundary"
+            "href": "https://prescale.dev/docs/reference/data-boundary"
           }
         ]
       },
@@ -127,11 +127,11 @@
           },
           {
             "label": "GitHub Action",
-            "href": "/guides/github-action"
+            "href": "https://prescale.dev/docs/guides/github-action"
           },
           {
             "label": "MCP server",
-            "href": "/guides/mcp-agents"
+            "href": "https://prescale.dev/docs/guides/mcp-agents"
           },
           {
             "label": "PyPI",
