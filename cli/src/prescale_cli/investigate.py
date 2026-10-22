@@ -155,10 +155,12 @@ def classify(p: Probes) -> Diagnosis:
 
 _REMEDIATION = {
     "edge_protection": [
-        "Exempt your IP for the test: on Vercel, vercel firewall system-bypass add "
-        "<your-ip> (remove it afterwards); on Cloudflare, a WAF skip rule for your IP.",
-        "Or test a route that isn't cached (an API, or a page rendered per request): "
-        "that's where your app's capacity is decided.",
+        "Load-test your app locally or on staging you're allowed to load, not a site "
+        "behind Vercel, Netlify or Cloudflare.",
+        "Test a route that isn't cached (an API, or a page rendered per request): that's "
+        "where your app's capacity is decided.",
+        "To test the host itself, arrange it with them first: Vercel only permits load "
+        "testing on Enterprise plans, with notice.",
         "Real visitors come from many IPs, so this limit isn't what they'd hit.",
     ],
     "rate_limited": [
@@ -281,14 +283,14 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None,
 async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
                       max_rps=None, store=None, transport=None, progress_cb=None,
                       on_stage=None, on_probe=None, headers=None, think_time=0.0,
-                      profile=None, audit=False) -> dict:
+                      profile=None, audit=False, host_permission=False) -> dict:
     """Ramp to find the culprit, probe it, and attach a diagnosis to the Result."""
     targets = build_targets(url, paths=tuple(paths))
     levels = default_levels(max_users)
     stages, warning = await run_loadtest(
         targets, levels=levels, stage_seconds=stage_seconds, max_rps=max_rps,
         transport=transport, progress_cb=progress_cb, on_stage=on_stage, headers=headers,
-        think_time=think_time)
+        think_time=think_time, host_permission=host_permission)
     report = analyze(stages, latency_wall=_LATENCY_WALL_S,
                      error_threshold=_ERROR_THRESHOLD, rate_capped=max_rps is not None)
     config = {"method": "GET", "max_users": max_users, "stage_seconds": stage_seconds,
