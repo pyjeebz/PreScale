@@ -17,7 +17,7 @@ from prescale_cli.commands.replicaopts import app_option, app_timeout_option, st
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.investigate import _LATENCY_WALL_S
 from prescale_cli.investigate import investigate as run_investigate
-from prescale_cli.live import LiveRamp
+from prescale_cli.live import LiveRamp, ramp_progress
 from prescale_cli.loadtest import LoadError
 from prescale_cli.profiles import PROFILES, lookup
 from prescale_cli.render import render_investigation, render_terminal
@@ -123,23 +123,17 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
         confirm_host(url, console=console, permitted=host_permission, as_json=as_json,
                      headers=headers)
 
-    live_mode = console.is_terminal and not as_json
+    progress = ramp_progress(console, latency_wall=_LATENCY_WALL_S, as_json=as_json)
+    live_mode = isinstance(progress, LiveRamp)
     try:
-        if live_mode:
-            with LiveRamp(console, latency_wall=_LATENCY_WALL_S) as live:
-                result = asyncio.run(run_investigate(
-                    url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
-                    max_rps=max_rps, store=store, headers=headers,
-                    think_time=prof.think_time_s if prof else 0.0, profile=prof,
-                    audit=with_audit, host_permission=True, replica=bool(app),
-                    progress_cb=live.starting, on_stage=live.finished,
-                    on_probe=live.diagnosing))
-        else:
+        with progress:
             result = asyncio.run(run_investigate(
                 url, max_users=max_users, paths=paths, stage_seconds=stage_seconds,
                 max_rps=max_rps, store=store, headers=headers,
-                think_time=prof.think_time_s if prof else 0.0, profile=prof, audit=with_audit,
-                host_permission=True, replica=bool(app)))
+                think_time=prof.think_time_s if prof else 0.0, profile=prof,
+                audit=with_audit, host_permission=True, replica=bool(app),
+                progress_cb=progress.starting, on_stage=progress.finished,
+                on_probe=progress.diagnosing))
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1)
