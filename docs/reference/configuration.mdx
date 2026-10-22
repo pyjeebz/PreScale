@@ -172,6 +172,14 @@ When you run PreScale as an MCP server for AI coding agents, you can control whi
 
 ***
 
+## Host permission
+
+<ParamField query="PRESCALE_HOST_PERMISSION" type="string">
+  Set to `1` to confirm you have the host's permission to load-test a target on Vercel, Netlify or Cloudflare, where nobody can be asked (scripts, CI, the MCP server). The same as `--host-permission`. Only set it if you really have that permission. See [Host rules](/reference/host-rules).
+</ParamField>
+
+***
+
 ## Safety defaults
 
 PreScale ships with conservative safety defaults so you don't accidentally load-test something you don't own.
