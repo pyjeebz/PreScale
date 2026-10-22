@@ -122,6 +122,18 @@ Likely cause    Server returned 5xx under load — likely an unhandled overload
   Skip the interactive confirmation prompt for non-local targets. Required when running in non-interactive environments (CI, `--json` mode). See [Safety](#safety) below.
 </ParamField>
 
+<ParamField query="--app COMMAND" type="string">
+  Replica mode: start your app with COMMAND (for example `"npm run build && npm start"`), test it on the local URL, then stop it and everything it started. No host is involved. The URL must be local, and the command is never saved or uploaded. See [Replica mode](/guides/replica-mode).
+</ParamField>
+
+<ParamField query="--app-timeout" type="float" default="600">
+  Seconds to wait for the app started by `--app` to answer. Production builds can take minutes.
+</ParamField>
+
+<ParamField query="--host-permission" type="boolean" default="false">
+  Confirm you have the host's permission to load-test the target. Vercel, Netlify and Cloudflare restrict load testing; without this, PreScale asks first, or stops in `--json` mode. Also set by `PRESCALE_HOST_PERMISSION=1`. See [Host rules](/reference/host-rules).
+</ParamField>
+
 <ParamField query="--json" type="boolean" default="false">
   Emit the full versioned Result document as JSON instead of the human-readable terminal output. See [Output formats](#output-formats) below.
 </ParamField>
@@ -174,15 +186,21 @@ Sending load to a URL you do not own can cause outages or unexpected cloud bills
 
 * **Local hosts** (`localhost`, `127.0.0.1`, `0.0.0.0`, `::1`) are tested without any prompt.
 * **All other hosts** trigger an interactive confirmation panel that tells you the target host and the peak concurrency before asking you to confirm.
+* **Hosts that restrict load testing** (Vercel, Netlify, Cloudflare) are recognised from the first response. PreScale explains the host's rule and sends no load until you confirm you have its permission. See [Host rules](/reference/host-rules).
 
 ```text
 ⚠️  Heads up
 You're about to send real traffic to staging.myapp.com (up to 200 concurrent users).
 Point this at a staging/preview URL you own — not production.
+Check it doesn't share production's database: the load reaches whatever it talks to.
 Proceed? [y/N]:
 ```
 
-Pass `--i-own-this` to skip this prompt — required in CI and whenever you run with `--json` (which has no interactive mode).
+Pass `--i-own-this` to skip this prompt — required in CI and whenever you run with `--json` (which has no interactive mode). For a restricted host, also pass `--host-permission` if you have that permission.
+
+<Tip>
+  To skip all of this, test your app's own build locally with [Replica mode](/guides/replica-mode): `prescale run http://localhost:3000 --app "npm run build && npm start"`.
+</Tip>
 
 <Warning>
   Always point `prescale run` at a **staging or preview** URL, not production, unless you have load-tested it before and know it can handle the traffic.
