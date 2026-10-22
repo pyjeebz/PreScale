@@ -791,6 +791,18 @@ def confidence_band(stages, *, latency_wall, error_threshold, survives_point,
     return low, high, low == high
 
 
+def _costliest_of_slow_routes(first: StageResult, onset: StageResult, latency_wall: float):
+    """When several routes cross the latency wall together, they're usually queueing
+    behind one process (a Node server, a single worker): the route to blame is the
+    one that was already slowest at the lightest load, not whichever queued longest."""
+    slow = [(label, stat) for label, stat in onset.routes.items()
+            if stat.latencies and stat.pct(0.95) >= latency_wall]
+    light = {label: stat for label, stat in first.routes.items() if stat.latencies}
+    if len(slow) < 2 or not all(label in light for label, _ in slow):
+        return None
+    return max(slow, key=lambda kv: light[kv[0]].pct(0.5))
+
+
 def analyze(stages: list[StageResult], *, latency_wall: float,
             error_threshold: float, rate_capped: bool = False) -> RunReport:
     """Find the first level that crosses the error or latency threshold, and the
@@ -823,6 +835,8 @@ def analyze(stages: list[StageResult], *, latency_wall: float,
     idx = stages.index(onset)
     survives = stages[idx - 1].users if idx > 0 else 0
     worst = onset.worst_route("latency" if reason == "latency" else "errors")
+    if reason == "latency":
+        worst = _costliest_of_slow_routes(stages[0], onset, latency_wall) or worst
     culprit = worst[0] if worst else None
     bottleneck = _bottleneck_hint(worst[1], reason, sat) if worst else None
     marginal = (onset.users == max_tested and reason == "errors"
