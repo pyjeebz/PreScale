@@ -92,7 +92,7 @@ From source: `git clone https://github.com/pyjeebz/PreScale.git && pip install .
 | Command | What it does |
 |---|---|
 | [`run <url>`](#run--what-breaks-first) | Ramp traffic; report what breaks first and at what load |
-| [`investigate <url>`](#investigate--and-why) | …and *why* it breaks, plus how to fix it |
+| [`investigate <url>`](#investigate--and-why) | …and *why* it breaks, plus how to fix it (`--app` to start your app first: [replica mode](#replica-mode--test-your-app-not-your-host)) |
 | [`audit <url>`](#audit--hygiene-no-load) | Load-free HTTP hygiene check (compression, caching, CDN, HTTP/2) |
 | [`compare`](#ci--gate-on-capacity) | Capacity diff of two runs; regression gating for CI |
 | [`profiles`](#frame-it-as-a-launch) | Launch scenarios for `--profile` |
@@ -208,6 +208,46 @@ prescale schema                   # the JSON Schema for a saved run
 ```
 
 `prescale run --json` and the saved `.json` are the **same shape**, so a result is easy to script against or hand to another tool. Use `--store DIR` to change where runs are kept, `--no-save` to skip saving, and gitignore `.prescale/`.
+
+### Replica mode — test your app, not your host
+
+Many hosts restrict load testing (Vercel only permits it on Enterprise plans), and what breaks under load is usually your app's code and database, not the CDN. So PreScale can start your app's own production build, test it on localhost, and stop it:
+
+```bash
+prescale investigate http://localhost:3000 --app "npm run build && npm start"
+```
+
+PreScale runs the command in your project, waits until the URL answers (`--app-timeout`, default 600s, since builds take a while), runs the test, then stops the app and everything it started, even on errors or Ctrl-C. The app uses your environment, so point `DATABASE_URL` and API keys at a dev or staging database. Results say they were measured on a local replica (no serverless cold starts), and the command itself is never saved or uploaded.
+
+In CI it needs no deploy at all: build the pull request in the job and test it there.
+
+```yaml
+# .github/workflows/capacity.yml
+on:
+  pull_request:
+  push:
+    branches: [main]          # the baseline PRs compare against
+
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - uses: pyjeebz/prescale/action@v1
+        with:
+          token: ${{ secrets.PRESCALE_TOKEN }}
+          target: myapp.com
+          app: npm run build && npm start
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+```
 
 ### CI — gate on capacity
 
