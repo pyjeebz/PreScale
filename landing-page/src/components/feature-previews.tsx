@@ -211,7 +211,7 @@ function PrCommentRun() {
       {measured && (
         <>
           <motion.p {...fadeUp(0.35)} className="mt-1.5 font-mono text-[10px] text-muted-foreground">
-            shop-git-search-acme.vercel.app vs main @ 71aa0c9
+            pr-482.staging.acme.dev vs main @ 71aa0c9
           </motion.p>
           <motion.p {...fadeUp(0.65)} className="mt-2">
             <span className="font-semibold">Breaks first:</span> <span className="font-mono">/api/search</span> at ~120 users
