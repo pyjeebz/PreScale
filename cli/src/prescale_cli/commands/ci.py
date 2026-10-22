@@ -28,6 +28,7 @@ from prescale_cli.cloud import CloudError, parse_headers, require_credentials, u
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.hosts import PERMISSION_ENV
 from prescale_cli.investigate import investigate as run_investigate
+from prescale_cli.live import ramp_progress
 from prescale_cli.loadtest import HostPolicyError, LoadError, default_levels
 
 console = Console()
@@ -147,10 +148,12 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
                      "Previews often share production's database: the load reaches it too.")
                   + "[/dim]")
     try:
-        result = asyncio.run(run_investigate(
-            url, max_users=max_users, paths=extra_paths, stage_seconds=stage_seconds,
-            max_rps=max_rps, store=store, headers=headers, host_permission=host_permission,
-            replica=bool(app)))
+        with ramp_progress(console) as progress:
+            result = asyncio.run(run_investigate(
+                url, max_users=max_users, paths=extra_paths, stage_seconds=stage_seconds,
+                max_rps=max_rps, store=store, headers=headers, host_permission=host_permission,
+                replica=bool(app), progress_cb=progress.starting, on_stage=progress.finished,
+                on_probe=progress.diagnosing))
     except HostPolicyError as exc:
         _skip_restricted_host(exc.rule, target=target, ctx=ctx, comment=comment,
                               pr_number=pr_number, github_token=github_token)
