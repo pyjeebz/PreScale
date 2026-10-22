@@ -41,7 +41,11 @@
         "repeat": { "type": "integer" },
         "think_time_s": { "type": "number" },
         "fail_under": { "type": ["integer", "null"] },
-        "profile": { "type": ["string", "null"] }
+        "profile": { "type": ["string", "null"] },
+        "replica": {
+          "type": "boolean",
+          "description": "True when PreScale started the app's own build locally (--app) and tested that, not a deployed host."
+        }
       }
     },
     "verdict": {
