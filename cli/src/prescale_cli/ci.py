@@ -167,6 +167,20 @@ def _onset(verdict: dict) -> str:
     return f"errors climbed at ~{users} users"
 
 
+def render_host_skip(rule, *, target: str) -> str:
+    """The PR comment when the deploy's host restricts load testing."""
+    return "\n".join([
+        comment_marker(target),
+        "### ⏸️ PreScale skipped this deploy",
+        "",
+        f"{rule.rule} ([policy]({rule.link}))",
+        "",
+        f"PreScale doesn't load-test {rule.name} deploys unless you confirm you have "
+        "permission. If you do, set `host-permission: true` in the PreScale action. "
+        "Otherwise, test a staging copy on infrastructure you're allowed to load.",
+    ])
+
+
 def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) -> str:
     """The PR comment: the change vs baseline, what breaks first, why, the fix."""
     verdict = result["verdict"]
