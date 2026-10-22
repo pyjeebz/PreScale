@@ -1,0 +1,146 @@
+---
+title: "prescale investigate"
+sidebarTitle: "prescale investigate"
+description: "prescale investigate runs a load ramp, finds the culprit route, then probes it to classify the bottleneck and give you a concrete fix to try."
+---
+
+`prescale investigate` does everything `prescale run` does — ramp virtual users, find what breaks first, and report the break point — then goes further. Once the ramp identifies the culprit route, `investigate` runs an active second-pass probe: baseline vs loaded latency, a static-vs-dynamic comparison, and error/header forensics. The result is a classified bottleneck type, a confidence level, and a concrete list of things to try. The whole process is fully local and deterministic — no LLM, no external service.
+
+## Basic usage
+
+```bash
+# Local app
+prescale investigate http://localhost:8000
+
+# Staging target — confirm you own it
+prescale investigate https://staging.myapp.com --i-own-this
+
+# Re-investigate the most recent saved run (no URL needed)
+prescale investigate
+
+# Machine-readable JSON output
+prescale investigate http://localhost:8000 --json
+```
+
+## Example output
+
+After the ramp, PreScale prints a standard verdict followed by the `🔬 Diagnosis` block:
+
+```text
+ Users   Req/s    p50    p95   vs 2s wall          p99   Errors
+    10     520   18ms   31ms   █            ┆       44ms      0%
+    50     610   46ms  120ms   █            ┆      210ms      0%
+    90     590   80ms  240ms   ██           ┆      900ms      0%
+   150     410  180ms   2.1s   ░░░░░░░░▒▒▒██┆        3.4s      7%
+
+Scale readiness: ⚠️  Survives ~90 (75–110) concurrent users
+Traffic         ≈ 590 req/s, roughly 5,900 real visitors (one request per visitor every 10s)
+
+🔬 Diagnosis
+Likely cause: 5xx under load while static assets held — the app/backend is the wall.
+Bottleneck  connection_pool (high confidence)  ·  culprit /api/search
+Evidence
+  • culprit p95 28ms at 1 user vs 2100ms at 150 users
+  • static /assets/app.js held at 150 users
+  • errors under load: 5xx (180)
+Try this
+  → Increase the DB/upstream connection-pool size.
+  → Add a pooler (e.g. pgbouncer) and check the pool checkout timeout.
+```
+
+> Numbers are illustrative — your results depend on your app and infrastructure.
+
+## How it works
+
+`investigate` runs in two phases:
+
+<Steps>
+  <Step title="Load ramp">
+    Identical to `prescale run`: virtual users ramp from 1 to `--max-users`, holding each level for `--stage-seconds`. PreScale records throughput, latency percentiles, and error rates at every step and identifies the first level that crosses the latency wall or error threshold.
+  </Step>
+
+  <Step title="Active diagnosis probe">
+    Once the culprit route is known, PreScale fires a series of targeted probes against it:
+
+    * **Baseline vs loaded latency** — a single request at 1 user is compared to the culprit's p95 at peak load. A large delta (e.g. 28 ms vs 2 100 ms) points to a resource that saturates under concurrency.
+    * **Static vs dynamic comparison** — a static asset (CSS, JS, an image) is tested at the same load level. If the static file responds fine while the dynamic route degrades, the problem is inside the application layer, not the network or web server.
+    * **Error and header forensics** — response status codes, `Retry-After`, `X-RateLimit-*`, `CF-Cache-Status`, and similar headers are inspected to narrow down the category (connection pool exhaustion, rate limiting, CDN misconfiguration, etc.).
+
+    The evidence is combined into a bottleneck classification with a confidence level, and PreScale emits a prioritised "Try this" list of concrete remediation steps.
+  </Step>
+</Steps>
+
+## Options
+
+<ParamField path="url" type="string">
+  The URL to investigate. Optional — if you omit it, PreScale re-investigates the most recent saved run's target URL. See [Re-investigating a saved run](#re-investigating-a-saved-run) below.
+</ParamField>
+
+<ParamField query="--max-users / -u" type="integer" default="200">
+  Peak virtual users to ramp to during the load phase. PreScale steps through load levels from 1 up to this number, holding each level for `--stage-seconds`.
+</ParamField>
+
+<ParamField query="--stage-seconds / -s" type="float" default="5.0">
+  How many seconds to hold each load level before stepping up. Increase this for a more thorough measurement; decrease it for a faster iteration cycle.
+</ParamField>
+
+<ParamField query="--path" type="string">
+  An extra route to include in the ramp, relative to the base URL (e.g. `--path /api/search`). Repeatable. The culprit is chosen from all routes tested, and the diagnosis probe focuses on whichever one breaks first.
+</ParamField>
+
+<ParamField query="--max-rps" type="float">
+  Cap aggregate requests per second across all virtual users. A safety ceiling for shared staging environments. By default there is no cap.
+</ParamField>
+
+<ParamField query="--i-own-this" type="boolean" default="false">
+  Skip the interactive confirmation prompt for non-local targets. Required in CI and when using `--json`. See the [Safety](#safety) note below.
+</ParamField>
+
+<ParamField query="--json" type="boolean" default="false">
+  Emit the full Result document — including the `investigation` block — as JSON to stdout instead of the human-readable terminal output.
+
+  ```bash
+  prescale investigate https://staging.myapp.com --i-own-this --json | jq .investigation
+  ```
+</ParamField>
+
+<ParamField query="--store DIR" type="string">
+  Directory where PreScale reads and writes saved run JSON files. Defaults to `./.prescale`. Pass the same value you used with `prescale run` if you changed the default.
+</ParamField>
+
+<ParamField query="--fail-under N" type="integer">
+  Exit with a non-zero status code if the app survives fewer than N concurrent users. Use this as a CI gate alongside `--i-own-this` and `--json`.
+</ParamField>
+
+## Safety
+
+`investigate` sends real traffic — a full ramp plus a handful of diagnostic probes — to your target. The same safety rules that apply to `prescale run` apply here:
+
+* **Local hosts** are tested without any prompt.
+* **All other hosts** show a confirmation panel before the ramp starts.
+
+Pass `--i-own-this` to skip the prompt in CI or `--json` mode.
+
+<Warning>
+  Always point `prescale investigate` at a **staging or preview** URL, not production, unless you fully understand the traffic volume it will generate.
+</Warning>
+
+## Re-investigating a saved run
+
+Run `prescale investigate` with **no URL** and it looks up the most recent saved run in `.prescale/runs/`, reads its target URL, and re-investigates it:
+
+```bash
+prescale investigate   # re-uses the URL from the latest saved run
+```
+
+This is useful when you've already run `prescale run` and want a deeper diagnosis without typing the URL again, or when you want to check whether a fix you deployed has changed the bottleneck classification.
+
+If you store runs in a non-default directory, pass `--store DIR` so PreScale knows where to look:
+
+```bash
+prescale investigate --store /tmp/prescale-ci
+```
+
+<Note>
+  The **Bottleneck Types** reference page at [`reference/bottleneck-types`](/reference/bottleneck-types) describes every classification PreScale can emit — what each bottleneck means, how it is detected, and what "high / medium / low confidence" signifies.
+</Note>
