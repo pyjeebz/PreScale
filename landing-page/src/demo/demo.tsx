@@ -65,9 +65,12 @@ export function DashboardDemo() {
   const mainRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const scaleRef = useRef(1);
-  const [view, setView] = useState<View>(() =>
-    reducedMotion() ? { name: "target", id: "shop" } : { name: "overview" },
-  );
+  // The pre-rendered page starts on the overview; without motion the tour never plays,
+  // so those visitors get the target page (switched before the first paint).
+  const [view, setView] = useState<View>({ name: "overview" });
+  useLayoutEffect(() => {
+    if (reducedMotion()) setView({ name: "target", id: "shop" });
+  }, []);
   const [hovered, setHovered] = useState<string | null>(null);
   const [activePoint, setActivePoint] = useState<string | null>(null);
   const [cursor, setCursor] = useState({ x: DESIGN_W * 0.6, y: DESIGN_H * 0.7, shown: false, pressed: false });
