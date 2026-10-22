@@ -30,7 +30,7 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
     prescale --version
     ```
 
-    You should see `prescale, version 1.0.0`. If your shell says "command not found", open a new terminal so it picks up the updated `PATH`. [Installation](/installation) has the details.
+    You should see `prescale, version 1.1.2` or newer. If your shell says "command not found", open a new terminal so it picks up the updated `PATH`. [Installation](/installation) has the details.
   </Step>
 
   <Step title="Run a load test">
@@ -38,6 +38,12 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
 
     ```bash
     prescale run http://localhost:8000
+    ```
+
+    Or let PreScale start your app's production build itself, test it, and stop it ([Replica mode](/guides/replica-mode)):
+
+    ```bash
+    prescale run http://localhost:3000 --app "npm run build && npm start"
     ```
 
     PreScale steps virtual users up from 1 to 200 (by default), measuring throughput, latency percentiles, and error rates at each level. When it finds the first level where errors or latency cross the threshold, it marks the break and prints a verdict:
@@ -118,10 +124,10 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
 
     ```bash
     prescale login
-    prescale investigate https://staging.myapp.com --i-own-this --upload
+    prescale investigate http://localhost:3000 --app "npm run build && npm start" --upload
     ```
 
-    Then add the [GitHub Action](/guides/github-action): every preview deploy gets one PR comment with the capacity change against `main`, what breaks first, and the fix. [What gets uploaded](/reference/data-boundary) lists exactly what leaves your machine.
+    Then add the [GitHub Action](/guides/github-action): it builds every pull request in CI and keeps one PR comment with the capacity change against `main`, what breaks first, and the fix. [What gets uploaded](/reference/data-boundary) lists exactly what leaves your machine.
   </Step>
 </Steps>
 
@@ -147,7 +153,7 @@ PreScale is designed to give you a meaningful load-test result as fast as possib
   </Card>
 
   <Card title="Capacity on every pull request" icon="github" href="/guides/github-action">
-    Load-test every preview deploy and get one PR comment with the capacity change, the culprit route and the fix.
+    Build and load-test every pull request in CI, and get one PR comment with the capacity change, the culprit route and the fix.
   </Card>
 
   <Card title="Launch readiness guide" icon="rocket" href="/guides/launch-readiness">
