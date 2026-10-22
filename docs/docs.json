@@ -72,6 +72,7 @@
       {
         "group": "Guides",
         "pages": [
+          "guides/replica-mode",
           "guides/github-action",
           "guides/ci-regression",
           "guides/launch-guard",
@@ -83,6 +84,7 @@
         "group": "Reference",
         "pages": [
           "reference/data-boundary",
+          "reference/host-rules",
           "reference/result-schema",
           "reference/bottleneck-types",
           "reference/configuration"
