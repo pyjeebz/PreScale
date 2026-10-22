@@ -190,6 +190,8 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
     baseline_branch = target_info.get("baselineBranch") or "main"
     tested_host = result["target"].get("host") or result["target"]["url"]
     commit = (result.get("environment") or {}).get("git_commit") or (sha[:7] if sha else None)
+    replica = bool((result.get("config") or {}).get("replica"))
+    subject = "this build" if replica else "this deploy"
 
     lines = [comment_marker(target)]
     band = f"{conf.get('survives_low')}–{conf.get('survives_high')}"
@@ -206,7 +208,7 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
             base_rps = base.get("capacityRps")
             was = (f" (was ≈ {base_rps:,.0f} req/s, roughly {visitors_for(base_rps):,})"
                    if base_rps else "")
-            lines += ["", f"At capacity this deploy handles ≈ {rps:,.0f} req/s, roughly "
+            lines += ["", f"At capacity {subject} handles ≈ {rps:,.0f} req/s, roughly "
                           f"{visitors_for(rps):,} real visitors{was}. "
                           f"<sub>Visitors assume {VISITOR_NOTE}.</sub>"]
         lines += [
@@ -215,14 +217,14 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
             "|---|---:|---|---:|---|",
             f"| baseline | ~{base['survives']} | {base['low']}–{base['high']} | "
             f"{round(base['peakRps'])} | `{base.get('commit') or '-'}` |",
-            f"| this deploy | ~{verdict['survives_users']} | {conf.get('survives_low')}–"
+            f"| {subject} | ~{verdict['survives_users']} | {conf.get('survives_low')}–"
             f"{conf.get('survives_high')} | {round(verdict['peak_rps'])} | `{commit or '-'}` |",
             "",
             # The same comparison in PreScale's bar: ░ sparse → ▒ → █ the measured capacity.
             "```text",
             *bar_rows(
                 [(comparison["against"], base["survives"], f"~{base['survives']}"),
-                 ("this deploy", verdict["survives_users"],
+                 (subject, verdict["survives_users"],
                   f"~{verdict['survives_users']}  {_pct(comparison['pct'])}")],
                 max(base["survives"], base.get("high") or 0, verdict["survives_users"], 1) * 1.1,
             ),
@@ -272,7 +274,10 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
         lines += ["", " · ".join(links)]
 
     notes = []
-    if tested_host != target:
+    if replica:
+        notes.append("Measured on a build of this commit in CI, not on your host: absolute "
+                     f"numbers are indicative, the change vs `{baseline_branch}` is the signal.")
+    elif tested_host != target:
         notes.append("Measured on a preview deploy: absolute numbers are indicative, the "
                      f"change vs `{baseline_branch}` is the signal.")
     if target_info.get("verified") is False:
