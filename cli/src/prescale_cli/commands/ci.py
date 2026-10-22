@@ -21,11 +21,13 @@ from prescale_cli.ci import (
     find_pull_request,
     github_context,
     render_comment,
+    render_host_skip,
     upsert_pr_comment,
 )
 from prescale_cli.cloud import CloudError, parse_headers, require_credentials, upload_result
+from prescale_cli.hosts import PERMISSION_ENV
 from prescale_cli.investigate import investigate as run_investigate
-from prescale_cli.loadtest import LoadError, default_levels
+from prescale_cli.loadtest import HostPolicyError, LoadError, default_levels
 
 console = Console()
 
@@ -60,16 +62,21 @@ def _annotate(level: str, message: str) -> None:
               help="Post or update the capacity comment on the PR (needs GITHUB_TOKEN).")
 @click.option("--allow-production", is_flag=True,
               help="Run even when the deployment environment is production.")
+@click.option("--host-permission", "host_permission", is_flag=True, envvar=PERMISSION_ENV,
+              help="Confirm the deploy's host allows load testing (Vercel, Netlify and "
+                   f"Cloudflare restrict it; otherwise PreScale skips). Env: {PERMISSION_ENV}=1.")
 @click.option("--store", "store", type=click.Path(file_okay=False), default=None,
               help="Directory for saved runs (default: ./.prescale).")
 def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tuple[str, ...],
        max_users: int, stage_seconds: float, max_rps: float | None, fail_on_regression: bool,
-       comment: bool, allow_production: bool, store: str | None) -> None:
+       comment: bool, allow_production: bool, host_permission: bool,
+       store: str | None) -> None:
     """Capacity-check a deploy from CI, upload it, and comment on the PR.
 
     With no URL, uses the deploy URL from a GitHub `deployment_status` event.
     Needs PRESCALE_TOKEN; PRESCALE_URL points at your dashboard if it isn't the
-    default. Production deploys are skipped unless you pass --allow-production.
+    default. Production deploys are skipped unless you pass --allow-production, and
+    deploys on hosts that restrict load testing unless you pass --host-permission.
 
     \b
     Example (GitHub Actions, on: deployment_status):
@@ -126,7 +133,11 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     try:
         result = asyncio.run(run_investigate(
             url, max_users=max_users, paths=extra_paths, stage_seconds=stage_seconds,
-            max_rps=max_rps, store=store, headers=headers))
+            max_rps=max_rps, store=store, headers=headers, host_permission=host_permission))
+    except HostPolicyError as exc:
+        _skip_restricted_host(exc.rule, target=target, ctx=ctx, comment=comment,
+                              pr_number=pr_number, github_token=github_token)
+        return
     except LoadError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         _annotate("error", f"PreScale couldn't load-test {url}: {exc}")
@@ -173,3 +184,21 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     elif kind == "possible":
         _annotate("warning", f"Possible capacity regression {round(comparison['pct'] * 100)}% "
                              f"vs {comparison['against']} (bands overlap).")
+
+
+def _skip_restricted_host(rule, *, target: str, ctx, comment: bool, pr_number: int | None,
+                          github_token: str | None) -> None:
+    """The deploy's host restricts load testing: say so everywhere, and pass the check."""
+    console.print(f"[yellow]Skipping:[/yellow] {rule.rule} Set host-permission (or "
+                  f"--host-permission) if you have {rule.name}'s permission. {rule.link}")
+    _annotate("notice", f"PreScale skipped this {rule.name} deploy: {rule.rule}")
+    body = render_host_skip(rule, target=target)
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with Path(summary_path).open("a", encoding="utf-8") as fh:
+            fh.write(body + "\n")
+    if comment and pr_number and github_token and ctx.repository:
+        try:
+            upsert_pr_comment(ctx, github_token, pr_number, body, comment_marker(target))
+        except httpx.HTTPError:
+            pass
