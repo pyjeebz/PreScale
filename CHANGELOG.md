@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.2 — 2026-10-22
+
+### Fixed
+- **The right route gets the blame when everything slows down together.** In a Node app (or
+  any single process), one slow route makes every route queue, and the cheap ones can cross
+  the latency wall first. When several routes cross it at once, PreScale now names the one
+  that was already slowest at light load: the route doing the work.
+- In replica mode, the PR comment says it measured a build of the commit in CI ("this build"),
+  not a preview deploy.
+
 ## 1.1.1 — 2026-10-22
 
 ### Fixed
