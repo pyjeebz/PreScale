@@ -44,10 +44,9 @@
     <meta name="twitter:image" content="https://prescale.dev/og.png" />
     <meta name="twitter:image:alt" content="PreScale: a load test ramping from 10 to 150 users, breaking through the 2s latency wall at /api/search because the DB connection pool is exhausted" />
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Fonts: self-hosted (src/index.css); the Latin files are needed above the fold -->
+    <link rel="preload" href="/fonts/google-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- Structured data: helps search + answer engines describe PreScale -->
     <script type="application/ld+json">
