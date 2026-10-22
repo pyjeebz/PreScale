@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **The ramp is never silent in CI.** In GitHub Actions logs, pipes and anywhere a live table
+  can't redraw, `run`, `investigate` and `ci` now print one line per finished stage (users,
+  req/s, p95, errors; red once it crosses the latency wall) and say when they start diagnosing
+  the culprit route. In a terminal you still get the live table; `--json` stays quiet.
+
 ## 1.1.2 — 2026-10-22
 
 ### Fixed
