@@ -1,3 +1,3 @@
 """PreScale - launch-readiness load testing for developers."""
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
