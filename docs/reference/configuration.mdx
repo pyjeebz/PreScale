@@ -1,0 +1,217 @@
+---
+title: "Configuration"
+sidebarTitle: "Configuration"
+description: "Reference for all PreScale configuration options: latency thresholds, error rates, save directories, rate limits, and MCP allowlists."
+---
+
+PreScale is designed to work with no configuration — run `prescale run http://localhost:8000` and you get a useful result immediately. Every default is calibrated to be safe and sensible for most apps. But every default can be overridden with a flag on any invocation.
+
+**There are no config files.** PreScale doesn't read a `.prescalerc`, `prescale.yml`, or any project-level config. All settings are passed as CLI flags, which means your exact configuration is always visible in shell history, CI logs, and the `config` object of the saved result JSON.
+
+***
+
+## Thresholds
+
+Thresholds define what "passing" and "failing" mean during a load ramp. A stage is considered failed when either threshold is crossed — whichever comes first determines `verdict.onset_reason`.
+
+<ParamField query="--latency-wall" type="float" default="2.0">
+  p95 response latency in seconds. Any stage where p95 exceeds this value is counted as a failure. The default of 2.0 s is a practical web-app threshold — most users perceive responses slower than this as broken.
+
+  ```bash
+  # Tighter threshold for a latency-sensitive API
+  prescale run http://localhost:8000 --latency-wall 0.5
+
+  # Looser threshold for a batch-style endpoint
+  prescale run http://localhost:8000 --latency-wall 5.0
+  ```
+
+  Raising `--latency-wall` moves the failure onset to a higher user count — you'll see a higher `survives_users` verdict, but you're accepting slower responses as acceptable. Lowering it makes the verdict stricter.
+</ParamField>
+
+<ParamField query="--error-threshold" type="float" default="0.02">
+  Error rate (expressed as a fraction from 0 to 1) above which a stage is considered failed. The default of `0.02` means any stage where more than 2% of requests return an error is counted as a failure.
+
+  ```bash
+  # Zero-tolerance for errors
+  prescale run http://localhost:8000 --error-threshold 0.0
+
+  # Looser tolerance for a degraded-OK endpoint
+  prescale run http://localhost:8000 --error-threshold 0.05
+  ```
+
+  Errors counted here include 5xx HTTP responses, connection timeouts, connection refusals, and network errors. 4xx responses (except 429) are not counted as errors.
+</ParamField>
+
+***
+
+## Load shaping
+
+These flags control the shape of the load ramp — how many users to test, how long to hold each level, and how to simulate realistic user behaviour.
+
+<ParamField query="--max-users / -u" type="integer" default="200">
+  Peak concurrent virtual users to ramp to. PreScale ramps from 1 user up to this value in steps, holding each level for `--stage-seconds`. If the app fails well before this value, the ramp stops early.
+
+  ```bash
+  # Test up to 500 concurrent users
+  prescale run https://staging.myapp.com -u 500 --i-own-this
+  ```
+
+  If `verdict.marginal` is `true`, the failure onset is close to `max_tested` — re-run with a larger `-u` to find the true ceiling.
+</ParamField>
+
+<ParamField query="--stage-seconds / -s" type="float" default="5.0">
+  How long (in seconds) to hold each load level before stepping up. Shorter stages make the ramp faster but noisier. Longer stages give more signal at each level and are useful when you're diagnosing intermittent issues.
+
+  ```bash
+  # Quick check (noisy but fast)
+  prescale run http://localhost:8000 -s 3
+
+  # More reliable signal at each level
+  prescale run https://staging.myapp.com -s 10 --i-own-this
+  ```
+</ParamField>
+
+<ParamField query="--max-rps" type="float">
+  Safety ceiling on aggregate requests per second. When set, PreScale throttles traffic so the total RPS across all routes never exceeds this value, regardless of how many virtual users are active.
+
+  ```bash
+  # Cap at 200 req/s to protect a shared staging environment
+  prescale run https://staging.myapp.com --max-rps 200 --i-own-this
+  ```
+
+  When `--max-rps` is active, the `config.max_rps` field in the result is set and `verdict.saturated` accounts for the cap when interpreting throughput plateaus.
+</ParamField>
+
+<ParamField query="--repeat" type="integer" default="1">
+  Run the full ramp N times and pool the results. Multiple ramps tighten the confidence band (`verdict.confidence`) by averaging out transient spikes. Use `--repeat 3` whenever `verdict.confidence.stable` is `false` or the bottleneck class came back `"unknown"`.
+
+  ```bash
+  # Pool 3 ramps for a tighter verdict
+  prescale run https://staging.myapp.com --repeat 3 --i-own-this
+  ```
+</ParamField>
+
+<ParamField query="--think-time" type="float" default="0.0">
+  Seconds each virtual user pauses between requests. A value of `0` (the default) sends requests as fast as possible — which models an API client under pressure. A non-zero value simulates realistic user pacing — a browser user who reads a page before clicking.
+
+  ```bash
+  # Simulate users who spend ~2 seconds reading between requests
+  prescale run http://localhost:8000 --think-time 2.0
+  ```
+
+  `--profile` scenarios set this automatically — for example, the `product-hunt` profile applies a realistic think time for a consumer web app.
+</ParamField>
+
+<ParamField query="--no-warmup" type="boolean">
+  By default, PreScale sends a brief warmup burst before starting measurement. This lets JIT compilers warm up, connection pools fill, and caches prime — so your stage-1 latency reflects steady-state performance rather than cold-start overhead. Pass `--no-warmup` to skip this phase and start measuring from the first request.
+
+  ```bash
+  prescale run http://localhost:8000 --no-warmup
+  ```
+
+  Use `--no-warmup` only if you deliberately want to measure cold-start behaviour.
+</ParamField>
+
+***
+
+## Saved runs
+
+By default, every run is saved to `./.prescale/runs/<id>.json`. You can change or disable this behaviour.
+
+<ParamField query="--store" type="path" default="./.prescale">
+  Directory where runs are saved. PreScale creates `<store>/runs/` automatically.
+
+  ```bash
+  # Save runs in a shared network directory
+  prescale run http://localhost:8000 --store /mnt/shared/prescale-runs
+  ```
+</ParamField>
+
+<ParamField query="--no-save" type="boolean">
+  Skip saving the result to disk entirely. Useful when you only want the terminal output or the `--json` stream.
+
+  ```bash
+  prescale run http://localhost:8000 --no-save
+  ```
+</ParamField>
+
+<Tip>
+  Add `.prescale/` to your `.gitignore` to keep transient run artifacts out of source control. If you use `prescale compare` for CI regression gating, deliberately commit only the baseline file (e.g. `prescale-baseline.json`) rather than the whole `.prescale/` directory.
+</Tip>
+
+***
+
+## MCP environment variable
+
+When you run PreScale as an MCP server for AI coding agents, you can control which non-local hosts the agent is allowed to load-test.
+
+<ParamField query="PRESCALE_MCP_ALLOW" type="string">
+  Comma-separated list of non-local hostnames the MCP server may load-test. By default, the MCP server only allows `localhost` and loopback addresses. You must explicitly allowlist staging or preview hosts before an agent can test them.
+
+  ```bash
+  # Allow a single staging host
+  export PRESCALE_MCP_ALLOW=staging.myapp.com
+
+  # Allow multiple hosts
+  export PRESCALE_MCP_ALLOW=staging.myapp.com,preview.myapp.com
+  ```
+
+  Alternatively, pass the allowlist directly to the `mcp` command:
+
+  ```bash
+  prescale mcp --allow staging.myapp.com --allow preview.myapp.com
+  ```
+
+  The environment variable and the `--allow` flag are equivalent — use whichever fits your deployment. For Claude Code, set the variable in your shell before running `claude mcp add`:
+
+  ```bash
+  export PRESCALE_MCP_ALLOW=staging.myapp.com
+  claude mcp add prescale -- prescale mcp
+  ```
+</ParamField>
+
+***
+
+## Safety defaults
+
+PreScale ships with conservative safety defaults so you don't accidentally load-test something you don't own.
+
+<ParamField query="--i-own-this" type="boolean">
+  Skip the interactive confirmation prompt before sending traffic to a non-local host. Without this flag, PreScale prints a warning and asks you to confirm before it ramps any non-`localhost` target.
+
+  ```bash
+  prescale run https://staging.myapp.com --i-own-this
+  ```
+
+  Use `--i-own-this` in all CI and automated contexts — interactive prompts block pipeline execution.
+</ParamField>
+
+<ParamField query="--ignore-robots" type="boolean">
+  Skip the `robots.txt` courtesy check. By default, PreScale checks the target's `robots.txt` and warns (but does not stop) if any tested routes are disallowed. Pass `--ignore-robots` to silence the warning.
+
+  ```bash
+  prescale run https://staging.myapp.com --ignore-robots --i-own-this
+  ```
+</ParamField>
+
+<Warning>
+  Load testing sends real traffic and can cause real outages or unexpected cloud bills. Always point PreScale at a **staging or preview environment** — not production — unless you have explicitly planned for the load and have the capacity to absorb it.
+</Warning>
+
+### MCP safety model
+
+The MCP server defaults to **local-only**. An AI coding agent using the `load_test` or `investigate` MCP tools cannot reach any non-local host unless you have explicitly added it to `PRESCALE_MCP_ALLOW` or passed `--allow` when starting the server. Requests to unlisted non-local hosts are rejected before any traffic is sent.
+
+***
+
+<Tip>
+  In CI pipelines, always pair non-local URLs with `--i-own-this`. Without it, `prescale run` in non-interactive (e.g. `--json`) mode will exit with an error rather than prompt. A complete CI invocation looks like:
+
+  ```bash
+  prescale run https://staging.myapp.com \
+    --i-own-this \
+    --fail-under 100 \
+    --max-rps 300 \
+    --repeat 2
+  ```
+</Tip>
