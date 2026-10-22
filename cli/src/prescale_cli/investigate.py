@@ -283,7 +283,8 @@ async def gather_probes(base_url, report, stages, targets, *, transport=None,
 async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
                       max_rps=None, store=None, transport=None, progress_cb=None,
                       on_stage=None, on_probe=None, headers=None, think_time=0.0,
-                      profile=None, audit=False, host_permission=False) -> dict:
+                      profile=None, audit=False, host_permission=False,
+                      replica=False) -> dict:
     """Ramp to find the culprit, probe it, and attach a diagnosis to the Result."""
     targets = build_targets(url, paths=tuple(paths))
     levels = default_levels(max_users)
@@ -297,7 +298,8 @@ async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
               "latency_wall_s": _LATENCY_WALL_S, "error_threshold": _ERROR_THRESHOLD,
               "max_rps": max_rps, "warmup": True, "repeat": 1, "think_time_s": think_time,
               "profile": profile.name if profile else None}
-    result = build_result(report, url=url, targets=targets, config=config, warning=warning)
+    result = build_result(report, url=url, targets=targets, config=config, warning=warning,
+                          replica=replica)
 
     if report.onset_users is not None and report.culprit_route:
         if on_probe:
