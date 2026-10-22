@@ -142,7 +142,10 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     levels = default_levels(max_users)
     console.print(f"[dim]Ramp: up to {max_users} users in {len(levels)} steps of "
                   f"{stage_seconds:g}s (~{round(len(levels) * stage_seconds)}s of load). "
-                  "Previews often share production's database: the load reaches it too.[/dim]")
+                  + ("The load reaches whatever this job's environment points the app at."
+                     if app else
+                     "Previews often share production's database: the load reaches it too.")
+                  + "[/dim]")
     try:
         result = asyncio.run(run_investigate(
             url, max_users=max_users, paths=extra_paths, stage_seconds=stage_seconds,
