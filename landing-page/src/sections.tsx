@@ -238,7 +238,7 @@ export function Faq() {
 
 const DOCS: Array<[string, string, string]> = [
   ["Quickstart", "Install, run your first test, read the verdict.", "/docs/quickstart"],
-  ["Capacity on every PR", "Set up the GitHub Action for your preview deploys.", "/docs/guides/github-action"],
+  ["Capacity on every PR", "Check every pull request in CI, no deploy needed.", "/docs/guides/github-action"],
   ["Why it breaks", "How investigate finds the bottleneck and the fix.", "/docs/commands/investigate"],
   ["What gets uploaded", "Exactly what leaves your machine, and what never does.", LINKS.data],
 ];
