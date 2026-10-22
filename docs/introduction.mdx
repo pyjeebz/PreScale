@@ -39,11 +39,11 @@ Load test results are inherently noisy. PreScale represents that honestly: every
 
 ### Safe by default
 
-Before hitting any non-local host, PreScale pauses and asks you to confirm you own it. The MCP server goes further — it refuses non-local hosts entirely unless you explicitly allowlist them. You won't accidentally hammer a third-party service or rack up a cloud bill without knowing.
+Before hitting any non-local host, PreScale pauses and asks you to confirm you own it. On hosts that only allow load tests by arrangement (Vercel, Netlify, Cloudflare), it explains the host's rule and sends no load until you confirm you have permission ([host rules](/reference/host-rules)). Or skip the host entirely: [replica mode](/guides/replica-mode) starts your app's own build and tests it on localhost. The MCP server goes further — it refuses non-local hosts entirely unless you explicitly allowlist them. You won't accidentally hammer a third-party service or rack up a cloud bill without knowing.
 
 ### Every deploy, not just once
 
-Capacity changes with every deploy. The [GitHub Action](/guides/github-action) load-tests each preview deploy and keeps one comment on the pull request: the capacity change against `main`, what breaks first, and the fix. A free dashboard at [prescale.dev/dashboard](https://prescale.dev/dashboard) keeps the history per site. Both are optional: the CLI works fully offline, and nothing leaves your machine unless you ask ([what gets uploaded](/reference/data-boundary)).
+Capacity changes with every deploy. The [GitHub Action](/guides/github-action) builds and load-tests each pull request in CI, with no deploy needed, and keeps one comment on the pull request: the capacity change against `main`, what breaks first, and the fix. A free dashboard at [prescale.dev/dashboard](https://prescale.dev/dashboard) keeps the history per site. Both are optional: the CLI works fully offline, and nothing leaves your machine unless you ask ([what gets uploaded](/reference/data-boundary)).
 
 ## PreScale vs other load testers
 
