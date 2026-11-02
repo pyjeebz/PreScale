@@ -394,7 +394,8 @@ async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
                      think_time: float = 0.0, vu=None) -> StageResult:
     """Hold USERS virtual users for DURATION. By default each fires requests at
     TARGETS; VU, when given, is the virtual user itself: an async callable
-    (client, deadline, sink, gate) that records its own requests (journeys)."""
+    (client, deadline, sink, gate, index, users) that records its own requests
+    (journeys). INDEX is this user's place among the stage's USERS."""
     sink = _Sink(labels=vu is None)
     cycle = itertools.cycle(targets)  # round-robin spreads load evenly across routes
     loop = asyncio.get_running_loop()
@@ -405,7 +406,8 @@ async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
     watcher = asyncio.create_task(_watch_loop_lag(stop, lags))
     try:
         if vu is not None:
-            await asyncio.gather(*(vu(client, deadline, sink, gate) for _ in range(users)))
+            await asyncio.gather(*(vu(client, deadline, sink, gate, i, users)
+                                   for i in range(users)))
         else:
             await asyncio.gather(
                 *(_worker(client, method, deadline, sink, lambda: next(cycle), gate, think_time)

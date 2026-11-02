@@ -129,12 +129,39 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
         bar = text_bar(verdict["survives_users"], scale, width=24, marker=prof["peak_users"])
         lines.append(f"        [{tone}]{bar}[/{tone}]  ┆ = launch peak")
 
+    exp = result.get("expect")
+    if exp:
+        lines.extend(_expect_lines(exp))
+
     console.print(Panel("\n".join(lines), title="📈 Readiness report", border_style=color))
 
     if multi and stages:
         _render_routes(result)
     if result.get("journeys"):
         render_journeys(result)
+
+
+def _expect_lines(exp: dict) -> list[str]:
+    """The readiness lines for --expect: the answer first, then what decides it."""
+    icon = {True: "✅", False: "🛑", None: "❔"}[exp["meets"]]
+    if not exp.get("journeys"):
+        tail = {True: f"survives ~{exp['survives_users']}.",
+                False: f"survives ~{exp['survives_users']}, short by "
+                       f"~{exp['users'] - exp['survives_users']}.",
+                None: f"held all ~{exp['survives_users']} tested; raise --max-users to know."}
+        return [f"Expected  {icon} ~{exp['users']} users: {tail[exp['meets']]}"]
+    lines = [f"Expected  {icon} ~{exp['users']} users, split across journeys by weight:"]
+    for j in exp["journeys"]:
+        mark = {True: "✅", False: "🛑", None: "❔"}[j["meets"]]
+        lines.append(f"          {mark} {escape(j['name'])}: ~{j['users']:g} users, holds "
+                     f"~{j['survives_users']} alone")
+    c = exp.get("combined")
+    if c:
+        mark = {True: "✅", False: "🛑", None: "❔"}[c["meets"]]
+        lines.append(f"          {mark} all together: holds ~{c['survives_users']}")
+    for name in exp.get("untested") or []:
+        lines.append(f"          ❔ {escape(name)}: not load-tested (stale or unreachable)")
+    return lines
 
 
 def render_journeys(result: dict) -> None:
@@ -168,6 +195,30 @@ def render_journeys(result: dict) -> None:
         style = "bold red" if j["name"] == first and j["onset_users"] is not None else None
         table.add_row(name, survives, where, escape(j.get("bottleneck") or ""), style=style)
     console.print(table)
+    if result.get("combined"):
+        _render_combined(result["combined"])
+
+
+def _render_combined(c: dict) -> None:
+    """All journeys ramped together by weight, and whether one starved another."""
+    mix = ", ".join(f"{escape(name)} {pct:g}%" for name, pct in c["mix"].items())
+    lines = [f"[bold]Mix[/bold]  {mix}"]
+    if c["onset_users"] is None:
+        lines.append(f"Held through {c['max_tested']} users in total.")
+    else:
+        step = c.get("culprit_step")
+        where = (f"{escape(c['culprit_journey'])} › {step['index']}. {escape(step['name'])}"
+                 if c.get("culprit_journey") and step else "—")
+        lines.append(f"Survives ~{c['survives_users']} users in total; breaks first at {where}.")
+    inter = c.get("interference")
+    if inter:
+        others = ", ".join(escape(n) for n in inter["with"])
+        lines.append(
+            f"[yellow]Interference[/yellow]  {escape(inter['journey'])} broke with "
+            f"{inter['users_at_break']} of its own users, but held {inter['held_alone']} "
+            f"alone. It competes with {others} for something they share (a database pool, "
+            "CPU, a cache).")
+    console.print(Panel("\n".join(lines), title="All journeys together", border_style="cyan"))
 
 
 def _render_routes(result: dict) -> None:

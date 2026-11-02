@@ -98,6 +98,44 @@
       "description": "Present on journey runs: one entry per journey. Each journey that replays is ramped on its own; a stale or unreachable one isn't load-tested and carries the reason.",
       "items": { "$ref": "#/$defs/journey" }
     },
+    "combined": {
+      "type": "object",
+      "description": "Journey runs with two or more journeys that replay: all of them ramped together, each user picking a journey by weight. Users are the total across journeys.",
+      "properties": {
+        "journeys": { "type": "array", "items": { "type": "string" } },
+        "mix": { "type": "object", "additionalProperties": { "type": "number" }, "description": "Percent of the concurrent users on each journey (by weight; each user stays on one journey)." },
+        "survives_users": { "type": "integer" },
+        "max_tested": { "type": "integer" },
+        "onset_users": { "type": ["integer", "null"] },
+        "onset_reason": { "type": ["string", "null"], "enum": ["errors", "latency", null] },
+        "confidence": { "type": "object" },
+        "culprit_journey": { "type": ["string", "null"] },
+        "culprit_step": { "type": ["object", "null"] },
+        "bottleneck": { "type": ["string", "null"] },
+        "interference": {
+          "type": ["object", "null"],
+          "description": "Set when the journey that breaks first does so with fewer of its own users than it held alone: it competes with the others for something they share.",
+          "properties": {
+            "journey": { "type": "string" },
+            "users_at_break": { "type": "integer", "description": "Its own users (exact) at the level where the combined run broke." },
+            "held_alone": { "type": "integer" },
+            "with": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "description": "Present with `run --expect N`: whether the run holds N users at peak. In a journey run N is split across journeys by weight; each journey must hold its share alone, and the combined run must hold N.",
+      "properties": {
+        "users": { "type": "integer" },
+        "meets": { "type": ["boolean", "null"], "description": "null: held every level tested, but fewer users than expected were tested." },
+        "survives_users": { "type": "integer" },
+        "journeys": { "type": ["array", "null"] },
+        "combined": { "type": ["object", "null"] },
+        "untested": { "type": "array", "items": { "type": "string" }, "description": "Journeys that weren't load-tested; their share of N is unknown." }
+      }
+    },
     "investigation": {
       "type": "object",
       "description": "Present when `prescale investigate` diagnosed a failure.",

@@ -29,6 +29,8 @@ from prescale_cli.journeys.model import Journey, Step, TemplateError, fresh_uniq
 from prescale_cli.loadtest import client_headers
 
 _SNIPPET = 160
+# Separates journey and step in labels when several journeys run together.
+SEP = " › "
 _MAX_REDIRECTS = 10
 
 
@@ -118,18 +120,43 @@ async def check(journey: Journey, base_url: str, *, timeout: float = 10.0,
     return result
 
 
-def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = None,
-               think: float = 0.0):
-    """JOURNEY as a load-test virtual user: walk its steps, pausing for each
-    step's think time, and start again with a fresh identity until the stage
-    deadline. A failed step ends that walk (after its pause), like a real user
-    giving up. Each step is recorded under its label, so the report can name the
-    step that broke. THINK is the pause for steps that don't set their own
-    (`--think-time`, or a launch profile's)."""
-    env = dict(os.environ) if env is None else env
+def apportion(users: int, weights: list[float]) -> list[int]:
+    """Split USERS into whole numbers proportional to WEIGHTS (largest remainder),
+    so the counts always add up to USERS."""
+    total = sum(weights)
+    exact = [users * w / total for w in weights]
+    counts = [int(x) for x in exact]
+    by_remainder = sorted(range(len(weights)), key=lambda i: exact[i] - counts[i], reverse=True)
+    for i in by_remainder[:users - sum(counts)]:
+        counts[i] += 1
+    return counts
 
-    async def vu(client: httpx.AsyncClient, deadline: float, sink, gate=None) -> None:
+
+def journey_vu(journeys: Journey | list[Journey], base_url: str,
+               env: dict[str, str] | None = None, think: float = 0.0):
+    """A load-test virtual user: walk a journey's steps, pausing for each step's
+    think time, and start again with a fresh identity until the stage deadline.
+    A failed step ends that walk (after its pause), like a real user giving up.
+
+    Given several JOURNEYS, the stage's users are split between them by `weight`
+    (see `apportion`) and each user stays on its journey for the whole stage, so
+    a journey's weight is its share of the users in the app at once, whatever
+    its walks take. Steps are then labelled `journey › step`. Each step is
+    recorded under its label, so the report can name the step that broke. THINK
+    is the pause for steps that don't set their own (`--think-time`, or a launch
+    profile's)."""
+    env = dict(os.environ) if env is None else env
+    mix = [journeys] if isinstance(journeys, Journey) else list(journeys)
+    weights = [j.weight for j in mix]
+
+    async def vu(client: httpx.AsyncClient, deadline: float, sink, gate=None,
+                 index: int = 0, users: int = 1) -> None:
         loop = asyncio.get_running_loop()
+        journey = mix[0]
+        if len(mix) > 1:
+            seats = [j for j, n in zip(mix, apportion(users, weights)) for _ in range(n)]
+            journey = seats[index]
+        prefix = f"{journey.name}{SEP}" if len(mix) > 1 else ""
         while loop.time() < deadline:
             variables: dict[str, Any] = fresh_uniques()
             jar = httpx.Cookies()
@@ -139,7 +166,7 @@ def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = Non
                 if loop.time() >= deadline:
                     return
                 outcome = await run_step(client, step, base_url, variables, env, jar)
-                _record(sink, outcome)
+                _record(sink, outcome, prefix)
                 # A user pauses after a step either way; restarting the instant a step
                 # fails would hammer the app harder than real users who hit an error.
                 pause = step.think or think
@@ -156,10 +183,10 @@ def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = Non
     return vu
 
 
-def _record(sink, outcome: StepCheck) -> None:
+def _record(sink, outcome: StepCheck, prefix: str = "") -> None:
     """One step's outcome into the stage's numbers. An answer the journey didn't
     expect counts as a failure, even a 4xx: under load that's a step going wrong."""
-    label = outcome.step.label
+    label = prefix + outcome.step.label
     if outcome.status is None:
         sink.record_error(label, outcome.kind or "network")
     elif outcome.ok or outcome.status >= 500 or outcome.status == 429:
