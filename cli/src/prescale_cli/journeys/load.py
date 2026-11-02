@@ -35,16 +35,18 @@ class JourneyRun:
 async def ramp(journey: Journey, base_url: str, *, levels: list[int], stage_seconds: float,
                timeout: float = 10.0, max_rps: float | None = None, warmup: bool = True,
                repeat: int = 1, headers: dict[str, str] | None = None,
-               env: dict[str, str] | None = None, progress_cb=None, on_stage=None,
-               transport: httpx.AsyncBaseTransport | None = None,
+               env: dict[str, str] | None = None, think: float = 0.0, progress_cb=None,
+               on_stage=None, transport: httpx.AsyncBaseTransport | None = None,
                ) -> tuple[list[StageResult], str | None]:
-    """Ramp virtual users who each walk JOURNEY, through LEVELS."""
+    """Ramp virtual users who each walk JOURNEY, through LEVELS. THINK is the
+    pause for steps without their own `think`."""
     return await run_loadtest(
         [base_url], levels=levels, stage_seconds=stage_seconds, timeout=timeout,
         max_rps=max_rps, warmup=warmup, repeat=repeat, headers=headers,
         host_permission=True,  # the caller has already checked the host's rules
         progress_cb=progress_cb, on_stage=on_stage, transport=transport,
-        vu=journey_vu(journey, base_url, env), client_options=client_options(base_url),
+        vu=journey_vu(journey, base_url, env, think), client_options=client_options(base_url),
+        preflight=False,  # `check` already replayed the journey once
     )
 
 

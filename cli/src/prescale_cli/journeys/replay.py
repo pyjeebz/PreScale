@@ -29,6 +29,7 @@ from prescale_cli.journeys.model import Journey, Step, TemplateError, fresh_uniq
 from prescale_cli.loadtest import client_headers
 
 _SNIPPET = 160
+_MAX_REDIRECTS = 10
 
 
 class OffOriginError(Exception):
@@ -117,12 +118,14 @@ async def check(journey: Journey, base_url: str, *, timeout: float = 10.0,
     return result
 
 
-def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = None):
+def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = None,
+               think: float = 0.0):
     """JOURNEY as a load-test virtual user: walk its steps, pausing for each
     step's think time, and start again with a fresh identity until the stage
     deadline. A failed step ends that walk (after its pause), like a real user
     giving up. Each step is recorded under its label, so the report can name the
-    step that broke."""
+    step that broke. THINK is the pause for steps that don't set their own
+    (`--think-time`, or a launch profile's)."""
     env = dict(os.environ) if env is None else env
 
     async def vu(client: httpx.AsyncClient, deadline: float, sink, gate=None) -> None:
@@ -139,13 +142,16 @@ def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = Non
                 _record(sink, outcome)
                 # A user pauses after a step either way; restarting the instant a step
                 # fails would hammer the app harder than real users who hit an error.
-                if step.think:
+                pause = step.think or think
+                if pause:
                     remaining = deadline - loop.time()
                     if remaining <= 0:
                         return
-                    await asyncio.sleep(min(step.think, remaining))
+                    await asyncio.sleep(min(pause, remaining))
                 if not outcome.ok:
                     break
+            # Never spin: a walk that failed without awaiting must still yield.
+            await asyncio.sleep(0)
 
     return vu
 
@@ -179,10 +185,9 @@ async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
 
     request = client.build_request(step.method, url, headers=req_headers, json=payload,
                                    content=body)
-    jar.set_cookie_header(request)
     start = time.perf_counter()
     try:
-        resp = await client.send(request)
+        resp = await _send(client, request, jar)
     except OffOriginError as exc:
         outcome.problem, outcome.kind = str(exc), "left the app"
         return outcome
@@ -200,8 +205,6 @@ async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
     outcome.latency = time.perf_counter() - start
     outcome.status = resp.status_code
     outcome.headers = resp.headers
-    for hop in (*resp.history, resp):
-        jar.extract_cookies(hop)
 
     if not step.accepts(resp.status_code):
         wanted = (" or ".join(map(str, step.expect)) if step.expect else "a status below 400")
@@ -220,6 +223,25 @@ async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
         variables[name] = value
     outcome.ok = True
     return outcome
+
+
+async def _send(client: httpx.AsyncClient, request: httpx.Request,
+                jar: httpx.Cookies) -> httpx.Response:
+    """Send REQUEST with this run's cookies, following redirects one hop at a time
+    so every hop carries the cookies earlier hops set (a login that redirects to
+    /account stays logged in). The client keeps no cookies of its own, and its
+    same-origin hook checks each hop."""
+    for _ in range(_MAX_REDIRECTS + 1):
+        if "cookie" in request.headers:
+            del request.headers["cookie"]
+        jar.set_cookie_header(request)
+        resp = await client.send(request, follow_redirects=False)
+        jar.extract_cookies(resp)
+        if resp.next_request is None:
+            return resp
+        await resp.aclose()
+        request = resp.next_request
+    raise httpx.TooManyRedirects("too many redirects", request=request)
 
 
 def extract(resp: httpx.Response, source: str) -> Any:

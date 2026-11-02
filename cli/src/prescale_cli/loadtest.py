@@ -495,6 +495,7 @@ async def run_loadtest(
     host_permission: bool = False,
     vu=None,
     client_options: dict | None = None,
+    preflight: bool = True,
 ) -> tuple[list[StageResult], str | None]:
     """Preflight the target, then ramp through `levels`, spreading each stage's
     load across `targets`. Stops early once a stage is more than `hard_stop_rate`
@@ -504,7 +505,9 @@ async def run_loadtest(
     after the preflight unless `host_permission` says the user has permission.
 
     `vu` replaces the default virtual user (see `_run_stage`), and
-    `client_options` adds settings to the HTTP client (journeys use both)."""
+    `client_options` adds settings to the HTTP client. Journeys use both, and skip
+    the preflight (`preflight=False`): each journey was already replayed once, which
+    checks the app better than a request to targets[0]."""
     if not targets:
         raise LoadError("No targets to test.")
     max_conns = max(levels) + 50
@@ -516,26 +519,8 @@ async def run_loadtest(
         timeout=timeout, limits=limits, follow_redirects=True,
         headers=client_headers(headers), transport=transport, **(client_options or {}),
     ) as client:
-        try:
-            preflight = await client.request(method, targets[0])
-        except httpx.HTTPError as exc:
-            raise LoadError(f"Couldn't reach {targets[0]}: {exc}") from exc
-        blocker = edge_blocker(preflight.headers)
-        if blocker:
-            # Load now would only measure the firewall, and deepen the block.
-            raise LoadError(
-                f"{_capitalize(blocker)} is blocking requests from this machine (it answered "
-                f"the first request with HTTP {preflight.status_code}), so a load test would "
-                f"only measure the firewall. {_INSTEAD}"
-            )
-        rule = detect_host(preflight.headers)
-        if rule and not host_permission:
-            raise HostPolicyError(rule)
-        if preflight.status_code >= 400:
-            warning = (
-                f"First request returned HTTP {preflight.status_code} — "
-                "results may reflect a broken endpoint, not a load limit."
-            )
+        if preflight:
+            warning = await _preflight(client, method, targets[0], host_permission)
 
         if warmup:
             # Discarded: warms caches/JIT/connection pools so the first measured
@@ -561,6 +546,31 @@ async def run_loadtest(
 
     stages = [_merge_stages(by_level[u]) for u in sorted(by_level)]
     return stages, warning
+
+
+async def _preflight(client: httpx.AsyncClient, method: str, target: str,
+                     host_permission: bool) -> str | None:
+    """One request before any load: stop if a firewall already blocks us or the
+    host forbids load tests; return a warning if the target answers with an error."""
+    try:
+        first = await client.request(method, target)
+    except httpx.HTTPError as exc:
+        raise LoadError(f"Couldn't reach {target}: {exc}") from exc
+    blocker = edge_blocker(first.headers)
+    if blocker:
+        # Load now would only measure the firewall, and deepen the block.
+        raise LoadError(
+            f"{_capitalize(blocker)} is blocking requests from this machine (it answered "
+            f"the first request with HTTP {first.status_code}), so a load test would "
+            f"only measure the firewall. {_INSTEAD}"
+        )
+    rule = detect_host(first.headers)
+    if rule and not host_permission:
+        raise HostPolicyError(rule)
+    if first.status_code >= 400:
+        return (f"First request returned HTTP {first.status_code} — "
+                "results may reflect a broken endpoint, not a load limit.")
+    return None
 
 
 def open_client(*, timeout: float = 10.0, max_conns: int = 64,

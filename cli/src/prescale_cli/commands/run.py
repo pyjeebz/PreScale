@@ -324,6 +324,8 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
     if not as_json:
         console.print(f"\n[bold]PreScale[/bold] — replaying {len(journeys)} "
                       f"journey{'s' if len(journeys) != 1 else ''} against [cyan]{url}[/cyan]")
+    # --json keeps stdout for the Result alone; notes about journeys go to stderr.
+    out = Console(stderr=True) if as_json else console
     checks = asyncio.run(_check_all(journeys, url, timeout=timeout, headers=headers))
     runs = [JourneyRun(j, c) for j, c in zip(journeys, checks)]
     levels = default_levels(config["max_users"])
@@ -333,7 +335,7 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
         if not run.check.ok:
             failed = run.check.failed
             what = "stale" if run.check.stale else "couldn't run"
-            console.print(f"[yellow]⚠ {name}: {what}, not load-tested[/yellow] "
+            out.print(f"[yellow]⚠ {name}: {what}, not load-tested[/yellow] "
                           f"[dim]({escape(failed.step.name)}: {escape(failed.problem or '')})"
                           "[/dim]", highlight=False)
             continue
@@ -347,10 +349,10 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
                 stages, run.warning = asyncio.run(ramp(
                     run.journey, url, levels=levels, stage_seconds=config["stage_seconds"],
                     timeout=timeout, max_rps=config["max_rps"], warmup=config["warmup"],
-                    repeat=config["repeat"], headers=headers,
+                    repeat=config["repeat"], headers=headers, think=config["think_time_s"],
                     progress_cb=progress.starting, on_stage=progress.finished))
         except LoadError as exc:
-            console.print(f"[red]Error:[/red] {exc}")
+            out.print(f"[red]Error:[/red] {exc}")
             raise SystemExit(1)
         run.report = analyze(stages, latency_wall=latency_wall,
                              error_threshold=error_threshold,
@@ -358,7 +360,7 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
 
     worst = first_to_break(runs)
     if worst is None:
-        console.print("[red]Error:[/red] no journey replays against this app, so there's "
+        out.print("[red]Error:[/red] no journey replays against this app, so there's "
                       "nothing to load-test. Run `prescale journeys verify` for details.")
         raise SystemExit(1)
     warnings = list(dict.fromkeys(r.warning for r in runs if r.warning))
@@ -366,7 +368,9 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
                           targets=[s.label for s in worst.journey.steps],
                           config={**config, "mode": "journeys"},
                           warning=" ".join(warnings) or None, replica=replica)
-    result["verdict"]["culprit_journey"] = worst.journey.name
+    # Only a journey that broke is a culprit; if all held, there is none.
+    result["verdict"]["culprit_journey"] = (worst.journey.name
+                                            if worst.report.onset_users is not None else None)
     result["journeys"] = journeys_block(runs)
     return worst.report, result, live_mode
 

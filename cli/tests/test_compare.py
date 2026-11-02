@@ -103,3 +103,25 @@ def test_held_run_below_the_old_level_is_inconclusive_not_a_regression():
 def test_held_run_that_reached_the_old_level_still_compares():
     c = compare_results(_result(200, low=180, high=220), _result(190, held_at=190))
     assert not c["inconclusive"] and not c["regressed"]
+
+
+def _mode(result, mode=None, culprit=None):
+    r = json.loads(json.dumps(result))
+    if mode:
+        r["config"]["mode"] = mode
+    r["verdict"]["culprit_journey"] = culprit
+    return r
+
+
+def test_url_run_and_journey_run_are_not_comparable():
+    old = _result(200)
+    new = _mode(_result(20), mode="journeys", culprit="checkout")
+    cmp = compare_results(old, new)
+    assert not cmp["regressed"] and cmp["inconclusive"]
+    assert cmp["summary"].startswith("Not comparable")
+
+
+def test_journey_runs_note_a_new_first_to_break():
+    old = _mode(_result(100), mode="journeys", culprit="search")
+    new = _mode(_result(100), mode="journeys", culprit="checkout")
+    assert "search → checkout" in compare_results(old, new)["summary"]

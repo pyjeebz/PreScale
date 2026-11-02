@@ -150,3 +150,111 @@ def test_run_unknown_journey(tmp_path):
                                    "--dir", _dir(tmp_path, BROWSE)])
     assert res.exit_code == 2
     assert "no journey named nope" in _out(res)
+
+
+# --- review fixes -------------------------------------------------------------
+
+LOGIN_REDIRECT = {
+    "version": 1, "name": "account", "type": "account",
+    "steps": [
+        {"name": "log in", "request": {"method": "POST", "path": "/login"},
+         "expect": {"status": 200}, "extract": {"user": "body.user"}},
+        {"name": "update cart", "request": {"method": "POST", "path": "/cart"},
+         "expect": {"status": 200}, "extract": {"again": "body.user"}},
+    ],
+}
+
+
+def _login_redirects():
+    """POST /login sets a cookie on a 302; POST /cart answers 303. The pages they
+    redirect to only know the user if the cookie came along."""
+    logins = iter(range(10_000))
+
+    def handler(request):
+        cookie = request.headers.get("cookie")
+        if request.url.path == "/login":
+            return httpx.Response(302, headers={"location": "/me",
+                                                "set-cookie": f"sid=u{next(logins)}; Path=/"})
+        if request.url.path == "/cart":
+            return httpx.Response(303, headers={"location": "/cartview"})
+        if request.url.path in ("/me", "/cartview"):
+            return httpx.Response(200, json={"user": cookie} if cookie else {})
+        if request.url.path == "/":
+            return httpx.Response(302, headers={"location": "https://sso.example.com/"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+def test_cookies_survive_redirects_in_verify():
+    result = asyncio.run(check(parse(LOGIN_REDIRECT), "http://shop.test", env={},
+                               transport=_login_redirects()))
+    assert result.ok, result.failed and result.failed.problem
+
+
+def test_cookies_survive_redirects_at_load_and_root_redirect_is_fine():
+    # "/" redirects to an SSO host: journeys don't probe it, so no OffOriginError.
+    stages, warning = _ramp(parse(LOGIN_REDIRECT), _login_redirects(), levels=(1, 5))
+    assert warning is None
+    for stage in stages:
+        assert all(stat.errors == 0 for stat in stage.routes.values()), stage.routes
+
+
+def _fake_checks(monkeypatch, stale_names=()):
+    """Replace the network in `run`'s journey mode: CHECK says which journeys are
+    stale; RAMP returns a run that holds at every level."""
+    from prescale_cli.commands import run as run_cmd
+    from prescale_cli.journeys.replay import JourneyCheck, StepCheck
+    from prescale_cli.loadtest import RouteStat, StageResult
+
+    async def fake_check_all(journeys, url, *, timeout, headers):
+        out = []
+        for j in journeys:
+            c = JourneyCheck(j)
+            ok = j.name not in stale_names
+            c.steps = [StepCheck(s, status=200 if ok else 404, ok=ok,
+                                 problem=None if ok else "returned 404, expected 200")
+                       for s in j.steps[:1]] if not ok else \
+                [StepCheck(s, status=200, ok=True) for s in j.steps]
+            out.append(c)
+        return out
+
+    async def fake_ramp(journey, url, *, levels, **kwargs):
+        routes = {s.label: RouteStat(total=10, latencies=[0.01] * 10) for s in journey.steps}
+        return [StageResult(users=u, duration=1.0, routes=dict(routes)) for u in levels], None
+
+    monkeypatch.setattr(run_cmd, "_check_all", fake_check_all)
+    monkeypatch.setattr(run_cmd, "ramp", fake_ramp)
+
+
+def test_run_json_stays_pure_when_a_journey_is_stale(tmp_path, monkeypatch):
+    _fake_checks(monkeypatch, stale_names={"browse"})
+    res = CliRunner().invoke(cli, ["run", "http://localhost:1", "--json", "--no-save",
+                                   "-u", "5", "--dir", _dir(tmp_path, SHOP, BROWSE)])
+    assert res.exit_code == 0, res.output
+    result = json.loads(res.stdout)  # nothing but the Result on stdout
+    assert "stale, not load-tested" in res.stderr
+    statuses = {j["name"]: j["status"] for j in result["journeys"]}
+    assert statuses == {"browse": "stale", "checkout": "ok"}
+    # nothing broke, so there's no culprit journey
+    assert result["verdict"]["onset_users"] is None
+    assert result["verdict"]["culprit_journey"] is None
+    assert result["config"]["mode"] == "journeys"
+
+
+def test_run_applies_think_time_to_steps_without_their_own(tmp_path, monkeypatch):
+    seen = {}
+    _fake_checks(monkeypatch)
+    from prescale_cli.commands import run as run_cmd
+    inner = run_cmd.ramp
+
+    async def spy(journey, url, **kwargs):
+        seen[journey.name] = kwargs.get("think")
+        return await inner(journey, url, **kwargs)
+
+    monkeypatch.setattr(run_cmd, "ramp", spy)
+    res = CliRunner().invoke(cli, ["run", "http://localhost:1", "--json", "--no-save",
+                                   "-u", "5", "--think-time", "1.5",
+                                   "--dir", _dir(tmp_path, BROWSE)])
+    assert res.exit_code == 0, res.output
+    assert seen == {"browse": 1.5}

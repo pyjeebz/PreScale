@@ -27,6 +27,8 @@ def _facts(result: dict) -> dict:
         "branch": env.get("git_branch"),
         "created_at": result.get("created_at"),
         "target": result.get("target", {}).get("url"),
+        "mode": (result.get("config") or {}).get("mode") or "urls",
+        "culprit_journey": v.get("culprit_journey"),
     }
 
 
@@ -35,6 +37,9 @@ def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHO
     survives_users; it's 'confident' when the M1 bands don't overlap. A new run
     that held to its max below the old level is 'inconclusive', not a drop."""
     o, n = _facts(old), _facts(new)
+    if o["mode"] != n["mode"]:
+        # URL capacity and journey capacity measure different things: never a regression.
+        return _not_comparable(o, n)
     o_surv, n_surv = o["survives_users"], n["survives_users"]
     pct = (n_surv - o_surv) / o_surv if o_surv else 0.0
     inconclusive = (n["onset_users"] is None and n["max_tested"] is not None
@@ -57,8 +62,26 @@ def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHO
         "improved": improved,
         "inconclusive": inconclusive,
         "confident": confident,
-        "summary": _summary(o, n, pct, regressed, improved, inconclusive),
+        "summary": _summary(o, n, pct, regressed, improved, inconclusive) + _journey_note(o, n),
     }
+
+
+def _not_comparable(o: dict, n: dict) -> dict:
+    kinds = {"urls": "tested URLs", "journeys": "replayed journeys"}
+    return {
+        "old": o, "new": n, "survives_delta": 0, "survives_pct": 0.0, "peak_rps_pct": 0.0,
+        "regressed": False, "improved": False, "inconclusive": True, "confident": False,
+        "summary": (f"Not comparable: the old run {kinds.get(o['mode'], o['mode'])}, the new "
+                    f"run {kinds.get(n['mode'], n['mode'])}. Compare runs of the same kind."),
+    }
+
+
+def _journey_note(o: dict, n: dict) -> str:
+    if o["culprit_journey"] and n["culprit_journey"] \
+            and o["culprit_journey"] != n["culprit_journey"]:
+        return (f" The journey that breaks first changed: {o['culprit_journey']} → "
+                f"{n['culprit_journey']}.")
+    return ""
 
 
 def _summary(o: dict, n: dict, pct: float, regressed: bool, improved: bool,
