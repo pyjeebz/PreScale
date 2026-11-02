@@ -12,7 +12,7 @@ The gate. Mirrors `.github/workflows/ci.yml` (Python 3.10, 3.11, 3.12), so a gre
 - `ruff check cli/src`
 - `pytest cli/tests -q`
 
-Landing page changes (not in CI yet, inferred, check):
+Landing page changes (not in CI yet):
 
 - `cd landing-page && npm ci && npm run lint && npm run build`
 
@@ -21,7 +21,7 @@ Landing page changes (not in CI yet, inferred, check):
 How to run the real thing to see a change working.
 
 - Build/run: `pip install -e cli && python examples/fragile-shop.py 8400` in one terminal
-- Smoke: `prescale investigate http://localhost:8400 --path /search --path /product --path /checkout -u 60 -s 2`; expect `/checkout` named as the culprit with a `connection_pool` diagnosis while static assets hold
+- Smoke: `prescale investigate http://localhost:8400 --path /search --path /product --path /checkout -u 200 -s 2`; expect "Survives ~100", `connection_pool (high confidence)` and culprit `/checkout` (at 60 users it holds, so keep `-u 200`)
 - JSON contract: `prescale show --json` (or `run --json`) validates against `prescale schema`
 - Landing page: `cd landing-page && npm run build && npm run preview`, open the printed URL
 
@@ -44,10 +44,10 @@ Touching these makes a change **risky tier**: rollback written first, fresh-cont
 
 How a merge reaches users, and how to know it worked.
 
-- Landing page: auto on merge to `main` via Vercel (`landing-page/`) (inferred, check)
+- Landing page: auto on merge to `main` via Vercel (`landing-page/`)
   - Check: `curl -fsSI https://prescale.dev` → 200; `curl -fsSL https://prescale.dev/install | head -3` → the installer's shebang; `curl -fsSI https://prescale.dev/docs` → 200
   - Rollback: promote the previous deployment in Vercel, then revert the PR
-- Docs: `docs/` is served by Mintlify, proxied at `/docs` (inferred, check)
+- Docs: `docs/` is served by Mintlify, proxied at `/docs`
 - GitHub Action: users run `pyjeebz/prescale/action@v1` from this repo; it pip-installs the CLI from PyPI. A change to `action/` reaches users when the `v1` tag moves
 - CLI: no deploy; reaches users through a release
 - Dashboard: separate private repo, not deployed from here
