@@ -9,6 +9,7 @@ from prescale_cli.commands import (
     compare,
     history,
     investigate,
+    journeys,
     login,
     mcp,
     profiles,
@@ -33,6 +34,7 @@ def cli() -> None:
         prescale run http://localhost:8000          # load test: what breaks first
         prescale investigate http://localhost:8000  # ...and why, plus how to fix it
         prescale audit https://myapp.com            # static scaling-hygiene check
+        prescale journeys verify http://localhost:8000  # check your journeys still replay
         prescale history                            # list saved runs
         prescale compare                            # capacity diff of the last two runs
         prescale profiles                           # launch scenarios for --profile
@@ -45,6 +47,7 @@ def cli() -> None:
 
 cli.add_command(run.run)
 cli.add_command(investigate.investigate)
+cli.add_command(journeys.journeys)
 cli.add_command(audit.audit)
 cli.add_command(history.history)
 cli.add_command(compare.compare)

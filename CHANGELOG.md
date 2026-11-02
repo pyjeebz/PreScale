@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+- **Journeys: your users' real paths, saved in your repo.** A journey file
+  (`prescale/journeys/<name>.yaml`) lists the requests a user's path makes (log in, add to
+  cart, place an order), carrying tokens and IDs from one step to the next.
+  `prescale journeys` lists them; `prescale journeys verify <url>` replays each once, as one
+  user, and names the step that no longer answers as expected (the journey is stale, or the
+  app is broken). It exits non-zero, so it works as a CI check.
+  - Secrets come from environment variables (`{{env.NAME}}`); a literal password, token or
+    API key in a journey file is refused.
+  - Journeys that change data only run against local hosts or hosts you allow with
+    `--allow-writes`; journeys that send messages or delete data are never replayed.
+  - The example shop has a JSON API and two example journeys in `examples/journeys/`.
+
 ### Fixed
 - **`prescale mcp` works on a fresh install again.** `pip install 'prescale[mcp]'` picked up the new
   mcp 2.x, which renamed the server class PreScale uses, so the MCP server wouldn't start and told

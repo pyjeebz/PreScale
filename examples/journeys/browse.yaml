@@ -1,0 +1,12 @@
+version: 1
+name: browse
+type: browse
+steps:
+  - name: home
+    request: {method: GET, path: /}
+  - name: list products
+    request: {method: GET, path: /api/products}
+    expect: {status: 200}
+    extract: {product_id: body.0.id}
+  - name: product page
+    request: {method: GET, path: /product}

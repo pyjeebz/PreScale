@@ -1,0 +1,25 @@
+version: 1
+name: checkout
+type: checkout
+steps:
+  - name: log in
+    request:
+      method: POST
+      path: /api/login
+      json: {email: "{{unique.email}}", password: "{{env.SHOP_PASSWORD}}"}
+    expect: {status: 200}
+    extract: {token: body.token}
+  - name: add to cart
+    request:
+      method: POST
+      path: /api/cart
+      headers: {Authorization: "Bearer {{token}}"}
+    expect: {status: 201}
+    extract: {cart_id: body.id}
+  - name: place order
+    request:
+      method: POST
+      path: "/api/carts/{{cart_id}}/order"
+      headers: {Authorization: "Bearer {{token}}"}
+    expect: {status: 201}
+    think: 1s

@@ -17,3 +17,12 @@ PreScale reports that `/checkout` breaks first, then diagnoses it as a
 connection-pool ceiling and suggests raising the pool / adding pgbouncer. It's
 the app behind the demo in the README. Tune the `Semaphore(25)` to move the
 breaking point.
+
+### Journeys
+
+The shop also has a small JSON API (log in, add to cart, place an order; the order
+draws from the same pool) and two journeys for it in `journeys/`:
+
+```bash
+SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys
+```

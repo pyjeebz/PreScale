@@ -94,6 +94,7 @@ From source: `git clone https://github.com/pyjeebz/PreScale.git && pip install .
 | [`run <url>`](#run--what-breaks-first) | Ramp traffic; report what breaks first and at what load |
 | [`investigate <url>`](#investigate--and-why) | …and *why* it breaks, plus how to fix it (`--app` to start your app first: [replica mode](#replica-mode--test-your-app-not-your-host)) |
 | [`audit <url>`](#audit--hygiene-no-load) | Load-free HTTP hygiene check (compression, caching, CDN, HTTP/2) |
+| [`journeys`](#journeys--your-users-real-paths) | List your journey files; `journeys verify <url>` checks they still replay |
 | [`compare`](#ci--gate-on-capacity) | Capacity diff of two runs; regression gating for CI |
 | [`profiles`](#frame-it-as-a-launch) | Launch scenarios for `--profile` |
 | [`history` / `show`](#saved-runs-and-the-json-contract) | List and re-open saved runs |
@@ -165,6 +166,44 @@ Try this
   → Increase the DB/upstream connection-pool size.
   → Add a pooler (e.g. pgbouncer) and check the pool checkout timeout.
 ```
+
+### `journeys` — your users' real paths
+
+A journey is a path a user takes through your app (log in, add to cart, place an order), saved as the requests it makes. Journeys live in your repo as `prescale/journeys/<name>.yaml`:
+
+```yaml
+version: 1
+name: checkout
+type: checkout
+steps:
+  - name: log in
+    request:
+      method: POST
+      path: /api/login
+      json: {email: "{{unique.email}}", password: "{{env.SHOP_PASSWORD}}"}
+    expect: {status: 200}
+    extract: {token: body.token}
+  - name: place order
+    request:
+      method: POST
+      path: /api/orders
+      headers: {Authorization: "Bearer {{token}}"}
+    expect: {status: 201}
+```
+
+```bash
+prescale journeys                                  # list them
+prescale journeys verify http://localhost:3000     # replay each once, as one user
+```
+
+`verify` stops at the first step that doesn't answer as expected and calls the journey **stale**: the app changed, or it's broken. It exits non-zero, so it works as a CI check.
+
+- `{{name}}` is a value an earlier step pulled out with `extract` (`body.<field>` or `header.<name>`); `{{unique.email}}` and `{{unique.id}}` are fresh each run; `{{env.NAME}}` reads an environment variable.
+- **Secrets never go in the file.** A literal password, token, API key or `Authorization` value is refused; use `{{env.NAME}}`.
+- Paths must start with `/`: a journey only calls the app it's run against.
+- Journeys that change data (POST, PUT, PATCH, DELETE) run against local hosts, or a host you name with `--allow-writes staging.myapp.com`. Types `side_effect` (emails, SMS, invites) and `destructive` are never replayed.
+
+Try it on the example shop: `python examples/fragile-shop.py 8400`, then `SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys`.
 
 ### `audit` — hygiene, no load
 
