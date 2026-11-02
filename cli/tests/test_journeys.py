@@ -79,7 +79,10 @@ def test_read_only_journey_does_not_write():
     (_with(weight=0), "weight must be a positive number"),
     (_with(steps=[]), "steps must be a non-empty list"),
     (_with(extra=True), "unknown field(s): extra"),
-    (_step(0, request={"method": "POST", "path": "https://evil.example/x"}), "path must start with /"),
+    (_step(0, request={"method": "POST", "path": "https://evil.example/x"}), "single /"),
+    (_step(0, request={"method": "DELETE", "path": "//evil.example/x"}), "single /"),
+    (_with(weight=float("nan")), "weight must be a positive number"),
+    (_with(weight=float("inf")), "weight must be a positive number"),
     (_step(0, request={"method": "BREW", "path": "/"}), "method BREW isn't supported"),
     (_step(0, expect={"status": "ok"}), "HTTP status codes"),
     (_step(0, extract={"token": "cookie.sid"}), "body.<field> or header.<name>"),
@@ -118,6 +121,30 @@ def test_literal_secrets_are_refused(request_part):
     doc = _step(0, request={"method": "POST", "path": "/api/login", **request_part})
     with pytest.raises(JourneyError, match="literal value"):
         parse(doc)
+
+
+@pytest.mark.parametrize("request_part", [
+    {"body": '{"email": "a@b.co", "password": "hunter2"}'},
+    {"body": "user=a&password=hunter2"},
+    {"path": "/a?api_key=sk_live_123"},
+    {"json": {"password": 123456}},
+    {"headers": {"Authorization": "Basic dXNlcjpwdw== {{unique.id}}"}},
+])
+def test_literal_secrets_are_refused_anywhere(request_part):
+    request_part.setdefault("path", "/api/login")
+    doc = _step(0, request={"method": "POST", "path": "/api/login", **request_part})
+    with pytest.raises(JourneyError, match="literal value"):
+        parse(doc)
+
+
+@pytest.mark.parametrize("request_part", [
+    {"json": {"passenger_name": "Ada", "passport": "X1", "token_type": "bearer",
+              "cookie_consent": "yes", "bypass": "no"}},
+    {"headers": {"Authorization": "Bearer {{env.TOKEN}}", "X-Api-Key": "{{env.KEY}}"}},
+    {"headers": {"Authorization": "Basic {{env.BASIC}}"}},
+])
+def test_ordinary_fields_and_placeholder_secrets_are_allowed(request_part):
+    parse(_step(0, request={"method": "POST", "path": "/api/login", **request_part}))
 
 
 def test_load_dir_reports_bad_files_and_duplicate_names(tmp_path):
@@ -213,6 +240,68 @@ def test_check_missing_extract_fails_the_step():
     assert "couldn't find body.token" in result.failed.problem
 
 
+def _one_step(path="/next", **request):
+    return parse({"version": 1, "name": "j", "steps": [
+        {"request": {"method": "GET", "path": "/start"}, "extract": {"next": "body.next"}},
+        {"request": {"method": "POST", "path": path, **request}}]})
+
+
+def test_rendered_path_cannot_change_host():
+    seen = []
+
+    def handler(request):
+        seen.append(str(request.url))
+        if request.url.path == "/start":
+            return httpx.Response(200, json={"next": "/evil.example/x", "pid": 1})
+        return httpx.Response(200)
+
+    j = _one_step(path="/{{next}}")
+    result = asyncio.run(check(j, "http://shop.test", env={}, transport=httpx.MockTransport(handler)))
+    assert seen == ["http://shop.test/start"]  # nothing sent off the app
+    assert not result.ok and "single /" in result.failed.problem
+
+
+def test_base_url_path_prefix_is_kept():
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.path)
+        return httpx.Response(200, json={"next": "x"})
+
+    asyncio.run(check(_one_step(), "http://shop.test/app/", env={},
+                      transport=httpx.MockTransport(handler)))
+    assert seen == ["/app/start", "/app/next"]
+
+
+def test_redirect_to_another_host_fails_the_step():
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.host)
+        if request.url.path == "/start":
+            return httpx.Response(200, json={"next": "x"})
+        return httpx.Response(307, headers={"Location": "https://evil.example/steal"})
+
+    result = asyncio.run(check(_one_step(), "http://shop.test", env={},
+                               transport=httpx.MockTransport(handler)))
+    assert "evil.example" not in seen
+    assert not result.ok and "outside the app" in result.failed.problem
+
+
+def test_extracted_number_in_a_header_is_sent_as_text():
+    sent = {}
+
+    def handler(request):
+        if request.url.path == "/start":
+            return httpx.Response(200, json={"next": 7})
+        sent["x-id"] = request.headers["x-id"]
+        return httpx.Response(200)
+
+    result = asyncio.run(check(_one_step(headers={"X-Id": "{{next}}"}), "http://shop.test",
+                               env={}, transport=httpx.MockTransport(handler)))
+    assert result.ok and sent["x-id"] == "7"
+
+
 # --- the command -------------------------------------------------------------
 
 def _out(res):
@@ -250,6 +339,15 @@ def test_verify_reports_invalid_files(tmp_path):
                                    "--dir", str(_write(tmp_path, bad))])
     assert res.exit_code == 2
     assert "name must be lowercase" in _out(res)
+
+
+def test_verify_prints_markup_like_names_safely(tmp_path):
+    doc = {"version": 1, "name": "j", "steps": [
+        {"name": "[/bold] oops", "request": {"method": "GET", "path": "/"}}]}
+    res = CliRunner().invoke(cli, ["journeys", "verify", "http://127.0.0.1:9",
+                                   "--dir", str(_write(tmp_path, doc))])
+    assert res.exit_code == 1, res.output
+    assert "[/bold] oops" in res.output
 
 
 def test_verify_unknown_journey_name(tmp_path):

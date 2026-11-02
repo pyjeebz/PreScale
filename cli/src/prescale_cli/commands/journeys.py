@@ -48,7 +48,7 @@ def journeys(ctx: click.Context, directory: Path) -> None:
         table.add_column(col)
     for j in found:
         table.add_row(j.name, j.type, f"{j.weight:g}", str(len(j.steps)),
-                      "yes" if j.writes else "no", str(j.source))
+                      "yes" if j.writes else "no", escape(str(j.source)))
     console.print(table)
 
 
@@ -94,8 +94,7 @@ def verify(url: str, directory: Path, only: tuple[str, ...], allow_writes: tuple
                       f"aren't set: {', '.join(unset)}.")
         raise SystemExit(2)
 
-    base = url if url.endswith("/") else url + "/"
-    results = asyncio.run(_check_all(found, base, timeout=timeout, headers=headers))
+    results = asyncio.run(_check_all(found, url, timeout=timeout, headers=headers))
     for result in results:
         _print_check(result)
 
@@ -120,7 +119,8 @@ def _load_or_exit(directory: Path) -> list[Journey]:
     if errors:
         raise SystemExit(2)
     if not found:
-        console.print(f"No journeys in {directory}. Add one as {directory}/<name>.yaml.")
+        console.print(f"No journeys in {escape(str(directory))}. Add one as "
+                      f"{escape(str(directory))}/<name>.yaml.", highlight=False)
         raise SystemExit(1)
     return found
 
@@ -147,17 +147,18 @@ def _print_check(result: JourneyCheck) -> None:
     journey = result.journey
     mark = "[green]✓[/green]" if result.ok else ("[yellow]stale[/yellow]" if result.stale
                                                  else "[red]✗[/red]")
-    console.print(f"\n{mark} [bold]{journey.name}[/bold] [dim]({journey.type}, "
+    console.print(f"\n{mark} [bold]{escape(journey.name)}[/bold] [dim]({journey.type}, "
                   f"{len(journey.steps)} steps)[/dim]")
     for i, step in enumerate(journey.steps, 1):
         done = result.steps[i - 1] if i <= len(result.steps) else None
+        name, label = escape(step.name), escape(step.label)
         if done is None:
-            console.print(f"   [dim]{i}. {step.name}  {step.label}  (not run)[/dim]")
+            console.print(f"   [dim]{i}. {name}  {label}  (not run)[/dim]", highlight=False)
         elif done.ok:
-            console.print(f"   {i}. {step.name}  [dim]{step.label}[/dim]  "
-                          f"{done.status}  {done.latency * 1000:.0f}ms")
+            console.print(f"   {i}. {name}  [dim]{label}[/dim]  "
+                          f"{done.status}  {done.latency * 1000:.0f}ms", highlight=False)
         else:
-            console.print(f"   {i}. {step.name}  [dim]{step.label}[/dim]  "
+            console.print(f"   {i}. {name}  [dim]{label}[/dim]  "
                           f"[red]{escape(done.problem or '')}[/red]", highlight=False)
             if done.status is not None and done.status >= 500:
                 console.print("      [dim]A 5xx with no load is usually a bug in the app, "

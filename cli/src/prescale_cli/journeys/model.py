@@ -24,11 +24,14 @@ is pure: loading never touches the network.
 
 from __future__ import annotations
 
+import json
+import math
 import re
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlsplit
 
 import yaml
 
@@ -48,8 +51,14 @@ METHODS = {"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"}
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 _PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][\w.]*)\s*\}\}")
-_SENSITIVE_KEY = re.compile(r"pass(word|wd)?|secret|token|api[-_]?key|authorization|cookie",
-                            re.IGNORECASE)
+# A key is secret-looking when it is, or ends with, one of these words:
+# password, client_secret, x-api-key, access_token, Authorization, Cookie.
+_SENSITIVE_KEY = re.compile(
+    r"(^|[-_.])(password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie)$",
+    re.IGNORECASE)
+# The secret itself must be a placeholder, optionally after an auth scheme.
+_SECRET_OK = re.compile(r"((Bearer|Basic|Token)\s+)?\{\{\s*[A-Za-z_][\w.]*\s*\}\}",
+                        re.IGNORECASE)
 _UNIQUE = {"email", "id"}
 _SOURCES = ("body", "header")
 
@@ -149,7 +158,8 @@ def parse(data: Any) -> Journey:
     if jtype not in TYPES:
         raise JourneyError(f"type must be one of {', '.join(TYPES)} (got {jtype!r})")
     weight = data.get("weight", TYPES[jtype])
-    if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight <= 0:
+    if isinstance(weight, bool) or not isinstance(weight, (int, float)) \
+            or not math.isfinite(weight) or weight <= 0:
         raise JourneyError("weight must be a positive number")
     raw_steps = data.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
@@ -168,7 +178,8 @@ def _parse_step(raw: Any, index: int) -> Step:
     name = raw.get("name") or f"step {index}"
     if not isinstance(name, str):
         raise JourneyError(f"{where}: name must be text")
-    where = f"step {index} ({name})"
+    if raw.get("name"):
+        where = f"step {index} ({name})"
 
     request = raw.get("request")
     if not isinstance(request, dict):
@@ -178,9 +189,9 @@ def _parse_step(raw: Any, index: int) -> Step:
     if method not in METHODS:
         raise JourneyError(f"{where}: method {method} isn't supported")
     path = request.get("path")
-    if not isinstance(path, str) or not path.startswith("/"):
-        raise JourneyError(f"{where}: path must start with / (journeys only call the app "
-                           "they're run against, never another site)")
+    if not isinstance(path, str) or not path.startswith("/") or path.startswith(("//", "/\\")):
+        raise JourneyError(f"{where}: path must start with a single / (it's relative to the "
+                           "URL the journey runs against, and never reaches another site)")
     headers = request.get("headers") or {}
     if not isinstance(headers, dict) or not all(isinstance(v, str) for v in headers.values()):
         raise JourneyError(f"{where}: headers must map names to text")
@@ -189,7 +200,9 @@ def _parse_step(raw: Any, index: int) -> Step:
     body = request.get("body")
     if body is not None and not isinstance(body, str):
         raise JourneyError(f"{where}: body must be text (use json for structured data)")
-    _check_secrets({"headers": headers, "json": request.get("json")}, where)
+    _check_secrets({"headers": headers, "json": request.get("json"),
+                    "query": dict(parse_qsl(urlsplit(path).query)),
+                    "body": _decode_body(body)}, where)
 
     return Step(
         name=name, method=method, path=path,
@@ -247,6 +260,16 @@ def _only(data: dict, allowed: set[str], where: str) -> None:
         raise JourneyError(f"{where} has unknown field(s): {', '.join(map(str, unknown))}")
 
 
+def _decode_body(body: str | None) -> Any:
+    """A string body as data, so secrets in it are checked too (JSON or a form)."""
+    if not body:
+        return None
+    try:
+        return json.loads(body)
+    except ValueError:
+        return dict(parse_qsl(body))
+
+
 def _check_secrets(value: Any, where: str, key: str = "") -> None:
     """Refuse a literal value under a secret-looking key: secrets come from {{env.*}}
     (or an earlier step's extract), so they never end up committed in the file."""
@@ -256,8 +279,8 @@ def _check_secrets(value: Any, where: str, key: str = "") -> None:
     elif isinstance(value, list):
         for v in value:
             _check_secrets(v, where, key)
-    elif isinstance(value, str) and key and _SENSITIVE_KEY.search(key) \
-            and not _PLACEHOLDER.search(value):
+    elif value is not None and key and _SENSITIVE_KEY.search(key) \
+            and not (isinstance(value, str) and _SECRET_OK.fullmatch(value.strip())):
         raise JourneyError(f"{where}: {key} has a literal value. Put secrets in an "
                            f"environment variable and write \"{{{{env.NAME}}}}\" instead")
 

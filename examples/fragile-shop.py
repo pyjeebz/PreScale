@@ -59,8 +59,12 @@ async def _handle(reader, writer, pool):
                 break
             name, _, value = header.decode(errors="replace").partition(":")
             headers[name.strip().lower()] = value.strip()
-        length = int(headers.get("content-length") or 0)
-        body = await reader.readexactly(length) if length else b""
+        length = headers.get("content-length") or "0"
+        if not length.isdigit():
+            writer.write(_resp(400, b"bad Content-Length"))
+            await writer.drain()
+            return
+        body = await reader.readexactly(int(length)) if int(length) else b""
 
         if path.startswith("/api/"):
             out = await _api(method, path, headers, body, pool)
@@ -111,7 +115,9 @@ async def _api(method, path, headers, body, pool):
         try:
             creds = json.loads(body or b"{}")
         except ValueError:
-            return _json(400, {"error": "send JSON"})
+            creds = None
+        if not isinstance(creds, dict):
+            return _json(400, {"error": "send a JSON object"})
         if not creds.get("email") or not creds.get("password"):
             return _json(401, {"error": "email and password required"})
         await asyncio.sleep(0.02)                            # password hashing

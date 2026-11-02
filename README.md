@@ -200,7 +200,7 @@ prescale journeys verify http://localhost:3000     # replay each once, as one us
 
 - `{{name}}` is a value an earlier step pulled out with `extract` (`body.<field>` or `header.<name>`); `{{unique.email}}` and `{{unique.id}}` are fresh each run; `{{env.NAME}}` reads an environment variable.
 - **Secrets never go in the file.** A literal password, token, API key or `Authorization` value is refused; use `{{env.NAME}}`.
-- Paths must start with `/`: a journey only calls the app it's run against.
+- Paths start with `/` and are relative to the URL you give (`http://host/app` + `/api/cart` is `http://host/app/api/cart`). A journey only calls that app: a request or redirect to another host fails the step.
 - Journeys that change data (POST, PUT, PATCH, DELETE) run against local hosts, or a host you name with `--allow-writes staging.myapp.com`. Types `side_effect` (emails, SMS, invites) and `destructive` are never replayed.
 
 Try it on the example shop: `python examples/fragile-shop.py 8400`, then `SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys`.
