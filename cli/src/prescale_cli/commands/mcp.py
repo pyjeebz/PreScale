@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 
 import click
@@ -28,7 +29,14 @@ def mcp(allow_hosts: tuple[str, ...]) -> None:
     """
     try:
         from prescale_cli.mcp_server import serve
-    except ImportError:
+    except ImportError as exc:
+        if importlib.util.find_spec("mcp") is not None:
+            # Installed, but a version we can't use (mcp 2.x renamed FastMCP).
+            err.print("[red]Error:[/red] the installed mcp package isn't supported:")
+            err.print(f"    {exc}", markup=False)
+            err.print("Install a supported version with:")
+            err.print("    pip install 'mcp>=1.0,<2'", markup=False)
+            raise SystemExit(1)
         err.print("[red]Error:[/red] MCP support needs the optional extra. Install it with:")
         err.print("    pip install 'prescale[mcp]'", markup=False)
         raise SystemExit(1)

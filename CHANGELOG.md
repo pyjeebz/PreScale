@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **`prescale mcp` works on a fresh install again.** `pip install 'prescale[mcp]'` picked up the new
+  mcp 2.x, which renamed the server class PreScale uses, so the MCP server wouldn't start and told
+  you to install the extra you already had. The extra now installs mcp 1.x, and if an unsupported
+  mcp is already installed, `prescale mcp` says so and shows the command that fixes it.
+
 ## 1.1.3 — 2026-10-22
 
 ### Added

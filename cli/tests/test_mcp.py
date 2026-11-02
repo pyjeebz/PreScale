@@ -135,7 +135,25 @@ def test_mcp_command_without_extra_gives_correct_install_hint(monkeypatch):
 
     # simulate the optional extra not being installed
     monkeypatch.setitem(sys.modules, "prescale_cli.mcp_server", None)
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
     res = CliRunner().invoke(cli, ["mcp"])
     assert res.exit_code == 1
     # the [mcp] must survive (rich must not eat it as markup)
     assert "prescale[mcp]" in res.stderr
+
+
+def test_mcp_command_with_unsupported_mcp_says_so(monkeypatch):
+    import importlib.util
+    import sys
+
+    from click.testing import CliRunner
+
+    from prescale_cli.main import cli
+
+    # mcp is installed, but importing the server fails (e.g. mcp 2.x renamed FastMCP)
+    monkeypatch.setitem(sys.modules, "prescale_cli.mcp_server", None)
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    res = CliRunner().invoke(cli, ["mcp"])
+    assert res.exit_code == 1
+    assert "isn't supported" in res.stderr
+    assert "mcp>=1.0,<2" in res.stderr
