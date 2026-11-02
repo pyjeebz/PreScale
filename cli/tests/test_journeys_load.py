@@ -264,25 +264,35 @@ def test_run_applies_think_time_to_steps_without_their_own(tmp_path, monkeypatch
 
 # --- the combined pass and --expect ------------------------------------------------
 
-def test_mixed_users_pick_journeys_by_weight_and_label_steps_by_journey():
-    import random
+def test_apportion_adds_up_and_follows_weights():
+    from prescale_cli.journeys.replay import apportion
+    assert apportion(10, [9, 1]) == [9, 1]
+    assert apportion(30, [1, 1]) == [15, 15]
+    assert apportion(3, [60, 25, 8, 5, 2]) == [2, 1, 0, 0, 0]
+    assert sum(apportion(97, [60, 25, 8, 5, 2])) == 97
 
+
+def test_mixed_users_stay_on_their_journey_whatever_its_walk_takes():
     from prescale_cli.journeys.replay import journey_vu
     from prescale_cli.loadtest import _Sink
 
-    heavy = parse({**BROWSE, "name": "heavy", "weight": 9})
-    light = parse({**BROWSE, "name": "light", "weight": 1,
-                   "steps": [{"request": {"path": "/light"}}]})
-    vu = journey_vu([heavy, light], "http://shop.test", env={}, rng=random.Random(7))
-    sink = _Sink(labels=False)
+    quick = parse({**BROWSE, "name": "quick", "weight": 1})
+    slow = parse({**BROWSE, "name": "slow", "weight": 1,
+                  "steps": [{"request": {"path": "/slow"}, "think": "1s"}]})
+    vu = journey_vu([quick, slow], "http://shop.test", env={})
+    sinks = [_Sink(labels=False) for _ in range(10)]
 
     async def go():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200))) as c:
-            await vu(c, asyncio.get_running_loop().time() + 0.2, sink)
+        transport = httpx.MockTransport(lambda r: httpx.Response(200))
+        async with httpx.AsyncClient(transport=transport) as c:
+            deadline = asyncio.get_running_loop().time() + 0.3
+            await asyncio.gather(*(vu(c, deadline, sinks[i], None, i, 10) for i in range(10)))
     asyncio.run(go())
-    counts = {label: stat.total for label, stat in sink.routes.items()}
-    assert set(counts) == {"heavy › GET /", "light › GET /light"}
-    assert counts["heavy › GET /"] > 4 * counts["light › GET /light"]
+    # each user only ever walked one journey; half the users are on each
+    walked = [set(s.routes) for s in sinks]
+    assert all(len(w) == 1 for w in walked)
+    assert sum(w == {"quick › GET /"} for w in walked) == 5
+    assert sum(w == {"slow › GET /slow"} for w in walked) == 5
 
 
 def _report(survives, onset, culprit=None, max_tested=100):
@@ -329,13 +339,17 @@ def test_expect_splits_users_across_journeys_by_weight():
     }
     exp = expect_block(result, 300)
     assert exp["meets"] is False
+    # the stale journey still takes its share of the users (weights total 70)
     assert [(j["name"], j["users"], j["meets"]) for j in exp["journeys"]] == [
-        ("browse", 276.9, True), ("checkout", 23.1, False)]
+        ("browse", 257.1, True), ("checkout", 21.4, False)]
     assert exp["combined"] == {"survives_users": 400, "meets": True}
-    # fewer expected users: checkout's share (~7.7) fits under the 20 it held
-    assert expect_block(result, 100)["meets"] is True
+    assert exp["untested"] == ["old"]
+    # every tested share fits, but "old" was never tested: unknown, not a yes
+    assert expect_block(result, 100)["meets"] is None
+    fresh = {**result, "journeys": result["journeys"][:2]}
+    assert expect_block(fresh, 100)["meets"] is True
     # more users than were ever tested on a journey that never broke: unknown
-    assert expect_block(result, 6000)["journeys"][0]["meets"] is None
+    assert expect_block(fresh, 6000)["journeys"][0]["meets"] is None
 
 
 def test_expect_on_a_url_run():

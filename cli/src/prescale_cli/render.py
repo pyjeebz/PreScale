@@ -159,6 +159,8 @@ def _expect_lines(exp: dict) -> list[str]:
     if c:
         mark = {True: "✅", False: "🛑", None: "❔"}[c["meets"]]
         lines.append(f"          {mark} all together: holds ~{c['survives_users']}")
+    for name in exp.get("untested") or []:
+        lines.append(f"          ❔ {escape(name)}: not load-tested (stale or unreachable)")
     return lines
 
 
@@ -212,8 +214,8 @@ def _render_combined(c: dict) -> None:
     if inter:
         others = ", ".join(escape(n) for n in inter["with"])
         lines.append(
-            f"[yellow]Interference[/yellow]  {escape(inter['journey'])} broke with only "
-            f"~{inter['users_at_break']:g} of its own users, but held ~{inter['held_alone']} "
+            f"[yellow]Interference[/yellow]  {escape(inter['journey'])} broke with "
+            f"{inter['users_at_break']} of its own users, but held {inter['held_alone']} "
             f"alone. It competes with {others} for something they share (a database pool, "
             "CPU, a cache).")
     console.print(Panel("\n".join(lines), title="All journeys together", border_style="cyan"))

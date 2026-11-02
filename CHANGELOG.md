@@ -21,8 +21,8 @@
   `verdict.culprit_journey`). Stale journeys are skipped with the reason. `--journey` picks
   journeys; `--urls` tests URLs as before.
 - **Journeys together, and interference.** After ramping each journey alone, `prescale run`
-  ramps them all together, each user picking a journey by `weight`, and flags a journey that
-  breaks with fewer of its own users than it held alone: it competes with the others for
+  ramps them all together, the users split between journeys by `weight`, and flags a journey that
+  breaks with no more of its own users than it held alone: it competes with the others for
   something they share (a database pool, CPU, a cache). Saved runs carry a `combined` field.
   `--no-combined` skips it.
 - **`--expect N`** on `run` says whether you'd hold N users at peak. In a journey run, N is split

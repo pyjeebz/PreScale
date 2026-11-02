@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import random
 import time
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar, DefaultCookiePolicy
@@ -121,28 +120,44 @@ async def check(journey: Journey, base_url: str, *, timeout: float = 10.0,
     return result
 
 
+def apportion(users: int, weights: list[float]) -> list[int]:
+    """Split USERS into whole numbers proportional to WEIGHTS (largest remainder),
+    so the counts always add up to USERS."""
+    total = sum(weights)
+    exact = [users * w / total for w in weights]
+    counts = [int(x) for x in exact]
+    by_remainder = sorted(range(len(weights)), key=lambda i: exact[i] - counts[i], reverse=True)
+    for i in by_remainder[:users - sum(counts)]:
+        counts[i] += 1
+    return counts
+
+
 def journey_vu(journeys: Journey | list[Journey], base_url: str,
-               env: dict[str, str] | None = None, think: float = 0.0,
-               rng: random.Random | None = None):
+               env: dict[str, str] | None = None, think: float = 0.0):
     """A load-test virtual user: walk a journey's steps, pausing for each step's
     think time, and start again with a fresh identity until the stage deadline.
     A failed step ends that walk (after its pause), like a real user giving up.
 
-    Given several JOURNEYS, each walk picks one by `weight`, so they share the
-    app the way real traffic does; steps are then labelled `journey › step`.
-    Each step is recorded under its label, so the report can name the step that
-    broke. THINK is the pause for steps that don't set their own (`--think-time`,
-    or a launch profile's)."""
+    Given several JOURNEYS, the stage's users are split between them by `weight`
+    (see `apportion`) and each user stays on its journey for the whole stage, so
+    a journey's weight is its share of the users in the app at once, whatever
+    its walks take. Steps are then labelled `journey › step`. Each step is
+    recorded under its label, so the report can name the step that broke. THINK
+    is the pause for steps that don't set their own (`--think-time`, or a launch
+    profile's)."""
     env = dict(os.environ) if env is None else env
     mix = [journeys] if isinstance(journeys, Journey) else list(journeys)
     weights = [j.weight for j in mix]
-    rng = rng or random.Random()
 
-    async def vu(client: httpx.AsyncClient, deadline: float, sink, gate=None) -> None:
+    async def vu(client: httpx.AsyncClient, deadline: float, sink, gate=None,
+                 index: int = 0, users: int = 1) -> None:
         loop = asyncio.get_running_loop()
+        journey = mix[0]
+        if len(mix) > 1:
+            seats = [j for j, n in zip(mix, apportion(users, weights)) for _ in range(n)]
+            journey = seats[index]
+        prefix = f"{journey.name}{SEP}" if len(mix) > 1 else ""
         while loop.time() < deadline:
-            journey = mix[0] if len(mix) == 1 else rng.choices(mix, weights)[0]
-            prefix = f"{journey.name}{SEP}" if len(mix) > 1 else ""
             variables: dict[str, Any] = fresh_uniques()
             jar = httpx.Cookies()
             for step in journey.steps:

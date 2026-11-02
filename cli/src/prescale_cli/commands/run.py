@@ -98,7 +98,8 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 @click.option("--no-combined", "no_combined", is_flag=True,
               help="Skip ramping all journeys together (by weight) after each one alone.")
 @click.option("--expect", "expect", default=None, type=click.IntRange(min=1), metavar="N",
-              help="Users you expect at peak; the verdict says whether you'd hold them.")
+              help="Users you expect at peak; the report says whether you'd hold them. "
+                   "It doesn't change the exit code (use --fail-under for a CI gate).")
 @click.option("--urls", "urls_only", is_flag=True,
               help="Test URLs, not journeys, even when prescale/journeys/ has some.")
 @click.option("--allow-writes", "allow_writes", multiple=True, metavar="HOST",
@@ -317,12 +318,14 @@ def expect_block(result: dict, users: int) -> dict:
     together (if they were ramped together) must hold USERS. It meets the
     expectation only if every one of those does."""
     v = result["verdict"]
+    untested = [j["name"] for j in (result.get("journeys") or []) if j["status"] != "ok"]
     journeys = [j for j in (result.get("journeys") or []) if j["status"] == "ok"]
     if not journeys:
         return {"users": users, "meets": _meets(v["survives_users"],
                                                 v["onset_users"] is None, users),
                 "survives_users": v["survives_users"], "journeys": None, "combined": None}
-    total = sum(j["weight"] for j in journeys)
+    # A journey that wasn't load-tested still takes its share of the users.
+    total = sum(j["weight"] for j in result["journeys"])
     per = []
     for j in journeys:
         share = users * j["weight"] / total
@@ -336,9 +339,11 @@ def expect_block(result: dict, users: int) -> dict:
         combined = {"survives_users": c["survives_users"],
                     "meets": _meets(c["survives_users"], c["onset_users"] is None, users)}
         checks.append(combined["meets"])
+    if untested:
+        checks.append(None)  # their share was never tested
     meets = False if False in checks else (None if None in checks else True)
     return {"users": users, "meets": meets, "survives_users": v["survives_users"],
-            "journeys": per, "combined": combined}
+            "journeys": per, "combined": combined, "untested": untested}
 
 
 def _journeys_to_run(directory: Path, only: tuple[str, ...], *, urls_only: bool,
@@ -436,7 +441,7 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
         live_mode = isinstance(progress, LiveRamp)
         try:
             with progress:
-                stages, _ = asyncio.run(ramp(
+                stages, together_warning = asyncio.run(ramp(
                     [r.journey for r in ramped], url, levels=levels,
                     stage_seconds=config["stage_seconds"], timeout=timeout,
                     max_rps=config["max_rps"], warmup=config["warmup"],
@@ -448,6 +453,8 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
         together = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
                            rate_capped=config["max_rps"] is not None)
         result["combined"] = combined_block(together, runs)
+        if together_warning and together_warning not in (result["warning"] or ""):
+            result["warning"] = " ".join(filter(None, [result["warning"], together_warning]))
     return worst.report, result, live_mode
 
 
