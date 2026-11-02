@@ -40,6 +40,37 @@ def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHO
     if o["mode"] != n["mode"]:
         # URL capacity and journey capacity measure different things: never a regression.
         return _not_comparable(o, n)
+    d = _diff(o, n, threshold)
+    cmp = {
+        "old": o,
+        "new": n,
+        "survives_delta": n["survives_users"] - o["survives_users"],
+        "survives_pct": round(d["pct"], 3),
+        "peak_rps_pct": (round((n["peak_rps"] - o["peak_rps"]) / o["peak_rps"], 3)
+                         if o["peak_rps"] else 0.0),
+        "regressed": d["regressed"],
+        "improved": d["improved"],
+        "inconclusive": d["inconclusive"],
+        "confident": d["confident"],
+        "summary": (_summary(o, n, d["pct"], d["regressed"], d["improved"], d["inconclusive"])
+                    + _journey_note(o, n)),
+    }
+    if o["mode"] == "journeys":
+        cmp["journeys"] = compare_journeys(old, new, threshold=threshold)
+        worse = [j for j in cmp["journeys"] if j.get("regressed")]
+        if worse:
+            # A drop in any one journey is a regression, even if it isn't the weakest.
+            cmp["regressed"] = True
+            cmp["confident"] = cmp["confident"] or any(j["confident"] for j in worse)
+            if not d["regressed"]:
+                cmp["summary"] = "Capacity regressed: " + "; ".join(
+                    f"{j['name']} {j['old']} → {j['new']} users ({j['pct']:+.0%})"
+                    for j in worse) + "."
+    return cmp
+
+
+def _diff(o: dict, n: dict, threshold: float) -> dict:
+    """The capacity change between two sets of facts (a run, or one journey)."""
     o_surv, n_surv = o["survives_users"], n["survives_users"]
     pct = (n_surv - o_surv) / o_surv if o_surv else 0.0
     inconclusive = (n["onset_users"] is None and n["max_tested"] is not None
@@ -51,19 +82,41 @@ def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHO
         confident = n["survives_high"] < o["survives_low"]
     elif improved and o["survives_high"] is not None and n["survives_low"] is not None:
         confident = n["survives_low"] > o["survives_high"]
-    return {
-        "old": o,
-        "new": n,
-        "survives_delta": n_surv - o_surv,
-        "survives_pct": round(pct, 3),
-        "peak_rps_pct": (round((n["peak_rps"] - o["peak_rps"]) / o["peak_rps"], 3)
-                         if o["peak_rps"] else 0.0),
-        "regressed": regressed,
-        "improved": improved,
-        "inconclusive": inconclusive,
-        "confident": confident,
-        "summary": _summary(o, n, pct, regressed, improved, inconclusive) + _journey_note(o, n),
-    }
+    return {"pct": pct, "regressed": regressed, "improved": improved,
+            "inconclusive": inconclusive, "confident": confident}
+
+
+def _journey_facts(j: dict) -> dict:
+    conf = j.get("confidence") or {}
+    return {"survives_users": j["survives_users"], "survives_low": conf.get("survives_low"),
+            "survives_high": conf.get("survives_high"), "onset_users": j["onset_users"],
+            "max_tested": j.get("max_tested")}
+
+
+def compare_journeys(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHOLD) -> list:
+    """Per-journey capacity change, matched by name. A journey that is new, gone,
+    or not load-tested on either side is listed with its status, never as a drop."""
+    before = {j["name"]: j for j in old.get("journeys") or []}
+    after = {j["name"]: j for j in new.get("journeys") or []}
+    rows = []
+    for name in [*before, *(n for n in after if n not in before)]:
+        o, n = before.get(name), after.get(name)
+        if o is None or n is None:
+            rows.append({"name": name, "status": "new" if o is None else "removed",
+                         "regressed": False, "confident": False})
+            continue
+        if o["status"] != "ok" or n["status"] != "ok":
+            rows.append({"name": name, "status": f"{o['status']} → {n['status']}",
+                         "regressed": False, "confident": False})
+            continue
+        d = _diff(_journey_facts(o), _journey_facts(n), threshold)
+        step = (n.get("culprit_step") or {}).get("name")
+        rows.append({"name": name, "status": "ok", "old": o["survives_users"],
+                     "new": n["survives_users"], "pct": round(d["pct"], 3),
+                     "regressed": d["regressed"], "improved": d["improved"],
+                     "inconclusive": d["inconclusive"], "confident": d["confident"],
+                     "breaks_at": step})
+    return rows
 
 
 def _not_comparable(o: dict, n: dict) -> dict:
@@ -117,7 +170,7 @@ def to_markdown(cmp: dict) -> str:
         emoji = "🟢"
     else:
         emoji = "⚪"
-    return "\n".join([
+    lines = [
         f"### {emoji} PreScale — {cmp['summary']}",
         "",
         "| | survives | peak req/s | commit |",
@@ -132,4 +185,14 @@ def to_markdown(cmp: dict) -> str:
             max(o["survives_users"], n["survives_users"], 1) * 1.1,
         ),
         "```",
-    ])
+    ]
+    if cmp.get("journeys"):
+        lines += ["", "| journey | old | new | change | breaks at |", "|---|---:|---:|---:|---|"]
+        for j in cmp["journeys"]:
+            if j["status"] != "ok":
+                lines.append(f"| {j['name']} | | | {j['status']} | |")
+                continue
+            mark = " 🔴" if j["regressed"] else (" 🟢" if j.get("improved") else "")
+            lines.append(f"| {j['name']} | ~{j['old']} | ~{j['new']} | {j['pct']:+.0%}{mark} | "
+                         f"{j.get('breaks_at') or '—'} |")
+    return "\n".join(lines)

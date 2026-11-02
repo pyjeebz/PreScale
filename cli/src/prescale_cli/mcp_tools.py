@@ -77,8 +77,38 @@ def summarize_result(result: dict) -> dict:
         "peak_rps": v["peak_rps"],
         "saturated": v["saturated"],
         "warning": result.get("warning"),
+        **_journey_summary(result),
         "hint": "Call get_run(id) for the full per-level / per-route breakdown.",
     }
+
+
+def _journey_summary(result: dict) -> dict:
+    """Journey runs: one line per journey, plus interference and --expect, kept short."""
+    journeys = result.get("journeys")
+    if not journeys:
+        return {}
+    out: dict = {"culprit_journey": result["verdict"].get("culprit_journey"), "journeys": []}
+    for j in journeys:
+        if j["status"] != "ok":
+            out["journeys"].append({"name": j["name"], "status": j["status"],
+                                    "reason": j.get("reason")})
+            continue
+        step = j.get("culprit_step")
+        out["journeys"].append({
+            "name": j["name"], "status": "ok",
+            "survives_users": j["survives_users"], "held_all": j["onset_users"] is None,
+            "breaks_at_step": (f"{step['index']}. {step['name']} ({step['route']})"
+                               if step else None),
+            "bottleneck": j.get("bottleneck"),
+        })
+    combined = result.get("combined")
+    if combined:
+        out["together"] = {"survives_users": combined["survives_users"],
+                           "held_all": combined["onset_users"] is None,
+                           "interference": combined.get("interference")}
+    if result.get("expect"):
+        out["expect"] = {k: result["expect"].get(k) for k in ("users", "meets", "untested")}
+    return out
 
 
 def _verdict_line(v: dict, conf: dict) -> str:
