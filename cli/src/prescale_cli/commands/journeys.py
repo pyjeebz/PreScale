@@ -87,12 +87,8 @@ def verify(url: str, directory: Path, only: tuple[str, ...], allow_writes: tuple
         found = [j for j in found if j.name in only]
 
     host = (parsed.hostname or "").lower()
-    _refuse_unallowed_writes(found, host, {h.lower() for h in allow_writes})
-    unset = sorted({name for j in found for name in j.env_names()} - set(os.environ))
-    if unset:
-        console.print(f"[red]Error:[/red] the journeys read environment variable(s) that "
-                      f"aren't set: {', '.join(unset)}.")
-        raise SystemExit(2)
+    refuse_unallowed_writes(found, host, {h.lower() for h in allow_writes})
+    refuse_missing_env(found)
 
     results = asyncio.run(_check_all(found, url, timeout=timeout, headers=headers))
     for result in results:
@@ -125,7 +121,17 @@ def _load_or_exit(directory: Path) -> list[Journey]:
     return found
 
 
-def _refuse_unallowed_writes(found: list[Journey], host: str, allowed: set[str]) -> None:
+def refuse_missing_env(found: list[Journey]) -> None:
+    """Stop before any request if a journey reads an environment variable that
+    isn't set, instead of failing a step halfway through."""
+    unset = sorted({name for j in found for name in j.env_names()} - set(os.environ))
+    if unset:
+        console.print(f"[red]Error:[/red] the journeys read environment variable(s) that "
+                      f"aren't set: {', '.join(unset)}.")
+        raise SystemExit(2)
+
+
+def refuse_unallowed_writes(found: list[Journey], host: str, allowed: set[str]) -> None:
     """Journeys that change data run on local hosts, or on hosts named with
     --allow-writes. Anywhere else they could change real data."""
     if host in _LOCAL_HOSTS or host in allowed:

@@ -4,6 +4,7 @@ identically from the same stored shape, with no need for raw per-request data.""
 from __future__ import annotations
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -93,6 +94,8 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
         lines.append(f"Traffic  {traffic} [dim]({VISITOR_NOTE})[/dim]")
     if onset_users is not None:
         culprit = f"{verdict['culprit_route']}  " if (multi and verdict["culprit_route"]) else ""
+        if verdict.get("culprit_journey"):
+            culprit = f"{escape(verdict['culprit_journey'])} › {escape(culprit)}"
         if verdict["onset_reason"] == "latency":
             lines.append(f"Latency wall  {culprit}p95 crosses "
                          f"{latency_wall:g}s at ~{onset_users} {_u(onset_users)}.")
@@ -130,6 +133,41 @@ def render_terminal(result: dict, *, show_ramp: bool = True) -> None:
 
     if multi and stages:
         _render_routes(result)
+    if result.get("journeys"):
+        render_journeys(result)
+
+
+def render_journeys(result: dict) -> None:
+    """One row per journey: how many users it survives and the step that breaks
+    first. Each was ramped on its own, so no row depends on the others."""
+    table = Table(show_header=True, header_style="bold magenta",
+                  title="Journeys (each ramped on its own)")
+    for col, justify in (("Journey", "left"), ("Survives", "right"),
+                         ("Breaks at step", "left"), ("Why", "left")):
+        table.add_column(col, justify=justify)
+    first = result["verdict"].get("culprit_journey")
+    for j in result["journeys"]:
+        name = escape(j["name"])
+        if j["status"] != "ok":
+            label = "stale" if j["status"] == "stale" else "couldn't run"
+            table.add_row(name, f"[yellow]{label}[/yellow]", "—",
+                          f"[dim]{escape(j.get('reason') or '')}[/dim]")
+            continue
+        conf = j.get("confidence") or {}
+        band = ""
+        if conf.get("survives_low") is not None and conf.get("survives_high") is not None \
+                and conf["survives_low"] != conf["survives_high"]:
+            band = f" ({conf['survives_low']}–{conf['survives_high']})"
+        if j["onset_users"] is None:
+            survives = f"{j['max_tested']}+ [dim](held)[/dim]"
+        else:
+            survives = f"~{j['survives_users']}{band}"
+        step = j.get("culprit_step")
+        where = f"{step['index']}. {escape(step['name'])}  [dim]{escape(step['route'])}[/dim]" \
+            if step else "—"
+        style = "bold red" if j["name"] == first and j["onset_users"] is not None else None
+        table.add_row(name, survives, where, escape(j.get("bottleneck") or ""), style=style)
+    console.print(table)
 
 
 def _render_routes(result: dict) -> None:

@@ -14,6 +14,12 @@
   - Journeys that change data only run against local hosts or hosts you allow with
     `--allow-writes`; journeys that send messages or delete data are never replayed.
   - The example shop has a JSON API and two example journeys in `examples/journeys/`.
+- **`prescale run` replays journeys at load.** When `prescale/journeys/` has journeys, virtual
+  users walk whole journeys (with each step's think time and their own cookies) instead of hitting
+  single URLs. Each journey is ramped on its own; the report names the journey and the step that
+  break first, with per-step timings, and saved runs carry a `journeys` field (plus
+  `verdict.culprit_journey`). Stale journeys are skipped with the reason. `--journey` picks
+  journeys; `--urls` tests URLs as before.
 
 ### Fixed
 - **`prescale mcp` works on a fresh install again.** `pip install 'prescale[mcp]'` picked up the new

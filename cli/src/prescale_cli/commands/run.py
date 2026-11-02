@@ -13,12 +13,17 @@ from urllib.parse import urlparse
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 from prescale_cli.cloud import CloudError, require_credentials
 from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
+from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
+from prescale_cli.journeys.load import JourneyRun, first_to_break, journeys_block, ramp
+from prescale_cli.journeys.model import Journey, load_dir
+from prescale_cli.journeys.replay import check
 from prescale_cli.live import LiveRamp, ramp_progress
 from prescale_cli.loadtest import (
     LoadError,
@@ -82,6 +87,14 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Exit non-zero if it survives fewer than N users (a CI gate).")
 @click.option("--profile", "profile_name", default=None,
               help="Frame the run as a launch scenario (see `prescale profiles`).")
+@click.option("--journey", "only", multiple=True,
+              help="Replay only this journey (repeatable). See `prescale journeys`.")
+@click.option("--urls", "urls_only", is_flag=True,
+              help="Test URLs, not journeys, even when prescale/journeys/ has some.")
+@click.option("--allow-writes", "allow_writes", multiple=True, metavar="HOST",
+              help="Let journeys that change data run against this non-local host "
+                   "(repeatable).")
+@dir_option
 @app_option
 @app_timeout_option
 @host_permission_option
@@ -93,9 +106,15 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
         store: str | None, no_save: bool, fail_under: int | None,
-        profile_name: str | None, app: str | None, app_timeout: float,
-        host_permission: bool, headers: dict[str, str], upload: bool) -> None:
+        profile_name: str | None, only: tuple[str, ...], urls_only: bool,
+        allow_writes: tuple[str, ...], directory: Path, app: str | None,
+        app_timeout: float, host_permission: bool, headers: dict[str, str],
+        upload: bool) -> None:
     """Load test URL and report what breaks first.
+
+    When prescale/journeys/ has journeys, each one is replayed at load (users
+    walk the whole journey: log in, add to cart, order) and the report names the
+    journey and step that break first. Use --urls to test URLs instead.
 
     \b
     Examples:
@@ -128,10 +147,16 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         max_users = prof.peak_users
         think_time = prof.think_time_s
 
+    journeys = _journeys_to_run(directory, only, urls_only=urls_only,
+                                url_mode=bool(paths or from_sitemap or method.upper() != "GET"))
+    host = (parsed.hostname or "").lower()
+    if journeys:
+        refuse_unallowed_writes(journeys, host, {h.lower() for h in allow_writes})
+        refuse_missing_env(journeys)
+
     if app:
         start_replica(app, url, timeout=app_timeout, console=console, quiet=as_json)
 
-    host = (parsed.hostname or "").lower()
     is_local = host in _LOCAL_HOSTS
     if not is_local and not yes:
         if as_json:
@@ -150,6 +175,30 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
     if not is_local:
         confirm_host(url, console=console, permitted=host_permission, as_json=as_json,
                      timeout=timeout, headers=headers)
+
+    config = {
+        "method": method,
+        "max_users": max_users,
+        "stage_seconds": stage_seconds,
+        "latency_wall_s": latency_wall,
+        "error_threshold": error_threshold,
+        "max_rps": max_rps,
+        "warmup": warmup,
+        "repeat": repeat,
+        "think_time_s": think_time,
+        "fail_under": fail_under,
+        "profile": prof.name if prof else None,
+    }
+    finish = dict(prof=prof, no_save=no_save, store=store, html_path=html_path,
+                  as_json=as_json, upload=upload, fail_under=fail_under)
+
+    if journeys:
+        report, result, live_mode = _run_journeys(
+            journeys, url, config, latency_wall=latency_wall,
+            error_threshold=error_threshold, timeout=timeout, headers=headers,
+            replica=bool(app), as_json=as_json)
+        _finish(result, report, live_mode=live_mode, **finish)
+        return
 
     extra: list[str] = []
     if from_sitemap:
@@ -203,22 +252,15 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
 
     report = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
                      rate_capped=max_rps is not None)
-
-    config = {
-        "method": method,
-        "max_users": max_users,
-        "stage_seconds": stage_seconds,
-        "latency_wall_s": latency_wall,
-        "error_threshold": error_threshold,
-        "max_rps": max_rps,
-        "warmup": warmup,
-        "repeat": repeat,
-        "think_time_s": think_time,
-        "fail_under": fail_under,
-        "profile": prof.name if prof else None,
-    }
     result = build_result(report, url=url, targets=targets, config=config, warning=warning,
                           replica=bool(app))
+    _finish(result, report, live_mode=live_mode, **finish)
+
+
+def _finish(result: dict, report, *, prof, no_save: bool, store: str | None,
+            html_path: str | None, as_json: bool, upload: bool, fail_under: int | None,
+            live_mode: bool) -> None:
+    """Save, render, upload and gate a finished run (URLs or journeys alike)."""
     if prof is not None:
         result["profile"] = scenario_block(prof, report.survives_users)
     saved_path = None if no_save else write_result(result, store=store)
@@ -244,3 +286,91 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         Console(stderr=True).print(
             f"[red]✗ fail-under:[/red] survives ~{report.survives_users} < {fail_under}")
         raise SystemExit(1)
+
+
+def _journeys_to_run(directory: Path, only: tuple[str, ...], *, urls_only: bool,
+                     url_mode: bool) -> list[Journey]:
+    """The journeys this run replays: none in URL mode (--urls, --path,
+    --from-sitemap or a non-GET --method), else every valid file in DIRECTORY,
+    narrowed by --journey. A broken journey file stops the run rather than
+    silently falling back to testing URLs."""
+    if urls_only or url_mode:
+        if only:
+            console.print("[red]Error:[/red] --journey can't be combined with --urls, "
+                          "--path, --from-sitemap or --method.")
+            raise SystemExit(2)
+        return []
+    found, errors = load_dir(directory)
+    for error in errors:
+        console.print(f"[red]Error:[/red] {escape(error)}", highlight=False)
+    if errors:
+        raise SystemExit(2)
+    if only:
+        missing = sorted(set(only) - {j.name for j in found})
+        if missing:
+            console.print(f"[red]Error:[/red] no journey named {', '.join(missing)} "
+                          f"in {escape(str(directory))}.", highlight=False)
+            raise SystemExit(2)
+        found = [j for j in found if j.name in only]
+    return found
+
+
+def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wall: float,
+                  error_threshold: float, timeout: float, headers: dict[str, str],
+                  replica: bool, as_json: bool) -> tuple:
+    """The isolation pass: check each journey once, then ramp each one that
+    replays on its own. Returns (report, result, live_mode) for the first
+    journey to break, with every journey's verdict in result["journeys"]."""
+    if not as_json:
+        console.print(f"\n[bold]PreScale[/bold] — replaying {len(journeys)} "
+                      f"journey{'s' if len(journeys) != 1 else ''} against [cyan]{url}[/cyan]")
+    checks = asyncio.run(_check_all(journeys, url, timeout=timeout, headers=headers))
+    runs = [JourneyRun(j, c) for j, c in zip(journeys, checks)]
+    levels = default_levels(config["max_users"])
+    live_mode = False
+    for run in runs:
+        name = escape(run.journey.name)
+        if not run.check.ok:
+            failed = run.check.failed
+            what = "stale" if run.check.stale else "couldn't run"
+            console.print(f"[yellow]⚠ {name}: {what}, not load-tested[/yellow] "
+                          f"[dim]({escape(failed.step.name)}: {escape(failed.problem or '')})"
+                          "[/dim]", highlight=False)
+            continue
+        if not as_json:
+            console.print(f"\n[bold]Journey {name}[/bold] [dim]({run.journey.type}, "
+                          f"{len(run.journey.steps)} steps)[/dim]", highlight=False)
+        progress = ramp_progress(console, latency_wall=latency_wall, as_json=as_json)
+        live_mode = isinstance(progress, LiveRamp)
+        try:
+            with progress:
+                stages, run.warning = asyncio.run(ramp(
+                    run.journey, url, levels=levels, stage_seconds=config["stage_seconds"],
+                    timeout=timeout, max_rps=config["max_rps"], warmup=config["warmup"],
+                    repeat=config["repeat"], headers=headers,
+                    progress_cb=progress.starting, on_stage=progress.finished))
+        except LoadError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise SystemExit(1)
+        run.report = analyze(stages, latency_wall=latency_wall,
+                             error_threshold=error_threshold,
+                             rate_capped=config["max_rps"] is not None)
+
+    worst = first_to_break(runs)
+    if worst is None:
+        console.print("[red]Error:[/red] no journey replays against this app, so there's "
+                      "nothing to load-test. Run `prescale journeys verify` for details.")
+        raise SystemExit(1)
+    warnings = list(dict.fromkeys(r.warning for r in runs if r.warning))
+    result = build_result(worst.report, url=url,
+                          targets=[s.label for s in worst.journey.steps],
+                          config={**config, "mode": "journeys"},
+                          warning=" ".join(warnings) or None, replica=replica)
+    result["verdict"]["culprit_journey"] = worst.journey.name
+    result["journeys"] = journeys_block(runs)
+    return worst.report, result, live_mode
+
+
+async def _check_all(journeys: list[Journey], url: str, *, timeout: float,
+                     headers: dict[str, str]):
+    return [await check(j, url, timeout=timeout, headers=headers) for j in journeys]

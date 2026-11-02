@@ -7,15 +7,20 @@ request, redirects included, must stay on that URL's scheme, host and port.
 `check` replays a journey once, as a single user, to see whether it still works
 against the app as it is now. A step that fails its expectation here, with no
 load at all, means the journey is stale (the app changed), not that the app
-broke under load. Each run gets its own client, so cookies and extracted values
-never leak between users.
+broke under load. `journey_vu` is the same journey as a virtual user for a load
+test: it walks the steps over and over until the stage ends.
+
+Every run of a journey has its own cookies and extracted values, so a login or
+a cart never leaks from one user to another, even on a shared client.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from dataclasses import dataclass, field
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 from typing import Any
 
 import httpx
@@ -46,6 +51,22 @@ def _origin(url: httpx.URL) -> tuple[str, str, int | None]:
     return url.scheme, url.host, url.port
 
 
+def client_options(base_url: str) -> dict:
+    """Settings for any client that runs journeys: requests (redirect hops too)
+    must stay on BASE_URL's origin, and the client itself keeps no cookies, since
+    each run of a journey carries its own."""
+    origin = _origin(httpx.URL(base_url))
+
+    async def same_origin(request: httpx.Request) -> None:
+        if _origin(request.url) != origin:
+            raise OffOriginError(f"redirected to {request.url.host}, outside the app")
+
+    return {
+        "event_hooks": {"request": [same_origin]},
+        "cookies": CookieJar(policy=DefaultCookiePolicy(allowed_domains=[])),
+    }
+
+
 @dataclass
 class StepCheck:
     step: Step
@@ -53,6 +74,8 @@ class StepCheck:
     latency: float = 0.0
     ok: bool = False
     problem: str | None = None   # why it failed, in plain words
+    kind: str | None = None      # a short failure kind for load reports
+    headers: httpx.Headers | None = None
 
 
 @dataclass
@@ -82,28 +105,68 @@ async def check(journey: Journey, base_url: str, *, timeout: float = 10.0,
     env = dict(os.environ) if env is None else env
     result = JourneyCheck(journey)
     variables: dict[str, Any] = fresh_uniques()
-    origin = _origin(httpx.URL(base_url))
-
-    async def same_origin(request: httpx.Request) -> None:
-        # Runs for redirect hops too, so an app can't bounce a write elsewhere.
-        if _origin(request.url) != origin:
-            raise OffOriginError(f"redirected to {request.url.host}, outside the app")
-
+    jar = httpx.Cookies()
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True,
                                  headers=client_headers(headers), transport=transport,
-                                 event_hooks={"request": [same_origin]}) as client:
+                                 **client_options(base_url)) as client:
         for step in journey.steps:
-            outcome = await run_step(client, step, base_url, variables, env)
+            outcome = await run_step(client, step, base_url, variables, env, jar)
             result.steps.append(outcome)
             if not outcome.ok:
                 break
     return result
 
 
+def journey_vu(journey: Journey, base_url: str, env: dict[str, str] | None = None):
+    """JOURNEY as a load-test virtual user: walk its steps, pausing for each
+    step's think time, and start again with a fresh identity until the stage
+    deadline. A failed step ends that walk (after its pause), like a real user
+    giving up. Each step is recorded under its label, so the report can name the
+    step that broke."""
+    env = dict(os.environ) if env is None else env
+
+    async def vu(client: httpx.AsyncClient, deadline: float, sink, gate=None) -> None:
+        loop = asyncio.get_running_loop()
+        while loop.time() < deadline:
+            variables: dict[str, Any] = fresh_uniques()
+            jar = httpx.Cookies()
+            for step in journey.steps:
+                if gate is not None and not await gate.wait(deadline):
+                    return
+                if loop.time() >= deadline:
+                    return
+                outcome = await run_step(client, step, base_url, variables, env, jar)
+                _record(sink, outcome)
+                # A user pauses after a step either way; restarting the instant a step
+                # fails would hammer the app harder than real users who hit an error.
+                if step.think:
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        return
+                    await asyncio.sleep(min(step.think, remaining))
+                if not outcome.ok:
+                    break
+
+    return vu
+
+
+def _record(sink, outcome: StepCheck) -> None:
+    """One step's outcome into the stage's numbers. An answer the journey didn't
+    expect counts as a failure, even a 4xx: under load that's a step going wrong."""
+    label = outcome.step.label
+    if outcome.status is None:
+        sink.record_error(label, outcome.kind or "network")
+    elif outcome.ok or outcome.status >= 500 or outcome.status == 429:
+        sink.record_response(label, outcome.status, outcome.latency, outcome.headers)
+    else:
+        sink.record_error(label, outcome.kind or f"unexpected {outcome.status}")
+
+
 async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
-                   variables: dict[str, Any], env: dict[str, str]) -> StepCheck:
-    """Send one step, judge it against `expect`, and pull its `extract` values
-    into VARIABLES for the steps after it."""
+                   variables: dict[str, Any], env: dict[str, str],
+                   jar: httpx.Cookies) -> StepCheck:
+    """Send one step with this journey run's cookies (JAR), judge it against
+    `expect`, and pull its `extract` values into VARIABLES for the steps after it."""
     outcome = StepCheck(step)
     try:
         url = step_url(base_url, str(render(step.path, variables, env)))
@@ -111,24 +174,34 @@ async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
         payload = render(step.json, variables, env) if step.json is not None else None
         body = render(step.body, variables, env) if step.body is not None else None
     except (TemplateError, OffOriginError) as exc:
-        outcome.problem = str(exc)
+        outcome.problem, outcome.kind = str(exc), "journey error"
         return outcome
 
+    request = client.build_request(step.method, url, headers=req_headers, json=payload,
+                                   content=body)
+    jar.set_cookie_header(request)
     start = time.perf_counter()
     try:
-        resp = await client.request(step.method, url, headers=req_headers, json=payload,
-                                    content=body)
+        resp = await client.send(request)
     except OffOriginError as exc:
-        outcome.problem = str(exc)
+        outcome.problem, outcome.kind = str(exc), "left the app"
         return outcome
     except httpx.TimeoutException:
-        outcome.problem = "timed out"
+        outcome.problem, outcome.kind = "timed out", "timeout"
+        return outcome
+    except httpx.ConnectError:
+        outcome.problem, outcome.kind = "couldn't reach the app (ConnectError)", \
+            "connection refused"
         return outcome
     except httpx.HTTPError as exc:
         outcome.problem = f"couldn't reach the app ({exc.__class__.__name__})"
+        outcome.kind = "network"
         return outcome
     outcome.latency = time.perf_counter() - start
     outcome.status = resp.status_code
+    outcome.headers = resp.headers
+    for hop in (*resp.history, resp):
+        jar.extract_cookies(hop)
 
     if not step.accepts(resp.status_code):
         wanted = (" or ".join(map(str, step.expect)) if step.expect else "a status below 400")
@@ -142,6 +215,7 @@ async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
         value = extract(resp, source)
         if value is None:
             outcome.problem = f"couldn't find {source} in the response to extract {name}"
+            outcome.kind = "missing extract"
             return outcome
         variables[name] = value
     outcome.ok = True
