@@ -217,7 +217,7 @@ Interference  checkout broke with 15 of its own users, but held 20 alone.
               It competes with quickbuy for something they share (a database pool, CPU, a cache).
 ```
 
-`prescale show`, `--html` reports and the MCP tools show journeys too, and `prescale compare` diffs each journey: a confident drop in any journey is a regression (so `--fail-on-regression` catches it), even when it isn't the weakest one. A URL run and a journey run measure different things, so comparing them is reported as not comparable.
+`prescale show`, `--html` reports and the MCP tools show journeys too, and `prescale compare` diffs each journey: a drop past the threshold in any journey is a regression (so `--fail-on-regression` catches it), even when it isn't the weakest one; it's marked confident when the confidence bands don't overlap. A journey that held everything it was tested to, below the old level, is inconclusive, not a drop. A URL run and a journey run measure different things, so comparing them is reported as not comparable.
 
 `--no-combined` skips this pass. `--expect 500` says whether you'd hold 500 users at peak: in a journey run, each journey must hold its share of them (by weight) on its own, and all journeys together must hold 500; a journey that wasn't load-tested makes the answer unknown. It reports, it doesn't change the exit code (use `--fail-under` to gate CI).
 

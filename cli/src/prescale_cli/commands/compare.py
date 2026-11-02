@@ -11,7 +11,13 @@ from rich.panel import Panel
 from rich.table import Table
 
 from prescale_cli.bars import text_bar
-from prescale_cli.compare import compare_results, resolve, to_markdown
+from prescale_cli.compare import (
+    compare_results,
+    journey_change,
+    journey_users,
+    resolve,
+    to_markdown,
+)
 from prescale_cli.result import AmbiguousResultError, ResultNotFoundError
 
 console = Console()
@@ -108,8 +114,8 @@ def _render(cmp: dict) -> None:
                 jt.add_row(escape(j["name"]), "", "", f"[dim]{escape(j['status'])}[/dim]", "")
                 continue
             tone = "red" if j["regressed"] else ("green" if j.get("improved") else "")
-            change = f"{j['pct']:+.0%}"
-            jt.add_row(escape(j["name"]), f"~{j['old']}", f"~{j['new']}",
+            change = journey_change(j)
+            jt.add_row(escape(j["name"]), journey_users(j, "old"), journey_users(j, "new"),
                        f"[{tone}]{change}[/{tone}]" if tone else change,
                        escape(j.get("breaks_at") or "—"))
         console.print(jt)

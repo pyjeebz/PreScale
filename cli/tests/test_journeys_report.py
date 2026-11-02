@@ -118,3 +118,31 @@ def test_mcp_summary_lists_journeys_compactly():
     assert s["journeys"][0]["breaks_at_step"] == "3. place order (POST /api/orders)"
     assert s["journeys"][1] == {"name": "old", "status": "stale",
                                 "reason": "step 1 (home): returned 404, expected 200"}
+
+
+def test_a_confident_overall_gain_doesnt_make_a_noisy_journey_drop_confident():
+    old = _run([_journey("browse", 100, 120, low=80, high=120)], survives=20)
+    new = _run([_journey("browse", 75, 90, low=70, high=110)], survives=40)
+    old["verdict"]["confidence"] = {"survives_low": 20, "survives_high": 20}
+    new["verdict"]["confidence"] = {"survives_low": 40, "survives_high": 40}
+    cmp = compare_results(old, new)
+    assert cmp["regressed"] and not cmp["confident"] and not cmp["improved"]
+    assert cmp["summary"] == ("Capacity regressed: browse 100 → 75 users (-25%). "
+                              "(Overall: 20 → 40 users, +100%.)")
+    assert to_markdown(cmp).startswith("### 🟠")
+
+
+def test_inconclusive_and_held_journeys_read_as_such():
+    old = _run([_journey("browse", 200, None)])
+    new = _run([_journey("browse", 50, None)])
+    for run, tested in ((old, 200), (new, 50)):
+        run["journeys"][0]["max_tested"] = tested
+    md = to_markdown(compare_results(old, new))
+    assert "| browse | 200+ | 50+ | inconclusive | — |" in md
+
+
+def test_pipes_in_names_dont_break_the_markdown_table():
+    old = _run([_journey("a|b", 40, 50, step="pay | ship")])
+    new = _run([_journey("a|b", 20, 30, step="pay | ship")])
+    md = to_markdown(compare_results(old, new))
+    assert "| a\\|b | ~40 | ~20 | -50% 🔴 | pay \\| ship |" in md

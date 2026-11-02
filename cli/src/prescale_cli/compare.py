@@ -60,12 +60,19 @@ def compare_results(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESHO
         worse = [j for j in cmp["journeys"] if j.get("regressed")]
         if worse:
             # A drop in any one journey is a regression, even if it isn't the weakest.
+            # Confidence only comes from drops: a confident overall gain says nothing
+            # about whether a journey's drop is noise.
             cmp["regressed"] = True
-            cmp["confident"] = cmp["confident"] or any(j["confident"] for j in worse)
+            cmp["confident"] = ((d["confident"] and d["regressed"])
+                                or any(j["confident"] for j in worse))
             if not d["regressed"]:
+                cmp["improved"] = False
                 cmp["summary"] = "Capacity regressed: " + "; ".join(
                     f"{j['name']} {j['old']} → {j['new']} users ({j['pct']:+.0%})"
                     for j in worse) + "."
+                if d["improved"]:
+                    cmp["summary"] += (f" (Overall: {o['survives_users']} → "
+                                       f"{n['survives_users']} users, {d['pct']:+.0%}.)")
     return cmp
 
 
@@ -113,10 +120,33 @@ def compare_journeys(old: dict, new: dict, *, threshold: float = _DEFAULT_THRESH
         step = (n.get("culprit_step") or {}).get("name")
         rows.append({"name": name, "status": "ok", "old": o["survives_users"],
                      "new": n["survives_users"], "pct": round(d["pct"], 3),
+                     "old_held_all": o["onset_users"] is None,
+                     "new_held_all": n["onset_users"] is None,
                      "regressed": d["regressed"], "improved": d["improved"],
                      "inconclusive": d["inconclusive"], "confident": d["confident"],
                      "breaks_at": step})
     return rows
+
+
+def journey_users(row: dict, side: str) -> str:
+    """A journey's capacity in a compare row: "~20", or "200+" if it held every level."""
+    return f"{row[side]}+" if row.get(f"{side}_held_all") else f"~{row[side]}"
+
+
+def journey_change(row: dict, *, markers: bool = False) -> str:
+    """The change cell: the percentage, or "inconclusive" when the new run held
+    everything it tested but was never pushed as far as the old one."""
+    if row.get("inconclusive"):
+        return "inconclusive"
+    mark = ""
+    if markers:
+        mark = " 🔴" if row["regressed"] else (" 🟢" if row.get("improved") else "")
+    return f"{row['pct']:+.0%}{mark}"
+
+
+def _cell(text: str) -> str:
+    """Text safe inside a markdown table cell (journey and step names come from YAML)."""
+    return str(text).replace("|", "\\|").replace("\n", " ")
 
 
 def _not_comparable(o: dict, n: dict) -> dict:
@@ -189,10 +219,11 @@ def to_markdown(cmp: dict) -> str:
     if cmp.get("journeys"):
         lines += ["", "| journey | old | new | change | breaks at |", "|---|---:|---:|---:|---|"]
         for j in cmp["journeys"]:
+            name = _cell(j["name"])
             if j["status"] != "ok":
-                lines.append(f"| {j['name']} | | | {j['status']} | |")
+                lines.append(f"| {name} | | | {j['status']} | |")
                 continue
-            mark = " 🔴" if j["regressed"] else (" 🟢" if j.get("improved") else "")
-            lines.append(f"| {j['name']} | ~{j['old']} | ~{j['new']} | {j['pct']:+.0%}{mark} | "
-                         f"{j.get('breaks_at') or '—'} |")
+            step = _cell(j.get("breaks_at") or "—")
+            lines.append(f"| {name} | {journey_users(j, 'old')} | {journey_users(j, 'new')} | "
+                         f"{journey_change(j, markers=True)} | {step} |")
     return "\n".join(lines)

@@ -27,8 +27,8 @@
   `--no-combined` skips it.
 - **Journeys everywhere.** The `--html` report shows each journey, the combined run and
   `--expect`; the MCP tools' run summaries list each journey's verdict; and `prescale compare`
-  diffs each journey by name (terminal, `--json`, `--markdown`). A confident drop in any journey
-  counts as a regression for `--fail-on-regression`, even when it isn't the weakest journey.
+  diffs each journey by name (terminal, `--json`, `--markdown`). A drop past the threshold in any
+  journey counts as a regression for `--fail-on-regression`, even when it isn't the weakest journey.
 - **`--expect N`** on `run` says whether you'd hold N users at peak. In a journey run, N is split
   across journeys by weight: each must hold its share alone, and all together must hold N.
 
