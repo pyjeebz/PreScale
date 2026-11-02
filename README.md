@@ -219,6 +219,8 @@ Interference  checkout broke with 15 of its own users, but held 20 alone.
 
 `prescale show`, `--html` reports and the MCP tools show journeys too, and `prescale compare` diffs each journey: a drop past the threshold in any journey is a regression (so `--fail-on-regression` catches it), even when it isn't the weakest one; it's marked confident when the confidence bands don't overlap. A journey that held everything it was tested to, below the old level, is inconclusive, not a drop. A URL run and a journey run measure different things, so comparing them is reported as not comparable.
 
+In CI, `prescale ci` (and the GitHub Action) replays the checkout's journeys instead of URLs whenever `prescale/journeys/` exists, and the PR comment shows each journey's verdict, any interference, and journeys that no longer replay. Those are always listed; `--stale fail` (Action input `stale: fail`) also fails the check. With `app:` the replica is local, so journeys that change data can run; against a preview host they need `allow-writes`. Journey secrets (`{{env.NAME}}`) come from the step's `env:`.
+
 `--no-combined` skips this pass. `--expect 500` says whether you'd hold 500 users at peak: in a journey run, each journey must hold its share of them (by weight) on its own, and all journeys together must hold 500; a journey that wasn't load-tested makes the answer unknown. It reports, it doesn't change the exit code (use `--fail-under` to gate CI).
 
 - `{{name}}` is a value an earlier step pulled out with `extract` (`body.<field>` or `header.<name>`); `{{unique.email}}` and `{{unique.id}}` are fresh each run; `{{env.NAME}}` reads an environment variable.

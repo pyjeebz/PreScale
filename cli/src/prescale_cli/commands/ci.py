@@ -1,7 +1,8 @@
 """`prescale ci` - capacity-check a deploy from CI and report it on the PR.
 
 Built for GitHub Actions (the PreScale action wraps it), usable from any CI:
-investigate the deploy URL, upload the Result, compare it with the baseline
+investigate the deploy URL (or, when the checkout has prescale/journeys/,
+replay the journeys at load), upload the Result, compare it with the baseline
 (server-side, the same rule as the dashboard), write a job summary, and keep
 one capacity comment on the PR up to date.
 """
@@ -18,18 +19,27 @@ from rich.console import Console
 
 from prescale_cli.ci import (
     comment_marker,
+    comparison_for,
     find_pull_request,
     github_context,
     render_comment,
     render_host_skip,
+    render_stale_only,
     upsert_pr_comment,
 )
 from prescale_cli.cloud import CloudError, parse_headers, require_credentials, upload_result
+from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
+from prescale_cli.commands.run import run_journeys
 from prescale_cli.hosts import PERMISSION_ENV
 from prescale_cli.investigate import investigate as run_investigate
+from prescale_cli.journeys.load import NoJourneyReplaysError
+from prescale_cli.journeys.model import load_dir
 from prescale_cli.live import ramp_progress
-from prescale_cli.loadtest import HostPolicyError, LoadError, default_levels
+from prescale_cli.loadtest import HostPolicyError, LoadError, default_levels, probe_host
+from prescale_cli.result import write_result
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 
 console = Console()
 
@@ -67,13 +77,22 @@ def _annotate(level: str, message: str) -> None:
 @click.option("--host-permission", "host_permission", is_flag=True, envvar=PERMISSION_ENV,
               help="Confirm the deploy's host allows load testing (Vercel, Netlify and "
                    f"Cloudflare restrict it; otherwise PreScale skips). Env: {PERMISSION_ENV}=1.")
+@click.option("--stale", "stale", type=click.Choice(["warn", "fail"]), default="warn",
+              show_default=True,
+              help="Journey runs: what a journey that no longer replays does to the check. It's "
+                   "always reported on the PR; 'fail' also fails the job.")
+@click.option("--allow-writes", "allow_writes", multiple=True, metavar="HOST",
+              help="Let journeys that change data run against this non-local host "
+                   "(repeatable). Not needed with --app: the replica is local.")
+@dir_option
 @app_option
 @app_timeout_option
 @click.option("--store", "store", type=click.Path(file_okay=False), default=None,
               help="Directory for saved runs (default: ./.prescale).")
 def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tuple[str, ...],
        max_users: int, stage_seconds: float, max_rps: float | None, fail_on_regression: bool,
-       comment: bool, allow_production: bool, host_permission: bool, app: str | None,
+       comment: bool, allow_production: bool, host_permission: bool, stale: str,
+       allow_writes: tuple[str, ...], directory: Path, app: str | None,
        app_timeout: float, store: str | None) -> None:
     """Capacity-check a deploy from CI, upload it, and comment on the PR.
 
@@ -92,6 +111,9 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     \b
     Example (replica mode, on: pull_request):
         prescale ci --target myapp.com --app "npm run build && npm start"
+
+    When prescale/journeys/ (or --dir) has journeys, they're replayed at load
+    instead of the URL routes, and the PR comment shows each journey's verdict.
     """
     ctx = github_context()
 
@@ -109,6 +131,20 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     url = url or ("http://localhost:3000" if app else ctx.deployment_url)
     if not url:
         raise click.UsageError("No URL to test. Pass one, or run on a deployment_status event.")
+
+    # A checkout with journey files replays them; without one (a deploy event with no
+    # checkout) it's a URL run as before. Broken files and missing secrets stop the
+    # job here, before an app is built.
+    journeys, errors = load_dir(directory)
+    for error in errors:
+        console.print(f"[red]Error:[/red] {error}", markup=False)
+        _annotate("error", f"PreScale: {error}")
+    if errors:
+        raise SystemExit(2)
+    if journeys:
+        host = (httpx.URL(url).host or "").lower()
+        refuse_unallowed_writes(journeys, host, {h.lower() for h in allow_writes})
+        refuse_missing_env(journeys)
 
     try:
         headers = parse_headers(header_values + tuple(_lines(os.environ.get("PRESCALE_HEADERS"))))
@@ -135,6 +171,14 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
 
     if app:
         start_replica(app, url, timeout=app_timeout, console=console, quiet=False)
+
+    if journeys:
+        _ci_journeys(journeys, url, target=target, ctx=ctx, creds=creds, headers=headers,
+                     max_users=max_users, stage_seconds=stage_seconds, max_rps=max_rps,
+                     store=store, comment=comment, pr_number=pr_number,
+                     github_token=github_token, host_permission=host_permission,
+                     replica=bool(app), stale=stale, fail_on_regression=fail_on_regression)
+        return
 
     extra_paths = tuple(paths) + tuple(_lines(os.environ.get("PRESCALE_PATHS")))
     console.print(f"[bold]PreScale[/bold] — capacity check of [cyan]{url}[/cyan] for "
@@ -163,28 +207,71 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
         _annotate("error", f"PreScale couldn't load-test {url}: {exc}")
         raise SystemExit(1) from None
 
+    if _report(result, url=url, target=target, ctx=ctx, creds=creds, comment=comment,
+               pr_number=pr_number, github_token=github_token,
+               fail_on_regression=fail_on_regression):
+        raise SystemExit(1)
+
+
+def _ci_journeys(journeys, url: str, *, target: str, ctx, creds, headers: dict[str, str],
+                 max_users: int, stage_seconds: float, max_rps: float | None,
+                 store: str | None, comment: bool, pr_number: int | None,
+                 github_token: str | None, host_permission: bool, replica: bool, stale: str,
+                 fail_on_regression: bool) -> None:
+    """Replay the checkout's journeys at load, upload, comment, and gate."""
+    # Journey ramps skip the preflight that checks the host, so check it here.
+    if not replica and not host_permission:
+        rule = asyncio.run(probe_host(url, headers=headers))
+        if rule is not None:
+            _skip_restricted_host(rule, target=target, ctx=ctx, comment=comment,
+                                  pr_number=pr_number, github_token=github_token)
+            return
+    console.print(f"[bold]PreScale[/bold] — journey check for [bold]{target}[/bold]"
+                  + (f" (PR #{pr_number})" if pr_number else ""))
+    config = {"method": "GET", "max_users": max_users, "stage_seconds": stage_seconds,
+              "latency_wall_s": 2.0, "error_threshold": 0.02, "max_rps": max_rps,
+              "warmup": True, "repeat": 1, "think_time_s": 0.0, "fail_under": None,
+              "profile": None}
     try:
-        upload = upload_result(result, creds, pr=pr_number, target=target)
-    except CloudError as exc:
-        console.print(f"[red]✗ upload failed:[/red] {exc}")
-        _annotate("error", f"PreScale upload failed: {exc}")
+        _, result, _ = run_journeys(journeys, url, config, latency_wall=2.0,
+                                    error_threshold=0.02, timeout=10.0, headers=headers,
+                                    replica=replica, as_json=False)
+    except NoJourneyReplaysError as exc:
+        body = render_stale_only(exc.runs, target=target)
+        _publish(body, target=target, ctx=ctx, comment=comment, pr_number=pr_number,
+                 github_token=github_token)
+        level = "error" if stale == "fail" else "warning"
+        _annotate(level, "PreScale: no journey replays against this build, so nothing was "
+                         "load-tested. Update the journey files if the app changed on purpose.")
+        if stale == "fail":
+            raise SystemExit(1)
+        return
+    except LoadError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        _annotate("error", f"PreScale couldn't load-test {url}: {exc}")
         raise SystemExit(1) from None
+    write_result(result, store=store)
 
-    body = render_comment(result, upload, target=target, sha=ctx.sha)
-    comparison = upload.get("comparison")
-    verdict = result["verdict"]
-    sent = sum(stage.get("total", 0) for stage in result.get("stages", []))
-    console.print(f"[dim]Sent {sent:,} requests while measuring.[/dim]")
-    console.print(f"survives ~{verdict['survives_users']} users"
-                  + (f" · {comparison['kind']} {round(comparison['pct'] * 100):+d}% vs "
-                     f"{comparison['against']}" if comparison else " · first run")
-                  + f"\n[green]✓[/green] uploaded → [cyan]{upload.get('url')}[/cyan]")
+    stale_names = [j["name"] for j in result["journeys"] if j["status"] != "ok"]
+    regressed = _report(result, url=url, target=target, ctx=ctx, creds=creds, comment=comment,
+                        pr_number=pr_number, github_token=github_token,
+                        fail_on_regression=fail_on_regression)
+    if stale_names:
+        level = "error" if stale == "fail" else "warning"
+        what = ("replays against this build, so it wasn't" if len(stale_names) == 1
+                else "replay against this build, so they weren't")
+        _annotate(level, f"PreScale: {', '.join(stale_names)} no longer {what} load-tested.")
+    if regressed or (stale_names and stale == "fail"):
+        raise SystemExit(1)
 
+
+def _publish(body: str, *, target: str, ctx, comment: bool, pr_number: int | None,
+             github_token: str | None) -> None:
+    """The job summary, and the one PreScale comment on the PR."""
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         with Path(summary_path).open("a", encoding="utf-8") as fh:
             fh.write(body + "\n")
-
     if comment and pr_number and github_token and ctx.repository:
         try:
             action = upsert_pr_comment(ctx, github_token, pr_number, body, comment_marker(target))
@@ -195,15 +282,42 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
     elif comment and not pr_number:
         console.print("[dim]No open PR for this commit, so no PR comment.[/dim]")
 
+
+def _report(result: dict, *, url: str, target: str, ctx, creds, comment: bool,
+            pr_number: int | None, github_token: str | None,
+            fail_on_regression: bool) -> bool:
+    """Upload the run, comment on the PR, and annotate a regression. Returns
+    whether the job should fail (a regression with --fail-on-regression); the
+    caller exits, after any notes of its own."""
+    try:
+        upload = upload_result(result, creds, pr=pr_number, target=target)
+    except CloudError as exc:
+        console.print(f"[red]✗ upload failed:[/red] {exc}")
+        _annotate("error", f"PreScale upload failed: {exc}")
+        raise SystemExit(1) from None
+
+    body = render_comment(result, upload, target=target, sha=ctx.sha)
+    comparison = comparison_for(result, upload)
+    verdict = result["verdict"]
+    sent = sum(stage.get("total", 0) for stage in result.get("stages", []))
+    console.print(f"[dim]Sent {sent:,} requests while measuring.[/dim]")
+    console.print(f"survives ~{verdict['survives_users']} users"
+                  + (f" · {comparison['kind']} {round(comparison['pct'] * 100):+d}% vs "
+                     f"{comparison['against']}" if comparison else " · first run")
+                  + f"\n[green]✓[/green] uploaded → [cyan]{upload.get('url')}[/cyan]")
+
+    _publish(body, target=target, ctx=ctx, comment=comment, pr_number=pr_number,
+             github_token=github_token)
+
     kind = comparison["kind"] if comparison else None
     if kind == "regressed":
         _annotate("error", f"Capacity regressed {round(comparison['pct'] * 100)}% vs "
                            f"{comparison['against']}.")
-        if fail_on_regression:
-            raise SystemExit(1)
-    elif kind == "possible":
+        return fail_on_regression
+    if kind == "possible":
         _annotate("warning", f"Possible capacity regression {round(comparison['pct'] * 100)}% "
                              f"vs {comparison['against']} (bands overlap).")
+    return False
 
 
 def _skip_restricted_host(rule, *, target: str, ctx, comment: bool, pr_number: int | None,

@@ -48,6 +48,14 @@ inputs:
     description: Confirm the deploy's host allows load testing. Vercel only permits it on Enterprise plans with notice, and Netlify and Cloudflare need it arranged; without this, PreScale skips their deploys and says why on the PR.
     required: false
     default: "false"
+  stale:
+    description: "Journey runs (when the checkout has prescale/journeys/): 'warn' or 'fail'. A journey that no longer replays against this build is always listed on the PR; 'fail' also fails the check."
+    required: false
+    default: "warn"
+  allow-writes:
+    description: "Journey runs: hosts (one per line) where journeys that change data may run, e.g. a staging host. Not needed with app: the replica is local. Journeys read their secrets from env variables you set on this step."
+    required: false
+    default: ""
   app-url:
     description: PreScale dashboard URL.
     required: false
@@ -105,6 +113,8 @@ runs:
         INPUT_HOST_PERMISSION: ${{ inputs.host-permission }}
         INPUT_APP: ${{ inputs.app }}
         INPUT_APP_TIMEOUT: ${{ inputs.app-timeout }}
+        INPUT_STALE: ${{ inputs.stale }}
+        INPUT_ALLOW_WRITES: ${{ inputs.allow-writes }}
       run: |
         args=(--max-users "$INPUT_MAX_USERS" --stage-seconds "$INPUT_STAGE_SECONDS" --store "$RUNNER_TEMP/prescale")
         [ "$INPUT_FAIL" = "true" ] && args+=(--fail-on-regression)
@@ -112,5 +122,10 @@ runs:
         [ "$INPUT_ALLOW_PRODUCTION" = "true" ] && args+=(--allow-production)
         [ "$INPUT_HOST_PERMISSION" = "true" ] && args+=(--host-permission)
         [ -n "$INPUT_APP" ] && args+=(--app "$INPUT_APP" --app-timeout "$INPUT_APP_TIMEOUT")
+        args+=(--stale "$INPUT_STALE")
+        while IFS= read -r host; do
+          host="${host//[[:space:]]/}"
+          [ -n "$host" ] && args+=(--allow-writes "$host")
+        done <<< "$INPUT_ALLOW_WRITES"
         [ -n "$INPUT_URL" ] && args+=("$INPUT_URL")
         prescale ci "${args[@]}"

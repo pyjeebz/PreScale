@@ -28,6 +28,14 @@ from prescale_cli.journeys.replay import (
 from prescale_cli.loadtest import RunReport, StageResult, run_loadtest
 
 
+class NoJourneyReplaysError(Exception):
+    """Every journey was stale or unreachable, so nothing could be load-tested."""
+
+    def __init__(self, runs: list[JourneyRun]) -> None:
+        super().__init__("no journey replays against this app")
+        self.runs = runs
+
+
 @dataclass
 class JourneyRun:
     journey: Journey

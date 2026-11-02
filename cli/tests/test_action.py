@@ -15,3 +15,23 @@ def test_metadata_has_no_expressions_outside_defaults_and_steps():
     for name, spec in action["inputs"].items():
         assert "${{" not in spec["description"], name
         assert "secrets." not in str(spec.get("default", "")), name
+
+
+def test_capacity_check_passes_stale_and_each_allow_writes_host(tmp_path):
+    import os
+    import subprocess
+
+    stub = tmp_path / "prescale"
+    stub.write_text('#!/bin/sh\nfor a in "$@"; do printf "[%s]" "$a"; done\n')
+    stub.chmod(0o755)
+    action = yaml.safe_load(ACTION.read_text())
+    script = next(s for s in action["runs"]["steps"] if s.get("name") == "Capacity check")["run"]
+    env = {"PATH": f"{tmp_path}:{os.environ['PATH']}", "RUNNER_TEMP": "/tmp",
+           "INPUT_MAX_USERS": "100", "INPUT_STAGE_SECONDS": "5", "INPUT_FAIL": "false",
+           "INPUT_COMMENT": "true", "INPUT_ALLOW_PRODUCTION": "false",
+           "INPUT_HOST_PERMISSION": "false", "INPUT_APP": "", "INPUT_APP_TIMEOUT": "600",
+           "INPUT_URL": "", "INPUT_STALE": "fail",
+           "INPUT_ALLOW_WRITES": "staging.myapp.com\n  qa.myapp.com  \n\n"}
+    out = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True).stdout
+    assert out.endswith("[--stale][fail][--allow-writes][staging.myapp.com]"
+                        "[--allow-writes][qa.myapp.com]")
