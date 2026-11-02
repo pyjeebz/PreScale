@@ -182,7 +182,7 @@
         "name": { "type": "string" },
         "type": { "type": "string" },
         "weight": { "type": "number" },
-        "status": { "enum": ["ok", "stale", "unreachable"] },
+        "status": { "enum": ["ok", "stale", "error", "unreachable"], "description": "stale: answered, but not as the journey expects (the app changed); error: a 5xx with one user; unreachable: no answer." },
         "reason": { "type": ["string", "null"], "description": "Why a stale or unreachable journey wasn't load-tested." },
         "survives_users": { "type": "integer" },
         "max_tested": { "type": "integer" },

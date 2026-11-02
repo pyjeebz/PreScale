@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 
 from prescale_cli.bars import bar_rows, route_rows
+from prescale_cli.journeys.load import LABELS
 from prescale_cli.throughput import VISITOR_NOTE, capacity_rps, visitors_for
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -199,7 +200,15 @@ def _mode(result: dict) -> str:
 
 
 def _cell(text) -> str:
-    return str(text).replace("|", "\\|").replace("\n", " ")
+    """Text from journey files or the app, safe in a PR comment: it can't break the
+    table, render HTML, or @mention (and so notify) anyone."""
+    return (str(text).replace("|", "\\|").replace("\n", " ").replace("<", "&lt;")
+            .replace(">", "&gt;").replace("@", "@\u200b"))
+
+
+def _code(text) -> str:
+    """TEXT as inline code that a backtick inside can't break out of."""
+    return "`" + _cell(text).replace("`", "'") + "`"
 
 
 def render_journeys(result: dict) -> list[str]:
@@ -217,7 +226,7 @@ def render_journeys(result: dict) -> list[str]:
         survives = (f"{j['max_tested']}+ (held)" if j["onset_users"] is None
                     else f"~{j['survives_users']}")
         step = j.get("culprit_step")
-        where = f"{step['index']}. {_cell(step['name'])} `{_cell(step['route'])}`" if step else "—"
+        where = f"{step['index']}. {_cell(step['name'])} {_code(step['route'])}" if step else "—"
         lines.append(f"| {_cell(j['name'])} | {survives} | {where} | "
                      f"{_cell(j.get('bottleneck') or '')} |")
     if stale:
@@ -245,7 +254,7 @@ def render_stale_only(runs, *, target: str) -> str:
     for run in runs:
         failed = run.check.failed
         index = run.check.steps.index(failed) + 1 if failed else "?"
-        what = "stale" if run.check.stale else "couldn't run"
+        what = LABELS[run.check.outcome]
         lines.append(f"- **{_cell(run.journey.name)}** ({what}): step {index} "
                      f"({_cell(failed.step.name if failed else '?')}): "
                      f"{_cell(failed.problem if failed else '')}")
@@ -332,7 +341,7 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
     else:
         culprit = verdict.get("culprit_route")
         journey = verdict.get("culprit_journey")
-        where = f"{_cell(journey)} › `{culprit}`" if journey and culprit else f"`{culprit}`"
+        where = f"{_cell(journey)} › {_code(culprit)}" if journey and culprit else _code(culprit)
         lines.append(f"**Breaks first:** {where} · {_onset(verdict)}" if culprit
                      else f"**Breaks first:** {_onset(verdict)}")
         if investigation:

@@ -32,6 +32,14 @@ def test_capacity_check_passes_stale_and_each_allow_writes_host(tmp_path):
            "INPUT_HOST_PERMISSION": "false", "INPUT_APP": "", "INPUT_APP_TIMEOUT": "600",
            "INPUT_URL": "", "INPUT_STALE": "fail",
            "INPUT_ALLOW_WRITES": "staging.myapp.com\n  qa.myapp.com  \n\n"}
-    out = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True).stdout
-    assert out.endswith("[--stale][fail][--allow-writes][staging.myapp.com]"
-                        "[--allow-writes][qa.myapp.com]")
+    def run(**inputs):
+        return subprocess.run(["bash", "-eo", "pipefail", "-c", script], env={**env, **inputs},
+                              capture_output=True, text=True).stdout
+
+    assert run().endswith("[--stale][fail][--allow-writes][staging.myapp.com]"
+                          "[--allow-writes][qa.myapp.com]")
+    # the default passes no new flag, so a pinned older prescale-version keeps working
+    assert "--stale" not in run(INPUT_STALE="warn", INPUT_ALLOW_WRITES="")
+    assert "--stale" not in run(INPUT_STALE="", INPUT_ALLOW_WRITES="")
+    assert run(INPUT_STALE="Fail", INPUT_ALLOW_WRITES="a.com, b.com").endswith(
+        "[--stale][fail][--allow-writes][a.com][--allow-writes][b.com]")

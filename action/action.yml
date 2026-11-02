@@ -53,7 +53,7 @@ inputs:
     required: false
     default: "warn"
   allow-writes:
-    description: "Journey runs: hosts (one per line) where journeys that change data may run, e.g. a staging host. Not needed with app: the replica is local. Journeys read their secrets from env variables you set on this step."
+    description: "Journey runs: hosts (one per line, or comma-separated) where journeys that change data may run, e.g. a staging host. Not needed with app: the replica is local. Journeys read their secrets from env variables you set on this step."
     required: false
     default: ""
   app-url:
@@ -122,10 +122,12 @@ runs:
         [ "$INPUT_ALLOW_PRODUCTION" = "true" ] && args+=(--allow-production)
         [ "$INPUT_HOST_PERMISSION" = "true" ] && args+=(--host-permission)
         [ -n "$INPUT_APP" ] && args+=(--app "$INPUT_APP" --app-timeout "$INPUT_APP_TIMEOUT")
-        args+=(--stale "$INPUT_STALE")
+        # New flags only when set, so a pinned older prescale-version keeps working.
+        stale="${INPUT_STALE,,}"
+        [ -n "$stale" ] && [ "$stale" != "warn" ] && args+=(--stale "$stale")
         while IFS= read -r host; do
           host="${host//[[:space:]]/}"
           [ -n "$host" ] && args+=(--allow-writes "$host")
-        done <<< "$INPUT_ALLOW_WRITES"
+        done <<< "${INPUT_ALLOW_WRITES//,/$'\n'}"
         [ -n "$INPUT_URL" ] && args+=("$INPUT_URL")
         prescale ci "${args[@]}"

@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from prescale_cli.bars import text_bar
+from prescale_cli.journeys.load import LABELS
 from prescale_cli.throughput import VISITOR_NOTE, describe
 
 console = Console()
@@ -160,7 +161,8 @@ def _expect_lines(exp: dict) -> list[str]:
         mark = {True: "✅", False: "🛑", None: "❔"}[c["meets"]]
         lines.append(f"          {mark} all together: holds ~{c['survives_users']}")
     for name in exp.get("untested") or []:
-        lines.append(f"          ❔ {escape(name)}: not load-tested (stale or unreachable)")
+        lines.append(f"          ❔ {escape(name)}: not load-tested "
+                     "(stale, failing or unreachable)")
     return lines
 
 
@@ -176,7 +178,7 @@ def render_journeys(result: dict) -> None:
     for j in result["journeys"]:
         name = escape(j["name"])
         if j["status"] != "ok":
-            label = "stale" if j["status"] == "stale" else "couldn't run"
+            label = LABELS.get(j["status"], j["status"])
             table.add_row(name, f"[yellow]{label}[/yellow]", "—",
                           f"[dim]{escape(j.get('reason') or '')}[/dim]")
             continue

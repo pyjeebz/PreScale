@@ -189,3 +189,59 @@ def test_ci_refuses_journey_writes_on_a_preview_host(monkeypatch, tmp_path):
                                    "--dir", _dir(tmp_path)])
     assert res.exit_code == 2
     assert "--allow-writes preview.example.com" in " ".join(res.output.split())
+
+
+# --- review fixes --------------------------------------------------------------------
+
+def _runs(outcomes):
+    runs = []
+    for name, status in outcomes:
+        j = parse({**BROWSE, "name": name})
+        c = JourneyCheck(j)
+        c.steps = [StepCheck(j.steps[0], status=status, problem=f"returned {status}"
+                             if status else "couldn't reach the app (ConnectError)")]
+        runs.append(JourneyRun(j, c))
+    return runs
+
+
+def test_an_app_that_doesnt_answer_fails_the_check_even_with_stale_warn(monkeypatch, tmp_path):
+    _wire(monkeypatch, raises=NoJourneyReplaysError(_runs([("a", None), ("b", 404)])))
+    res = _ci(tmp_path)
+    assert res.exit_code == 1
+    assert "::error::PreScale: a failed with a single user" in res.output
+
+
+def test_a_5xx_with_one_user_fails_the_check(monkeypatch, tmp_path):
+    _wire(monkeypatch, raises=NoJourneyReplaysError(_runs([("a", 500)])))
+    assert _ci(tmp_path).exit_code == 1
+    result = _journey_result()
+    result["journeys"][1] = {"name": "browse", "type": "browse", "weight": 60,
+                             "status": "error", "reason": "step 1 (home): returned 500"}
+    _wire(monkeypatch, result=result)
+    res = _ci(tmp_path)
+    assert res.exit_code == 1
+    assert "::error::PreScale: browse failed with a single user" in res.output
+
+
+def test_only_stale_follows_the_stale_policy(monkeypatch, tmp_path):
+    _wire(monkeypatch, raises=NoJourneyReplaysError(_runs([("a", 404)])))
+    assert _ci(tmp_path).exit_code == 0
+
+
+def test_comment_text_from_files_and_apps_cant_mention_render_html_or_break_code():
+    result = _journey_result(stale=True)
+    result["journeys"][1]["reason"] = "returned 422 for @octocat <img src=x> | ok"
+    result["journeys"][0]["culprit_step"]["route"] = "POST /a`b"
+    body = ci_mod.render_comment(result, _upload(mode="journeys"), target="t", sha=None)
+    assert "@octocat" not in body and "@​octocat" in body
+    assert "<img" not in body and "&lt;img src=x&gt;" in body
+    assert "\\| ok" in body
+    assert "`POST /a'b`" in body
+
+
+def test_refusals_are_annotated(monkeypatch, tmp_path):
+    _wire(monkeypatch, result=_journey_result())
+    res = CliRunner().invoke(cli, ["ci", "https://preview.example.com", "--target", "t",
+                                   "--dir", _dir(tmp_path)])
+    assert res.exit_code == 2
+    assert "::error::PreScale refused to replay the journeys" in res.output

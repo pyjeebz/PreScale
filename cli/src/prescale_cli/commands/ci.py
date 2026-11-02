@@ -39,8 +39,6 @@ from prescale_cli.live import ramp_progress
 from prescale_cli.loadtest import HostPolicyError, LoadError, default_levels, probe_host
 from prescale_cli.result import write_result
 
-_LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
-
 console = Console()
 
 
@@ -143,8 +141,16 @@ def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tupl
         raise SystemExit(2)
     if journeys:
         host = (httpx.URL(url).host or "").lower()
-        refuse_unallowed_writes(journeys, host, {h.lower() for h in allow_writes})
-        refuse_missing_env(journeys)
+        try:
+            refuse_unallowed_writes(journeys, host, {h.lower() for h in allow_writes})
+            refuse_missing_env(journeys)
+        except SystemExit:
+            _annotate("error", "PreScale refused to replay the journeys (see the log: "
+                               "journeys that change data need allow-writes for this host, "
+                               "and every {{env.NAME}} they read must be set).")
+            raise
+        if paths or os.environ.get("PRESCALE_PATHS"):
+            console.print("[dim]Journeys are replayed, so --path / paths are ignored.[/dim]")
 
     try:
         headers = parse_headers(header_values + tuple(_lines(os.environ.get("PRESCALE_HEADERS"))))
@@ -240,6 +246,13 @@ def _ci_journeys(journeys, url: str, *, target: str, ctx, creds, headers: dict[s
         body = render_stale_only(exc.runs, target=target)
         _publish(body, target=target, ctx=ctx, comment=comment, pr_number=pr_number,
                  github_token=github_token)
+        # Only "stale" (the app answered differently) follows --stale. An app that
+        # doesn't answer, or fails with a single user, fails the check like URL mode.
+        broken = [r.journey.name for r in exc.runs if r.check.outcome != "stale"]
+        if broken:
+            _annotate("error", f"PreScale: {', '.join(broken)} failed with a single user "
+                               "(no answer, or a 5xx), so nothing was load-tested.")
+            raise SystemExit(1)
         level = "error" if stale == "fail" else "warning"
         _annotate(level, "PreScale: no journey replays against this build, so nothing was "
                          "load-tested. Update the journey files if the app changed on purpose.")
@@ -252,7 +265,8 @@ def _ci_journeys(journeys, url: str, *, target: str, ctx, creds, headers: dict[s
         raise SystemExit(1) from None
     write_result(result, store=store)
 
-    stale_names = [j["name"] for j in result["journeys"] if j["status"] != "ok"]
+    stale_names = [j["name"] for j in result["journeys"] if j["status"] == "stale"]
+    broken = [j["name"] for j in result["journeys"] if j["status"] in ("error", "unreachable")]
     regressed = _report(result, url=url, target=target, ctx=ctx, creds=creds, comment=comment,
                         pr_number=pr_number, github_token=github_token,
                         fail_on_regression=fail_on_regression)
@@ -261,7 +275,10 @@ def _ci_journeys(journeys, url: str, *, target: str, ctx, creds, headers: dict[s
         what = ("replays against this build, so it wasn't" if len(stale_names) == 1
                 else "replay against this build, so they weren't")
         _annotate(level, f"PreScale: {', '.join(stale_names)} no longer {what} load-tested.")
-    if regressed or (stale_names and stale == "fail"):
+    if broken:
+        _annotate("error", f"PreScale: {', '.join(broken)} failed with a single user (no "
+                           "answer, or a 5xx), so they weren't load-tested.")
+    if regressed or broken or (stale_names and stale == "fail"):
         raise SystemExit(1)
 
 

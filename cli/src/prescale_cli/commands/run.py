@@ -22,6 +22,7 @@ from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refus
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.journeys.load import (
+    LABELS,
     JourneyRun,
     NoJourneyReplaysError,
     combined_block,
@@ -211,6 +212,9 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
                 journeys, url, config, latency_wall=latency_wall,
                 error_threshold=error_threshold, timeout=timeout, headers=headers,
                 replica=bool(app), as_json=as_json, combined=not no_combined)
+        except LoadError as exc:
+            (Console(stderr=True) if as_json else console).print(f"[red]Error:[/red] {exc}")
+            raise SystemExit(1)
         except NoJourneyReplaysError:
             (Console(stderr=True) if as_json else console).print(
                 "[red]Error:[/red] no journey replays against this app, so there's nothing "
@@ -386,8 +390,8 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
     """The isolation pass: check each journey once, then ramp each one that
     replays on its own; then, with two or more, the combined pass. Returns
     (report, result, live_mode) for the first journey to break, with every
-    journey's verdict in result["journeys"]. Raises NoJourneyReplaysError if every
-    journey is stale or unreachable. Shared by `run` and `ci`."""
+    journey's verdict in result["journeys"]. Raises NoJourneyReplaysError if no
+    journey replays, and LoadError if a ramp can't run. Shared by `run` and `ci`."""
     if not as_json:
         console.print(f"\n[bold]PreScale[/bold] — replaying {len(journeys)} "
                       f"journey{'s' if len(journeys) != 1 else ''} against [cyan]{url}[/cyan]")
@@ -401,7 +405,7 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
         name = escape(run.journey.name)
         if not run.check.ok:
             failed = run.check.failed
-            what = "stale" if run.check.stale else "couldn't run"
+            what = LABELS[run.check.outcome]
             out.print(f"[yellow]⚠ {name}: {what}, not load-tested[/yellow] "
                           f"[dim]({escape(failed.step.name)}: {escape(failed.problem or '')})"
                           "[/dim]", highlight=False)
@@ -411,16 +415,12 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
                           f"{len(run.journey.steps)} steps)[/dim]", highlight=False)
         progress = ramp_progress(console, latency_wall=latency_wall, as_json=as_json)
         live_mode = isinstance(progress, LiveRamp)
-        try:
-            with progress:
-                stages, run.warning = asyncio.run(ramp(
-                    run.journey, url, levels=levels, stage_seconds=config["stage_seconds"],
-                    timeout=timeout, max_rps=config["max_rps"], warmup=config["warmup"],
-                    repeat=config["repeat"], headers=headers, think=config["think_time_s"],
-                    progress_cb=progress.starting, on_stage=progress.finished))
-        except LoadError as exc:
-            out.print(f"[red]Error:[/red] {exc}")
-            raise SystemExit(1)
+        with progress:
+            stages, run.warning = asyncio.run(ramp(
+                run.journey, url, levels=levels, stage_seconds=config["stage_seconds"],
+                timeout=timeout, max_rps=config["max_rps"], warmup=config["warmup"],
+                repeat=config["repeat"], headers=headers, think=config["think_time_s"],
+                progress_cb=progress.starting, on_stage=progress.finished))
         run.report = analyze(stages, latency_wall=latency_wall,
                              error_threshold=error_threshold,
                              rate_capped=config["max_rps"] is not None)
@@ -446,17 +446,13 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
                           highlight=False)
         progress = ramp_progress(console, latency_wall=latency_wall, as_json=as_json)
         live_mode = isinstance(progress, LiveRamp)
-        try:
-            with progress:
-                stages, together_warning = asyncio.run(ramp(
-                    [r.journey for r in ramped], url, levels=levels,
-                    stage_seconds=config["stage_seconds"], timeout=timeout,
-                    max_rps=config["max_rps"], warmup=config["warmup"],
-                    repeat=config["repeat"], headers=headers, think=config["think_time_s"],
-                    progress_cb=progress.starting, on_stage=progress.finished))
-        except LoadError as exc:
-            out.print(f"[red]Error:[/red] {exc}")
-            raise SystemExit(1)
+        with progress:
+            stages, together_warning = asyncio.run(ramp(
+                [r.journey for r in ramped], url, levels=levels,
+                stage_seconds=config["stage_seconds"], timeout=timeout,
+                max_rps=config["max_rps"], warmup=config["warmup"],
+                repeat=config["repeat"], headers=headers, think=config["think_time_s"],
+                progress_cb=progress.starting, on_stage=progress.finished))
         together = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
                            rate_capped=config["max_rps"] is not None)
         result["combined"] = combined_block(together, runs)

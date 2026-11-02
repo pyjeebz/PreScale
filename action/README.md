@@ -93,6 +93,10 @@ If the checkout has journey files (`prescale/journeys/*.yaml`, see the main READ
           SHOP_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
 ```
 
+A journey that **no longer replays** (the app answers differently, e.g. a 404) is listed on the PR; `stale: fail` also fails the check. A journey that gets **no answer, or a 5xx with a single user**, always fails the check: that's the app broken or down, not a stale file. Response bodies never appear in the PR comment.
+
+Deploy workflows (`on: deployment_status`) that also check out the code replay journeys too. Journeys that change data then need the preview's host in `allow-writes`; preview hosts change per deploy, so prefer replica mode (`app:`) for journeys that write.
+
 ## How it works
 
 1. A pull request is pushed (replica mode) or a deploy finishes (`deployment_status`).
