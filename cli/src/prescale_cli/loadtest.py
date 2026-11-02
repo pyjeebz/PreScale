@@ -284,13 +284,15 @@ class SaturationInfo:
 
 class _Sink:
     """Per-stage accumulator, keyed by route label. A 5xx/429 is a failure;
-    everything else with a status code counts toward latency."""
+    everything else with a status code counts toward latency. Targets are URLs,
+    labelled by path; journeys pass their step labels as they are (`labels=False`)."""
 
-    def __init__(self) -> None:
+    def __init__(self, labels: bool = True) -> None:
         self.routes: dict[str, RouteStat] = {}
+        self._labels = labels
 
     def _stat(self, target: str) -> RouteStat:
-        label = route_label(target)
+        label = route_label(target) if self._labels else target
         stat = self.routes.get(label)
         if stat is None:
             stat = RouteStat()
@@ -389,8 +391,11 @@ _LAG_THRESHOLD_MS = 100.0
 
 async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
                      users: int, duration: float, gate: _RateGate | None = None,
-                     think_time: float = 0.0) -> StageResult:
-    sink = _Sink()
+                     think_time: float = 0.0, vu=None) -> StageResult:
+    """Hold USERS virtual users for DURATION. By default each fires requests at
+    TARGETS; VU, when given, is the virtual user itself: an async callable
+    (client, deadline, sink, gate) that records its own requests (journeys)."""
+    sink = _Sink(labels=vu is None)
     cycle = itertools.cycle(targets)  # round-robin spreads load evenly across routes
     loop = asyncio.get_running_loop()
     start = loop.time()
@@ -399,10 +404,13 @@ async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
     lags: list[float] = []
     watcher = asyncio.create_task(_watch_loop_lag(stop, lags))
     try:
-        await asyncio.gather(
-            *(_worker(client, method, deadline, sink, lambda: next(cycle), gate, think_time)
-              for _ in range(users))
-        )
+        if vu is not None:
+            await asyncio.gather(*(vu(client, deadline, sink, gate) for _ in range(users)))
+        else:
+            await asyncio.gather(
+                *(_worker(client, method, deadline, sink, lambda: next(cycle), gate, think_time)
+                  for _ in range(users))
+            )
     finally:
         stop.set()
         await watcher
@@ -485,13 +493,21 @@ async def run_loadtest(
     transport: httpx.AsyncBaseTransport | None = None,
     headers: dict[str, str] | None = None,
     host_permission: bool = False,
+    vu=None,
+    client_options: dict | None = None,
+    preflight: bool = True,
 ) -> tuple[list[StageResult], str | None]:
     """Preflight the target, then ramp through `levels`, spreading each stage's
     load across `targets`. Stops early once a stage is more than `hard_stop_rate`
     failed. Returns (stages, warning).
 
     A host that restricts load testing (Vercel, Netlify, Cloudflare) stops the run
-    after the preflight unless `host_permission` says the user has permission."""
+    after the preflight unless `host_permission` says the user has permission.
+
+    `vu` replaces the default virtual user (see `_run_stage`), and
+    `client_options` adds settings to the HTTP client. Journeys use both, and skip
+    the preflight (`preflight=False`): each journey was already replayed once, which
+    checks the app better than a request to targets[0]."""
     if not targets:
         raise LoadError("No targets to test.")
     max_conns = max(levels) + 50
@@ -501,35 +517,17 @@ async def run_loadtest(
     gate = _RateGate(max_rps) if max_rps else None
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, follow_redirects=True,
-        headers=client_headers(headers), transport=transport,
+        headers=client_headers(headers), transport=transport, **(client_options or {}),
     ) as client:
-        try:
-            preflight = await client.request(method, targets[0])
-        except httpx.HTTPError as exc:
-            raise LoadError(f"Couldn't reach {targets[0]}: {exc}") from exc
-        blocker = edge_blocker(preflight.headers)
-        if blocker:
-            # Load now would only measure the firewall, and deepen the block.
-            raise LoadError(
-                f"{_capitalize(blocker)} is blocking requests from this machine (it answered "
-                f"the first request with HTTP {preflight.status_code}), so a load test would "
-                f"only measure the firewall. {_INSTEAD}"
-            )
-        rule = detect_host(preflight.headers)
-        if rule and not host_permission:
-            raise HostPolicyError(rule)
-        if preflight.status_code >= 400:
-            warning = (
-                f"First request returned HTTP {preflight.status_code} — "
-                "results may reflect a broken endpoint, not a load limit."
-            )
+        if preflight:
+            warning = await _preflight(client, method, targets[0], host_permission)
 
         if warmup:
             # Discarded: warms caches/JIT/connection pools so the first measured
             # level isn't cold. Still rate-gated, since it's real traffic.
             warmup_users, warmup_seconds = _warmup_plan(levels, stage_seconds)
             await _run_stage(client, targets, method, warmup_users, warmup_seconds,
-                             gate, think_time)
+                             gate, think_time, vu)
 
         # --repeat pools several ramps per level, so run-to-run variance (cache
         # state, GC, noisy neighbours) widens the confidence band honestly.
@@ -539,7 +537,7 @@ async def run_loadtest(
                 if progress_cb:
                     progress_cb(users)
                 stage = await _run_stage(client, targets, method, users, stage_seconds,
-                                         gate, think_time)
+                                         gate, think_time, vu)
                 by_level.setdefault(users, []).append(stage)
                 if on_stage:
                     on_stage(stage)
@@ -548,6 +546,31 @@ async def run_loadtest(
 
     stages = [_merge_stages(by_level[u]) for u in sorted(by_level)]
     return stages, warning
+
+
+async def _preflight(client: httpx.AsyncClient, method: str, target: str,
+                     host_permission: bool) -> str | None:
+    """One request before any load: stop if a firewall already blocks us or the
+    host forbids load tests; return a warning if the target answers with an error."""
+    try:
+        first = await client.request(method, target)
+    except httpx.HTTPError as exc:
+        raise LoadError(f"Couldn't reach {target}: {exc}") from exc
+    blocker = edge_blocker(first.headers)
+    if blocker:
+        # Load now would only measure the firewall, and deepen the block.
+        raise LoadError(
+            f"{_capitalize(blocker)} is blocking requests from this machine (it answered "
+            f"the first request with HTTP {first.status_code}), so a load test would "
+            f"only measure the firewall. {_INSTEAD}"
+        )
+    rule = detect_host(first.headers)
+    if rule and not host_permission:
+        raise HostPolicyError(rule)
+    if first.status_code >= 400:
+        return (f"First request returned HTTP {first.status_code} — "
+                "results may reflect a broken endpoint, not a load limit.")
+    return None
 
 
 def open_client(*, timeout: float = 10.0, max_conns: int = 64,

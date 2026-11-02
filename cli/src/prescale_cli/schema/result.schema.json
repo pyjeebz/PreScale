@@ -45,6 +45,11 @@
         "replica": {
           "type": "boolean",
           "description": "True when PreScale started the app's own build locally (--app) and tested that, not a deployed host."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["journeys"],
+          "description": "\"journeys\" when the run replayed journeys (prescale/journeys/); absent for a URL run."
         }
       }
     },
@@ -61,6 +66,10 @@
         "onset_users": { "type": ["integer", "null"] },
         "onset_reason": { "type": ["string", "null"], "enum": ["errors", "latency", null] },
         "culprit_route": { "type": ["string", "null"] },
+        "culprit_journey": {
+          "type": ["string", "null"],
+          "description": "Journey runs: the journey that breaks first. The verdict, stages and culprit_route (a step's method and path) are that journey's."
+        },
         "bottleneck": { "type": ["string", "null"] },
         "saturated": { "type": "boolean" },
         "saturation_users": { "type": ["integer", "null"] },
@@ -83,6 +92,11 @@
         "git_commit": { "type": ["string", "null"] },
         "git_branch": { "type": ["string", "null"] }
       }
+    },
+    "journeys": {
+      "type": "array",
+      "description": "Present on journey runs: one entry per journey. Each journey that replays is ramped on its own; a stale or unreachable one isn't load-tested and carries the reason.",
+      "items": { "$ref": "#/$defs/journey" }
     },
     "investigation": {
       "type": "object",
@@ -123,6 +137,55 @@
     }
   },
   "$defs": {
+    "journey": {
+      "type": "object",
+      "required": ["name", "type", "weight", "status", "reason"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "weight": { "type": "number" },
+        "status": { "enum": ["ok", "stale", "unreachable"] },
+        "reason": { "type": ["string", "null"], "description": "Why a stale or unreachable journey wasn't load-tested." },
+        "survives_users": { "type": "integer" },
+        "max_tested": { "type": "integer" },
+        "onset_users": { "type": ["integer", "null"] },
+        "onset_reason": { "type": ["string", "null"], "enum": ["errors", "latency", null] },
+        "confidence": {
+          "type": "object",
+          "properties": {
+            "survives_low": { "type": ["integer", "null"] },
+            "survives_high": { "type": ["integer", "null"] },
+            "stable": { "type": "boolean" }
+          }
+        },
+        "culprit_step": {
+          "type": ["object", "null"],
+          "properties": {
+            "index": { "type": "integer", "description": "1-based step number." },
+            "name": { "type": "string" },
+            "route": { "type": "string" }
+          }
+        },
+        "bottleneck": { "type": ["string", "null"] },
+        "steps_at_users": { "type": ["integer", "null"], "description": "The level the step timings come from: where it broke, else the highest tested." },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "name", "route", "requests"],
+            "properties": {
+              "index": { "type": "integer" },
+              "name": { "type": "string" },
+              "route": { "type": "string" },
+              "requests": { "type": "integer" },
+              "p50_ms": { "type": ["integer", "null"] },
+              "p95_ms": { "type": ["integer", "null"] },
+              "error_rate": { "type": ["number", "null"] }
+            }
+          }
+        }
+      }
+    },
     "stage": {
       "type": "object",
       "required": [

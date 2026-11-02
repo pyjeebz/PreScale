@@ -94,7 +94,7 @@ From source: `git clone https://github.com/pyjeebz/PreScale.git && pip install .
 | [`run <url>`](#run--what-breaks-first) | Ramp traffic; report what breaks first and at what load |
 | [`investigate <url>`](#investigate--and-why) | …and *why* it breaks, plus how to fix it (`--app` to start your app first: [replica mode](#replica-mode--test-your-app-not-your-host)) |
 | [`audit <url>`](#audit--hygiene-no-load) | Load-free HTTP hygiene check (compression, caching, CDN, HTTP/2) |
-| [`journeys`](#journeys--your-users-real-paths) | List your journey files; `journeys verify <url>` checks they still replay |
+| [`journeys`](#journeys--your-users-real-paths) | List your journey files; `journeys verify <url>` checks they still replay. `run` replays them at load |
 | [`compare`](#ci--gate-on-capacity) | Capacity diff of two runs; regression gating for CI |
 | [`profiles`](#frame-it-as-a-launch) | Launch scenarios for `--profile` |
 | [`history` / `show`](#saved-runs-and-the-json-contract) | List and re-open saved runs |
@@ -198,10 +198,23 @@ prescale journeys verify http://localhost:3000     # replay each once, as one us
 
 `verify` stops at the first step that doesn't answer as expected and calls the journey **stale**: the app changed, or it's broken. It exits non-zero, so it works as a CI check.
 
+When `prescale/journeys/` has journeys, **`prescale run` replays them at load**: each virtual user walks a whole journey (logs in, adds to cart, orders), pauses for each step's `think` time, then starts again as a new user. Each journey is ramped on its own, so its verdict doesn't depend on any traffic mix, and the report names the journey and the step that break first:
+
+```
+                    Journeys (each ramped on its own)
+ Journey     Survives   Breaks at step                         Why
+ browse   400+ (held)   —
+ checkout ~20 (20–30)   3. place order  POST /api/carts/{{cart_id}}/order
+                                                    Server returned 5xx under load…
+```
+
+A stale journey isn't load-tested (a failure with no load says nothing about capacity); it's listed with the reason. `--journey NAME` picks journeys, and `--urls` (or `--path`, `--from-sitemap`) tests URLs instead.
+
 - `{{name}}` is a value an earlier step pulled out with `extract` (`body.<field>` or `header.<name>`); `{{unique.email}}` and `{{unique.id}}` are fresh each run; `{{env.NAME}}` reads an environment variable.
 - **Secrets never go in the file.** A literal password, token, API key or `Authorization` value is refused; use `{{env.NAME}}`.
 - Paths start with `/` and are relative to the URL you give (`http://host/app` + `/api/cart` is `http://host/app/api/cart`). A journey only calls that app: a request or redirect to another host fails the step.
-- Journeys that change data (POST, PUT, PATCH, DELETE) run against local hosts, or a host you name with `--allow-writes staging.myapp.com`. Types `side_effect` (emails, SMS, invites) and `destructive` are never replayed.
+- Journeys that change data (POST, PUT, PATCH, DELETE) run against local hosts, or a host you name with `--allow-writes staging.myapp.com` (on `verify` and `run`). Types `side_effect` (emails, SMS, invites) and `destructive` are never replayed.
+- Each run of a journey has its own cookies and extracted values, so one user's login never leaks to another.
 
 Try it on the example shop: `python examples/fragile-shop.py 8400`, then `SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys`.
 
