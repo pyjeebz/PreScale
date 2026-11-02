@@ -210,6 +210,15 @@ When `prescale/journeys/` has journeys, **`prescale run` replays them at load**:
 
 A stale journey isn't load-tested (a failure with no load says nothing about capacity); it's listed with the reason. `--journey NAME` picks journeys, and `--urls` (or `--path`, `--from-sitemap`) tests URLs instead.
 
+Then **all journeys run together**, each user picking a journey by its `weight` (defaults by type: browse 60, search 25, account 8, checkout 5, write 5, auth 2; edit them in the files). That catches **interference**: journeys competing for something they share. If a journey breaks with fewer of its own users than it held alone, the report says so:
+
+```
+Interference  checkout broke with only ~15 of its own users, but held ~20 alone.
+              It competes with quickbuy for something they share (a database pool, CPU, a cache).
+```
+
+`--no-combined` skips this pass. `--expect 500` says whether you'd hold 500 users at peak: in a journey run, each journey must hold its share of them (by weight) on its own, and all journeys together must hold 500.
+
 - `{{name}}` is a value an earlier step pulled out with `extract` (`body.<field>` or `header.<name>`); `{{unique.email}}` and `{{unique.id}}` are fresh each run; `{{env.NAME}}` reads an environment variable.
 - **Secrets never go in the file.** A literal password, token, API key or `Authorization` value is refused; use `{{env.NAME}}`.
 - Paths start with `/` and are relative to the URL you give (`http://host/app` + `/api/cart` is `http://host/app/api/cart`). A journey only calls that app: a request or redirect to another host fails the step.

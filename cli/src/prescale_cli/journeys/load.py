@@ -1,10 +1,14 @@
-"""Load-test journeys: the isolation pass.
+"""Load-test journeys: the isolation pass, then the combined pass.
 
 Each journey is first replayed once (`check`). A journey that fails there is
 stale or unreachable and isn't ramped: a failure with no load says nothing about
 capacity. Every journey that replays is then ramped on its own, so its verdict
 (how many users it survives, the step that breaks first, why) doesn't depend on
 any traffic mix. The run's overall verdict is the first journey to break.
+
+The combined pass then ramps all of them together, each user picking a journey
+by `weight`, to catch interference: journeys competing for something they share
+(a database pool, CPU, a cache), which no journey shows on its own.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from dataclasses import dataclass
 import httpx
 
 from prescale_cli.journeys.model import Journey
-from prescale_cli.journeys.replay import JourneyCheck, client_options, journey_vu
+from prescale_cli.journeys.replay import SEP, JourneyCheck, client_options, journey_vu
 from prescale_cli.loadtest import RunReport, StageResult, run_loadtest
 
 
@@ -32,14 +36,16 @@ class JourneyRun:
         return "stale" if self.check.stale else "unreachable"
 
 
-async def ramp(journey: Journey, base_url: str, *, levels: list[int], stage_seconds: float,
+async def ramp(journey: Journey | list[Journey], base_url: str, *, levels: list[int],
+               stage_seconds: float,
                timeout: float = 10.0, max_rps: float | None = None, warmup: bool = True,
                repeat: int = 1, headers: dict[str, str] | None = None,
                env: dict[str, str] | None = None, think: float = 0.0, progress_cb=None,
                on_stage=None, transport: httpx.AsyncBaseTransport | None = None,
                ) -> tuple[list[StageResult], str | None]:
-    """Ramp virtual users who each walk JOURNEY, through LEVELS. THINK is the
-    pause for steps without their own `think`."""
+    """Ramp virtual users who each walk JOURNEY, through LEVELS; given a list,
+    each walk picks one by weight (the combined pass). THINK is the pause for
+    steps without their own `think`."""
     return await run_loadtest(
         [base_url], levels=levels, stage_seconds=stage_seconds, timeout=timeout,
         max_rps=max_rps, warmup=warmup, repeat=repeat, headers=headers,
@@ -122,3 +128,49 @@ def _step_stats(index: int, step, stage: StageResult | None) -> dict:
         "p95_ms": round(stat.pct(0.95) * 1000) if has_latency else None,
         "error_rate": round(stat.error_rate, 4),
     }
+
+
+def combined_block(report: RunReport, runs: list[JourneyRun]) -> dict:
+    """The Result's `combined` field: the journeys ramped together by weight.
+    Users here are the total across journeys; each journey gets its weight's share.
+    If the journey that breaks first does so with fewer of its own users than it
+    held alone, something it shares with the others is the limit (interference)."""
+    ramped = [r for r in runs if r.report is not None]
+    total = sum(r.journey.weight for r in ramped)
+    share = {r.journey.name: r.journey.weight / total for r in ramped}
+    block: dict = {
+        "journeys": [r.journey.name for r in ramped],
+        "mix": {name: round(part * 100, 1) for name, part in share.items()},
+        "survives_users": report.survives_users,
+        "max_tested": report.max_tested,
+        "onset_users": report.onset_users,
+        "onset_reason": report.onset_reason,
+        "confidence": {"survives_low": report.survives_low,
+                       "survives_high": report.survives_high, "stable": report.stable},
+        "culprit_journey": None,
+        "culprit_step": None,
+        "bottleneck": report.bottleneck,
+        "interference": None,
+    }
+    if report.onset_users is None or not report.culprit_route or SEP not in report.culprit_route:
+        return block
+    name, label = report.culprit_route.split(SEP, 1)
+    run = next((r for r in ramped if r.journey.name == name), None)
+    if run is None:
+        return block
+    index = next((i for i, s in enumerate(run.journey.steps, 1) if s.label == label), None)
+    block["culprit_journey"] = name
+    if index is not None:
+        block["culprit_step"] = {"index": index, "name": run.journey.steps[index - 1].name,
+                                 "route": label}
+    users_of_it = report.onset_users * share[name]
+    alone = (run.report.survives_users if run.report.onset_users is not None
+             else run.report.max_tested)
+    if users_of_it < alone:
+        block["interference"] = {
+            "journey": name,
+            "users_at_break": round(users_of_it, 1),
+            "held_alone": alone,
+            "with": [r.journey.name for r in ramped if r.journey.name != name],
+        }
+    return block

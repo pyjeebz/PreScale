@@ -21,7 +21,13 @@ from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
-from prescale_cli.journeys.load import JourneyRun, first_to_break, journeys_block, ramp
+from prescale_cli.journeys.load import (
+    JourneyRun,
+    combined_block,
+    first_to_break,
+    journeys_block,
+    ramp,
+)
 from prescale_cli.journeys.model import Journey, load_dir
 from prescale_cli.journeys.replay import check
 from prescale_cli.live import LiveRamp, ramp_progress
@@ -89,6 +95,10 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
               help="Frame the run as a launch scenario (see `prescale profiles`).")
 @click.option("--journey", "only", multiple=True,
               help="Replay only this journey (repeatable). See `prescale journeys`.")
+@click.option("--no-combined", "no_combined", is_flag=True,
+              help="Skip ramping all journeys together (by weight) after each one alone.")
+@click.option("--expect", "expect", default=None, type=click.IntRange(min=1), metavar="N",
+              help="Users you expect at peak; the verdict says whether you'd hold them.")
 @click.option("--urls", "urls_only", is_flag=True,
               help="Test URLs, not journeys, even when prescale/journeys/ has some.")
 @click.option("--allow-writes", "allow_writes", multiple=True, metavar="HOST",
@@ -106,7 +116,8 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         repeat: int, think_time: float,
         ignore_robots: bool, yes: bool, as_json: bool, html_path: str | None,
         store: str | None, no_save: bool, fail_under: int | None,
-        profile_name: str | None, only: tuple[str, ...], urls_only: bool,
+        profile_name: str | None, only: tuple[str, ...], no_combined: bool,
+        expect: int | None, urls_only: bool,
         allow_writes: tuple[str, ...], directory: Path, app: str | None,
         app_timeout: float, host_permission: bool, headers: dict[str, str],
         upload: bool) -> None:
@@ -190,13 +201,13 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
         "profile": prof.name if prof else None,
     }
     finish = dict(prof=prof, no_save=no_save, store=store, html_path=html_path,
-                  as_json=as_json, upload=upload, fail_under=fail_under)
+                  as_json=as_json, upload=upload, fail_under=fail_under, expect=expect)
 
     if journeys:
         report, result, live_mode = _run_journeys(
             journeys, url, config, latency_wall=latency_wall,
             error_threshold=error_threshold, timeout=timeout, headers=headers,
-            replica=bool(app), as_json=as_json)
+            replica=bool(app), as_json=as_json, combined=not no_combined)
         _finish(result, report, live_mode=live_mode, **finish)
         return
 
@@ -259,8 +270,10 @@ def run(url: str, paths: tuple[str, ...], from_sitemap: bool, max_users: int,
 
 def _finish(result: dict, report, *, prof, no_save: bool, store: str | None,
             html_path: str | None, as_json: bool, upload: bool, fail_under: int | None,
-            live_mode: bool) -> None:
+            live_mode: bool, expect: int | None = None) -> None:
     """Save, render, upload and gate a finished run (URLs or journeys alike)."""
+    if expect is not None:
+        result["expect"] = expect_block(result, expect)
     if prof is not None:
         result["profile"] = scenario_block(prof, report.survives_users)
     saved_path = None if no_save else write_result(result, store=store)
@@ -286,6 +299,46 @@ def _finish(result: dict, report, *, prof, no_save: bool, store: str | None,
         Console(stderr=True).print(
             f"[red]✗ fail-under:[/red] survives ~{report.survives_users} < {fail_under}")
         raise SystemExit(1)
+
+
+def _meets(survives: int, held_all: bool, users: float) -> bool | None:
+    """True if it held USERS; None if it held everything tested but we never
+    tested that many; False if it broke below them."""
+    if survives >= users:
+        return True
+    return None if held_all else False
+
+
+def expect_block(result: dict, users: int) -> dict:
+    """Whether the run holds the USERS you expect at peak.
+
+    A URL run compares its verdict. A journey run splits USERS across journeys
+    by weight: each journey must hold its share on its own, and all journeys
+    together (if they were ramped together) must hold USERS. It meets the
+    expectation only if every one of those does."""
+    v = result["verdict"]
+    journeys = [j for j in (result.get("journeys") or []) if j["status"] == "ok"]
+    if not journeys:
+        return {"users": users, "meets": _meets(v["survives_users"],
+                                                v["onset_users"] is None, users),
+                "survives_users": v["survives_users"], "journeys": None, "combined": None}
+    total = sum(j["weight"] for j in journeys)
+    per = []
+    for j in journeys:
+        share = users * j["weight"] / total
+        per.append({"name": j["name"], "users": round(share, 1),
+                    "survives_users": j["survives_users"],
+                    "meets": _meets(j["survives_users"], j["onset_users"] is None, share)})
+    checks = [p["meets"] for p in per]
+    combined = None
+    if result.get("combined"):
+        c = result["combined"]
+        combined = {"survives_users": c["survives_users"],
+                    "meets": _meets(c["survives_users"], c["onset_users"] is None, users)}
+        checks.append(combined["meets"])
+    meets = False if False in checks else (None if None in checks else True)
+    return {"users": users, "meets": meets, "survives_users": v["survives_users"],
+            "journeys": per, "combined": combined}
 
 
 def _journeys_to_run(directory: Path, only: tuple[str, ...], *, urls_only: bool,
@@ -317,7 +370,7 @@ def _journeys_to_run(directory: Path, only: tuple[str, ...], *, urls_only: bool,
 
 def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wall: float,
                   error_threshold: float, timeout: float, headers: dict[str, str],
-                  replica: bool, as_json: bool) -> tuple:
+                  replica: bool, as_json: bool, combined: bool = True) -> tuple:
     """The isolation pass: check each journey once, then ramp each one that
     replays on its own. Returns (report, result, live_mode) for the first
     journey to break, with every journey's verdict in result["journeys"]."""
@@ -372,6 +425,29 @@ def _run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wa
     result["verdict"]["culprit_journey"] = (worst.journey.name
                                             if worst.report.onset_users is not None else None)
     result["journeys"] = journeys_block(runs)
+
+    ramped = [r for r in runs if r.report is not None]
+    if combined and len(ramped) > 1:
+        if not as_json:
+            mix = ", ".join(f"{escape(r.journey.name)} {r.journey.weight:g}" for r in ramped)
+            console.print(f"\n[bold]All journeys together[/bold] [dim](by weight: {mix})[/dim]",
+                          highlight=False)
+        progress = ramp_progress(console, latency_wall=latency_wall, as_json=as_json)
+        live_mode = isinstance(progress, LiveRamp)
+        try:
+            with progress:
+                stages, _ = asyncio.run(ramp(
+                    [r.journey for r in ramped], url, levels=levels,
+                    stage_seconds=config["stage_seconds"], timeout=timeout,
+                    max_rps=config["max_rps"], warmup=config["warmup"],
+                    repeat=config["repeat"], headers=headers, think=config["think_time_s"],
+                    progress_cb=progress.starting, on_stage=progress.finished))
+        except LoadError as exc:
+            out.print(f"[red]Error:[/red] {exc}")
+            raise SystemExit(1)
+        together = analyze(stages, latency_wall=latency_wall, error_threshold=error_threshold,
+                           rate_capped=config["max_rps"] is not None)
+        result["combined"] = combined_block(together, runs)
     return worst.report, result, live_mode
 
 

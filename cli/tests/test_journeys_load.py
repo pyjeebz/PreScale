@@ -220,7 +220,9 @@ def _fake_checks(monkeypatch, stale_names=()):
         return out
 
     async def fake_ramp(journey, url, *, levels, **kwargs):
-        routes = {s.label: RouteStat(total=10, latencies=[0.01] * 10) for s in journey.steps}
+        mix = journey if isinstance(journey, list) else [journey]
+        routes = {(f"{j.name} › " if len(mix) > 1 else "") + s.label:
+                  RouteStat(total=10, latencies=[0.01] * 10) for j in mix for s in j.steps}
         return [StageResult(users=u, duration=1.0, routes=dict(routes)) for u in levels], None
 
     monkeypatch.setattr(run_cmd, "_check_all", fake_check_all)
@@ -258,3 +260,103 @@ def test_run_applies_think_time_to_steps_without_their_own(tmp_path, monkeypatch
                                    "--dir", _dir(tmp_path, BROWSE)])
     assert res.exit_code == 0, res.output
     assert seen == {"browse": 1.5}
+
+
+# --- the combined pass and --expect ------------------------------------------------
+
+def test_mixed_users_pick_journeys_by_weight_and_label_steps_by_journey():
+    import random
+
+    from prescale_cli.journeys.replay import journey_vu
+    from prescale_cli.loadtest import _Sink
+
+    heavy = parse({**BROWSE, "name": "heavy", "weight": 9})
+    light = parse({**BROWSE, "name": "light", "weight": 1,
+                   "steps": [{"request": {"path": "/light"}}]})
+    vu = journey_vu([heavy, light], "http://shop.test", env={}, rng=random.Random(7))
+    sink = _Sink(labels=False)
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200))) as c:
+            await vu(c, asyncio.get_running_loop().time() + 0.2, sink)
+    asyncio.run(go())
+    counts = {label: stat.total for label, stat in sink.routes.items()}
+    assert set(counts) == {"heavy › GET /", "light › GET /light"}
+    assert counts["heavy › GET /"] > 4 * counts["light › GET /light"]
+
+
+def _report(survives, onset, culprit=None, max_tested=100):
+    from prescale_cli.loadtest import RunReport
+    return RunReport(stages=[], survives_users=survives, max_tested=max_tested,
+                     onset_users=onset, onset_reason="errors" if onset else None,
+                     culprit_route=culprit, survives_low=survives, survives_high=survives)
+
+
+def test_combined_block_flags_interference():
+    from prescale_cli.journeys.load import combined_block
+    checkout = parse({**SHOP, "weight": 1})
+    search = parse({**BROWSE, "name": "search", "weight": 3})
+    runs = [JourneyRun(checkout, None, report=_report(40, 50, "POST /api/orders")),
+            JourneyRun(search, None, report=_report(100, None))]
+    # together: breaks at 60 users in total, at checkout's order step.
+    # checkout had only 60 * 1/4 = 15 of its own users there, but held 40 alone.
+    block = combined_block(_report(50, 60, "checkout › POST /api/orders"), runs)
+    assert block["mix"] == {"checkout": 25.0, "search": 75.0}
+    assert block["culprit_journey"] == "checkout"
+    assert block["culprit_step"] == {"index": 2, "name": "place order",
+                                     "route": "POST /api/orders"}
+    assert block["interference"] == {"journey": "checkout", "users_at_break": 15.0,
+                                     "held_alone": 40, "with": ["search"]}
+    # breaking with more of its own users than it held alone is not interference
+    calm = combined_block(_report(150, 200, "checkout › POST /api/orders"), runs)
+    assert calm["interference"] is None
+    held = combined_block(_report(100, None), runs)
+    assert held["culprit_journey"] is None and held["interference"] is None
+
+
+def test_expect_splits_users_across_journeys_by_weight():
+    from prescale_cli.commands.run import expect_block
+    result = {
+        "verdict": {"survives_users": 20, "onset_users": 30},
+        "journeys": [
+            {"name": "browse", "status": "ok", "weight": 60, "survives_users": 400,
+             "onset_users": None},
+            {"name": "checkout", "status": "ok", "weight": 5, "survives_users": 20,
+             "onset_users": 30},
+            {"name": "old", "status": "stale", "weight": 5},
+        ],
+        "combined": {"survives_users": 400, "onset_users": None},
+    }
+    exp = expect_block(result, 300)
+    assert exp["meets"] is False
+    assert [(j["name"], j["users"], j["meets"]) for j in exp["journeys"]] == [
+        ("browse", 276.9, True), ("checkout", 23.1, False)]
+    assert exp["combined"] == {"survives_users": 400, "meets": True}
+    # fewer expected users: checkout's share (~7.7) fits under the 20 it held
+    assert expect_block(result, 100)["meets"] is True
+    # more users than were ever tested on a journey that never broke: unknown
+    assert expect_block(result, 6000)["journeys"][0]["meets"] is None
+
+
+def test_expect_on_a_url_run():
+    from prescale_cli.commands.run import expect_block
+    broke = {"verdict": {"survives_users": 90, "onset_users": 100}}
+    assert expect_block(broke, 50)["meets"] is True
+    assert expect_block(broke, 200)["meets"] is False
+    held = {"verdict": {"survives_users": 200, "onset_users": None}}
+    assert expect_block(held, 500)["meets"] is None
+
+
+def test_run_combined_pass_and_expect_end_to_end(tmp_path, monkeypatch):
+    _fake_checks(monkeypatch)
+    res = CliRunner().invoke(cli, ["run", "http://localhost:1", "--json", "--no-save",
+                                   "-u", "5", "--expect", "4",
+                                   "--dir", _dir(tmp_path, SHOP, BROWSE)])
+    assert res.exit_code == 0, res.output
+    result = json.loads(res.stdout)
+    assert result["combined"]["mix"] == {"browse": 92.3, "checkout": 7.7}
+    assert result["expect"]["meets"] is True
+    res = CliRunner().invoke(cli, ["run", "http://localhost:1", "--json", "--no-save",
+                                   "-u", "5", "--no-combined",
+                                   "--dir", _dir(tmp_path, SHOP, BROWSE)])
+    assert "combined" not in json.loads(res.stdout)
