@@ -80,6 +80,10 @@ The root object has the following properties. Fields marked **required** must be
   </Expandable>
 </ResponseField>
 
+<ResponseField name="fix_prompt" type="string | null">
+  Present with `investigation`: plain text for a coding agent (Claude Code, Cursor) with where it broke, at how many users, the diagnosis, the evidence and the fixes. Built from the result itself, with no model; never includes response bodies, secrets or credentials from the URL.
+</ResponseField>
+
 <ResponseField name="investigation" type="object">
   Root-cause diagnosis. Present only when `prescale investigate` ran. See [investigation fields](#investigation-fields) below.
 </ResponseField>

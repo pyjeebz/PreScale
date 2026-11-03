@@ -169,6 +169,8 @@ Try this
 
 With journeys in `prescale/journeys/`, `investigate` diagnoses the journey step that breaks first instead, reaching it the way a user does (logged in, cart filled): `culprit checkout, step 3 place order`. The journey's other steps play the part of the static assets. `--urls` investigates URLs.
 
+Every diagnosis ends with a **fix prompt**, plain text to paste into your coding agent (`--json | jq -r .fix_prompt`); the PR comment folds it under the diagnosis.
+
 ### `journeys` — your users' real paths
 
 A journey is a path a user takes through your app (log in, add to cart, place an order), saved as the requests it makes. Journeys live in your repo as `prescale/journeys/<name>.yaml`:

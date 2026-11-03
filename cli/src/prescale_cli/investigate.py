@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from prescale_cli.audit import _CDN_MARKERS, AuditError, extract_assets, run_audit
+from prescale_cli.fixprompt import fix_prompt
 from prescale_cli.loadtest import (
     analyze,
     build_targets,
@@ -347,6 +348,7 @@ async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
             "remediation": remediate(diag, stack),
             "stack": stack,
         }
+        result["fix_prompt"] = fix_prompt(result)
 
     if profile is not None:
         result["profile"] = scenario_block(profile, report.survives_users)

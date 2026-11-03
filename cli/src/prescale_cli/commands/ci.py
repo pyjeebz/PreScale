@@ -241,7 +241,7 @@ def _ci_journeys(journeys, url: str, *, target: str, ctx, creds, headers: dict[s
     try:
         _, result, _ = run_journeys(journeys, url, config, latency_wall=2.0,
                                     error_threshold=0.02, timeout=10.0, headers=headers,
-                                    replica=replica, as_json=False)
+                                    replica=replica, as_json=False, diagnose=True)
     except NoJourneyReplaysError as exc:
         body = render_stale_only(exc.runs, target=target)
         _publish(body, target=target, ctx=ctx, comment=comment, pr_number=pr_number,

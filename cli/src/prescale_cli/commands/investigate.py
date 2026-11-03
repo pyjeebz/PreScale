@@ -24,7 +24,7 @@ from prescale_cli.journeys.load import NoJourneyReplaysError
 from prescale_cli.live import LiveRamp, ramp_progress
 from prescale_cli.loadtest import LoadError
 from prescale_cli.profiles import PROFILES, lookup, scenario_block
-from prescale_cli.render import render_investigation, render_terminal
+from prescale_cli.render import render_fix_prompt, render_investigation, render_terminal
 from prescale_cli.result import latest_id, load_result, write_result
 
 console = Console()
@@ -214,6 +214,7 @@ def _show(result: dict, *, as_json: bool, live_mode: bool, upload: bool,
     else:
         render_terminal(result, show_ramp=not live_mode)
         render_investigation(result)
+        render_fix_prompt(result)
         if result.get("audit"):
             console.print("\n[bold]HTTP hygiene[/bold]")
             for finding in result["audit"]:
