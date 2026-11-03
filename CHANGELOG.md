@@ -39,6 +39,13 @@
   pinned older `prescale-version` keeps working). Until the dashboard compares journey runs only
   with journey baselines, a journey run's PR comment shows no change instead of a possibly
   misleading one, and never fails on it.
+- **How many at once, and one-at-a-time bottlenecks.** For the journey step that breaks first,
+  `investigate` now counts how many requests it serves at once (its most completions per second
+  times its 1-user time, once those completions stop rising while users keep rising) and says so:
+  "~25 requests served at once" is often the pool or worker count you're hitting. About one at a
+  time gets a new class, `serialized`: a lock on one shared row (one product's stock in a flash
+  sale), a global lock, or a single worker, with fixes for each. The example shop has a
+  `flash-sale` journey that PreScale names this way.
 - **A fix prompt for your coding agent.** Every diagnosis now comes with `fix_prompt`: plain
   text that says where it broke, at how many users, the likely cause, the evidence and the
   fixes, and asks the agent for the smallest fix and to re-run PreScale to confirm. It's built

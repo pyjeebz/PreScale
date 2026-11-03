@@ -387,6 +387,8 @@ async def _worker(client: httpx.AsyncClient, method: str, deadline: float,
 # Loop-lag sampling: a short sleep that wakes this late means the CLI is CPU-bound.
 _LAG_INTERVAL_S = 0.05
 _LAG_THRESHOLD_MS = 100.0
+# Loop lag at or above this means PreScale's own machine, not the target, was the limit.
+LAG_THRESHOLD_MS = _LAG_THRESHOLD_MS
 
 
 async def _run_stage(client: httpx.AsyncClient, targets: list[str], method: str,
