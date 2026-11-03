@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 
 from prescale_cli.bars import bar_rows, route_rows
+from prescale_cli.fixprompt import redact_query
 from prescale_cli.journeys.load import LABELS
 from prescale_cli.throughput import VISITOR_NOTE, capacity_rps, visitors_for
 
@@ -402,4 +403,5 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
     if target_info.get("verified") is False:
         notes.append(f"{target} isn't verified yet, so runs can't be signed off.")
     lines += ["", f"<sub>PreScale{' · ' + ' '.join(notes) if notes else ''}</sub>"]
-    return "\n".join(lines) + "\n"
+    # Routes can carry tokens in their query (a preview's bypass, ?token=): never on a PR.
+    return redact_query("\n".join(lines)) + "\n"

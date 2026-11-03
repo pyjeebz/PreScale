@@ -298,8 +298,10 @@ def _diagnosis_html(result: dict) -> str:
     if prompt:
         parts.append(
             '<div class="lbl" style="margin-top:12px">Fix prompt for your coding agent</div>'
-            '<div class="prompt"><button type="button" onclick="navigator.clipboard.writeText('
-            "this.nextElementSibling.textContent);this.textContent='Copied'\">Copy</button>"
+            '<div class="prompt"><button type="button" onclick="var b=this;'
+            "navigator.clipboard.writeText(b.nextElementSibling.textContent).then("
+            "function(){b.textContent='Copied'},function(){b.textContent='Select and copy'})"
+            '">Copy</button>'
             f"<pre>{_esc(prompt)}</pre></div>")
     return ('<div class="section"><h3>Diagnosis</h3><div class="cause">'
             + "".join(parts) + "</div></div>")
