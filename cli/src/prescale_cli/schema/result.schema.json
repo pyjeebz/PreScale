@@ -141,6 +141,23 @@
       "description": "Present when `prescale investigate` diagnosed a failure.",
       "properties": {
         "culprit_route": { "type": "string" },
+        "culprit_journey": {
+          "type": ["string", "null"],
+          "description": "Journey runs: the journey whose step broke first."
+        },
+        "culprit_step": {
+          "type": ["object", "null"],
+          "description": "Journey runs: the step that broke first.",
+          "properties": {
+            "index": { "type": "integer", "description": "1-based." },
+            "name": { "type": "string" },
+            "route": { "type": "string" }
+          }
+        },
+        "interference": {
+          "type": ["object", "null"],
+          "description": "Journey runs: set when the combined run starved the culprit journey (same shape as combined.interference)."
+        },
         "bottleneck_class": { "type": "string" },
         "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
         "summary": { "type": "string" },

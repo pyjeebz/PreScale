@@ -70,6 +70,22 @@ Try this
   </Step>
 </Steps>
 
+## Journeys
+
+When your repo has journeys in `prescale/journeys/`, `investigate` ramps them the way `prescale run` does, then diagnoses **the journey step that breaks first**. The step is probed with the journey's own state: its 1-user latency comes from replaying the journey from the start (log in, add to cart, then place the order), so a step that needs a token or a cart id is measured the way a real user reaches it. The journey's other steps play the part static assets play for URLs: if they held while this step failed, the limit is something this step uses, such as a database pool.
+
+```text
+🔬 Diagnosis
+Likely cause: 5xx under load while the journey's other steps held — the app/backend is the wall (often a DB or upstream pool).
+Bottleneck  connection_pool (high confidence)  ·  culprit checkout, step 3 place order (POST /api/carts/{{cart_id}}/order)
+Evidence
+  • culprit p95 123ms at 1 user vs 178ms at 50 users
+  • the journey's other steps (log in, add to cart) held at 50 users
+  • errors under load: 5xx (25)
+```
+
+If the journeys ramped together starved the culprit journey (it broke with fewer of its own users than it held alone), the evidence says so too. `--urls` investigates URLs instead.
+
 ## Options
 
 <ParamField path="url" type="string">
@@ -122,6 +138,26 @@ Try this
 
 <ParamField query="--fail-under N" type="integer">
   Exit with a non-zero status code if the app survives fewer than N concurrent users. Use this as a CI gate alongside `--i-own-this` and `--json`.
+</ParamField>
+
+<ParamField query="--journey NAME" type="string">
+  Investigate only this journey (repeatable). Default: every journey in `prescale/journeys/`.
+</ParamField>
+
+<ParamField query="--no-combined" type="boolean" default="false">
+  Skip ramping the journeys together, so there's no interference check.
+</ParamField>
+
+<ParamField query="--urls" type="boolean" default="false">
+  Investigate URLs even when `prescale/journeys/` has journeys.
+</ParamField>
+
+<ParamField query="--allow-writes HOST" type="string">
+  Let journeys that change data (POST, PUT, PATCH, DELETE) run against this non-local host, e.g. a staging host. Repeatable. Without it, such journeys only run against local hosts.
+</ParamField>
+
+<ParamField query="--dir DIR" type="string" default="prescale/journeys">
+  Where the journey files are.
 </ParamField>
 
 ## Safety
