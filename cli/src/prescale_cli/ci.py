@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 
 from prescale_cli.bars import bar_rows, route_rows
+from prescale_cli.journeys.load import LABELS
 from prescale_cli.throughput import VISITOR_NOTE, capacity_rps, visitors_for
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -181,11 +182,91 @@ def render_host_skip(rule, *, target: str) -> str:
     ])
 
 
+def comparison_for(result: dict, upload: dict) -> dict | None:
+    """The dashboard's comparison, if it compared like with like. A journey run is
+    only comparable with a journey baseline; a dashboard that doesn't say which
+    kind of run it compared against (`mode`) may have used a URL run, so its
+    comparison isn't trusted for journey runs (never a false regression)."""
+    comparison = upload.get("comparison")
+    if not comparison:
+        return None
+    if _mode(result) == "journeys" and comparison.get("mode") != "journeys":
+        return None
+    return comparison
+
+
+def _mode(result: dict) -> str:
+    return (result.get("config") or {}).get("mode") or "urls"
+
+
+def _cell(text) -> str:
+    """Text from journey files or the app, safe in a PR comment: it can't break the
+    table, render HTML, or @mention (and so notify) anyone."""
+    return (str(text).replace("|", "\\|").replace("\n", " ").replace("<", "&lt;")
+            .replace(">", "&gt;").replace("@", "@\u200b"))
+
+
+def _code(text) -> str:
+    """TEXT as inline code that a backtick inside can't break out of."""
+    return "`" + _cell(text).replace("`", "'") + "`"
+
+
+def render_journeys(result: dict) -> list[str]:
+    """Journey runs: each journey's verdict, the stale ones, and interference."""
+    journeys = result.get("journeys") or []
+    if not journeys:
+        return []
+    lines = ["", "**Journeys** <sub>(each ramped on its own)</sub>", "",
+             "| journey | survives | breaks at step | why |", "|---|---:|---|---|"]
+    stale = []
+    for j in journeys:
+        if j["status"] != "ok":
+            stale.append(j)
+            continue
+        survives = (f"{j['max_tested']}+ (held)" if j["onset_users"] is None
+                    else f"~{j['survives_users']}")
+        step = j.get("culprit_step")
+        where = f"{step['index']}. {_cell(step['name'])} {_code(step['route'])}" if step else "—"
+        lines.append(f"| {_cell(j['name'])} | {survives} | {where} | "
+                     f"{_cell(j.get('bottleneck') or '')} |")
+    if stale:
+        lines += ["", "**Not load-tested** (they don't replay against this build, so the app "
+                      "changed or it's broken; update the journey files if the change was on "
+                      "purpose):"]
+        lines += [f"- ⚠️ **{_cell(j['name'])}** ({j['status']}): {_cell(j.get('reason') or '')}"
+                  for j in stale]
+    inter = (result.get("combined") or {}).get("interference")
+    if inter:
+        lines += ["", f"**Interference:** {_cell(inter['journey'])} broke with "
+                      f"{inter['users_at_break']} of its own users, but held "
+                      f"{inter['held_alone']} alone. It competes with "
+                      f"{_cell(', '.join(inter['with']))} for something they share "
+                      "(a database pool, CPU, a cache)."]
+    return lines
+
+
+def render_stale_only(runs, *, target: str) -> str:
+    """The PR comment when no journey replays, so nothing was load-tested."""
+    lines = [comment_marker(target), "### ⚠️ PreScale: no journey replays against this build", "",
+             "Every journey failed with a single user, so there's no capacity to measure. "
+             "If the app changed on purpose, update the journey files (`prescale journeys "
+             "verify` shows what changed); if not, it's a bug.", ""]
+    for run in runs:
+        failed = run.check.failed
+        index = run.check.steps.index(failed) + 1 if failed else "?"
+        what = LABELS[run.check.outcome]
+        lines.append(f"- **{_cell(run.journey.name)}** ({what}): step {index} "
+                     f"({_cell(failed.step.name if failed else '?')}): "
+                     f"{_cell(failed.problem if failed else '')}")
+    return "\n".join(lines) + "\n"
+
+
 def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) -> str:
     """The PR comment: the change vs baseline, what breaks first, why, the fix."""
     verdict = result["verdict"]
     conf = verdict.get("confidence") or {}
-    comparison = upload.get("comparison")
+    comparison = comparison_for(result, upload)
+    unmatched = comparison is None and bool(upload.get("comparison"))
     target_info = upload.get("target") or {}
     baseline_branch = target_info.get("baselineBranch") or "main"
     tested_host = result["target"].get("host") or result["target"]["url"]
@@ -238,13 +319,20 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
             lines += ["", "The confidence bands overlap, so this may be noise. Another run "
                           "will confirm or clear it."]
     else:
-        lines.append(f"### ⚪ First capacity run: survives {survives}")
+        title = "Capacity" if unmatched else "First capacity run"
+        lines.append(f"### ⚪ {title}: survives {survives}")
         lines.append(f"`{tested_host}` · **{target}**")
         if rps:
             lines += ["", f"That's ≈ {rps:,.0f} req/s, roughly {visitors_for(rps):,} real "
                           f"visitors. <sub>Visitors assume {VISITOR_NOTE}.</sub>"]
-        lines += ["", f"No `{baseline_branch}` baseline yet. Later pushes to this PR compare "
-                      f"with this run; once `{baseline_branch}` has a run, PRs compare with it."]
+        if unmatched:
+            lines += ["", "This run replayed journeys. The baseline it would be compared with "
+                          "may have tested URLs, which measures something else, so no change is "
+                          "shown."]
+        else:
+            lines += ["", f"No `{baseline_branch}` baseline yet. Later pushes to this PR "
+                          f"compare with this run; once `{baseline_branch}` has a run, PRs "
+                          "compare with it."]
 
     investigation = result.get("investigation")
     lines.append("")
@@ -252,7 +340,9 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
         lines.append(f"**Held:** {_onset(verdict)} without crossing a failure threshold.")
     else:
         culprit = verdict.get("culprit_route")
-        lines.append(f"**Breaks first:** `{culprit}` · {_onset(verdict)}" if culprit
+        journey = verdict.get("culprit_journey")
+        where = f"{_cell(journey)} › {_code(culprit)}" if journey and culprit else _code(culprit)
+        lines.append(f"**Breaks first:** {where} · {_onset(verdict)}" if culprit
                      else f"**Breaks first:** {_onset(verdict)}")
         if investigation:
             lines.append(f"**Why:** `{investigation['bottleneck_class']}` "
@@ -266,6 +356,8 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
         if stage and len(stage.get("routes") or {}) > 1:
             caption = f"p95 per route at {stage['users']} users · ┆ = the {wall:g}s latency wall"
             lines += ["", f"<sub>{caption}</sub>", "", "```text", *route_rows(stage, wall), "```"]
+
+    lines += render_journeys(result)
 
     links = [f"[Open the run]({upload['url']})"] if upload.get("url") else []
     if target_info.get("url"):

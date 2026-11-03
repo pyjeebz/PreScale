@@ -25,7 +25,14 @@ from typing import Any
 
 import httpx
 
-from prescale_cli.journeys.model import Journey, Step, TemplateError, fresh_uniques, render
+from prescale_cli.journeys.model import (
+    SENSITIVE_KEY,
+    Journey,
+    Step,
+    TemplateError,
+    fresh_uniques,
+    render,
+)
 from prescale_cli.loadtest import client_headers
 
 _SNIPPET = 160
@@ -76,8 +83,11 @@ class StepCheck:
     status: int | None = None
     latency: float = 0.0
     ok: bool = False
-    problem: str | None = None   # why it failed, in plain words
+    problem: str | None = None   # why it failed, in plain words (no response body)
     kind: str | None = None      # a short failure kind for load reports
+    # The start of the response body, secrets masked. Shown in a local terminal
+    # only: never in CI output, a PR comment or an uploaded Result.
+    snippet: str | None = None
     headers: httpx.Headers | None = None
 
 
@@ -95,10 +105,20 @@ class JourneyCheck:
         return next((s for s in self.steps if not s.ok), None)
 
     @property
-    def stale(self) -> bool:
-        """The app answered, but not the way the journey expects."""
+    def outcome(self) -> str:
+        """ok; stale (the app answered, but not as the journey expects, e.g. a
+        404: the app changed); error (a 5xx with a single user: the app is
+        broken); unreachable (no answer at all)."""
         failed = self.failed
-        return failed is not None and failed.status is not None
+        if failed is None and self.ok:
+            return "ok"
+        if failed is None or failed.status is None:
+            return "unreachable"
+        return "error" if failed.status >= 500 else "stale"
+
+    @property
+    def stale(self) -> bool:
+        return self.outcome == "stale"
 
 
 async def check(journey: Journey, base_url: str, *, timeout: float = 10.0,
@@ -108,12 +128,13 @@ async def check(journey: Journey, base_url: str, *, timeout: float = 10.0,
     env = dict(os.environ) if env is None else env
     result = JourneyCheck(journey)
     variables: dict[str, Any] = fresh_uniques()
+    secrets = secret_values(journey, env)
     jar = httpx.Cookies()
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True,
                                  headers=client_headers(headers), transport=transport,
                                  **client_options(base_url)) as client:
         for step in journey.steps:
-            outcome = await run_step(client, step, base_url, variables, env, jar)
+            outcome = await run_step(client, step, base_url, variables, env, jar, secrets)
             result.steps.append(outcome)
             if not outcome.ok:
                 break
@@ -195,9 +216,25 @@ def _record(sink, outcome: StepCheck, prefix: str = "") -> None:
         sink.record_error(label, outcome.kind or f"unexpected {outcome.status}")
 
 
+def secret_values(journey: Journey, env: dict[str, str]) -> set[str]:
+    """The secrets a journey sends: the environment variables it reads."""
+    return {env[name] for name in journey.env_names() if env.get(name)}
+
+
+def _mask(text: str, secrets: set[str], variables: dict[str, Any]) -> str:
+    """TEXT with every secret replaced by ***: the journey's env values, and any
+    extracted value whose name looks secret (a token, a session id)."""
+    hidden = set(secrets) | {str(v) for k, v in variables.items()
+                             if SENSITIVE_KEY.search(k) and isinstance(v, str)}
+    for value in sorted(hidden, key=len, reverse=True):
+        if len(value) >= 4:
+            text = text.replace(value, "***")
+    return text
+
+
 async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
                    variables: dict[str, Any], env: dict[str, str],
-                   jar: httpx.Cookies) -> StepCheck:
+                   jar: httpx.Cookies, secrets: set[str] | None = None) -> StepCheck:
     """Send one step with this journey run's cookies (JAR), judge it against
     `expect`, and pull its `extract` values into VARIABLES for the steps after it."""
     outcome = StepCheck(step)
@@ -236,9 +273,9 @@ async def run_step(client: httpx.AsyncClient, step: Step, base_url: str,
     if not step.accepts(resp.status_code):
         wanted = (" or ".join(map(str, step.expect)) if step.expect else "a status below 400")
         outcome.problem = f"returned {resp.status_code}, expected {wanted}"
-        snippet = resp.text.strip().replace("\n", " ")[:_SNIPPET]
-        if snippet:
-            outcome.problem += f": {snippet}"
+        # Bodies can echo what was sent (validation errors often do), secrets included.
+        snippet = _mask(resp.text.strip().replace("\n", " "), secrets or set(), variables)
+        outcome.snippet = snippet[:_SNIPPET] or None
         return outcome
 
     for name, source in step.extract.items():

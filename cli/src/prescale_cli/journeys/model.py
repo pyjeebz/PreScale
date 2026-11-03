@@ -53,7 +53,7 @@ READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 _PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][\w.]*)\s*\}\}")
 # A key is secret-looking when it is, or ends with, one of these words:
 # password, client_secret, x-api-key, access_token, Authorization, Cookie.
-_SENSITIVE_KEY = re.compile(
+SENSITIVE_KEY = re.compile(
     r"(^|[-_.])(password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie)$",
     re.IGNORECASE)
 # The secret itself must be a placeholder, optionally after an auth scheme.
@@ -279,7 +279,7 @@ def _check_secrets(value: Any, where: str, key: str = "") -> None:
     elif isinstance(value, list):
         for v in value:
             _check_secrets(v, where, key)
-    elif value is not None and key and _SENSITIVE_KEY.search(key) \
+    elif value is not None and key and SENSITIVE_KEY.search(key) \
             and not (isinstance(value, str) and _SECRET_OK.fullmatch(value.strip())):
         raise JourneyError(f"{where}: {key} has a literal value. Put secrets in an "
                            f"environment variable and write \"{{{{env.NAME}}}}\" instead")

@@ -29,6 +29,16 @@
   `--expect`; the MCP tools' run summaries list each journey's verdict; and `prescale compare`
   diffs each journey by name (terminal, `--json`, `--markdown`). A drop past the threshold in any
   journey counts as a regression for `--fail-on-regression`, even when it isn't the weakest journey.
+- **Journeys in CI.** `prescale ci` and the GitHub Action replay the checkout's journeys when
+  `prescale/journeys/` exists. The PR comment shows each journey's verdict, interference, and
+  journeys that no longer replay (listed always; `--stale fail` / `stale: fail` fails the check).
+  A journey that gets no answer, or a 5xx with a single user, always fails the check (that's the
+  app, not a stale file). Response bodies never reach the PR comment or uploads; locally,
+  `journeys verify` shows them with every secret the journeys read masked.
+  New Action inputs: `stale` and `allow-writes` (the action only passes them when set, so a
+  pinned older `prescale-version` keeps working). Until the dashboard compares journey runs only
+  with journey baselines, a journey run's PR comment shows no change instead of a possibly
+  misleading one, and never fails on it.
 - **`--expect N`** on `run` says whether you'd hold N users at peak. In a journey run, N is split
   across journeys by weight: each must hold its share alone, and all together must hold N.
 

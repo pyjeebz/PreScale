@@ -221,8 +221,25 @@ def test_check_marks_a_changed_app_as_stale():
 def test_check_without_expect_fails_on_4xx_and_5xx():
     transport, _ = _shop(order_status=500)
     result = _check(transport)
+    # a 5xx with one user is the app failing, not a stale journey
+    assert result.outcome == "error" and not result.stale
+    assert result.failed.problem == "returned 500, expected a status below 400"
+    assert result.failed.snippet == "pool exhausted"
+
+
+def test_response_bodies_are_kept_apart_and_secrets_masked():
+    import httpx as _httpx
+
+    def echo(request):
+        # validation errors often echo the input, secrets included
+        return _httpx.Response(422, text=request.content.decode())
+
+    result = asyncio.run(check(parse(CHECKOUT), "http://shop.test/",
+                               env={"PW": "TopSecret123"},
+                               transport=_httpx.MockTransport(echo)))
     assert result.stale
-    assert "expected a status below 400: pool exhausted" in result.failed.problem
+    assert "TopSecret123" not in result.failed.problem
+    assert "TopSecret123" not in result.failed.snippet and "***" in result.failed.snippet
 
 
 def test_check_unreachable_app_is_not_stale():
@@ -256,7 +273,8 @@ def test_rendered_path_cannot_change_host():
         return httpx.Response(200)
 
     j = _one_step(path="/{{next}}")
-    result = asyncio.run(check(j, "http://shop.test", env={}, transport=httpx.MockTransport(handler)))
+    result = asyncio.run(check(j, "http://shop.test", env={},
+                               transport=httpx.MockTransport(handler)))
     assert seen == ["http://shop.test/start"]  # nothing sent off the app
     assert not result.ok and "single /" in result.failed.problem
 

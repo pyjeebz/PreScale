@@ -10,6 +10,8 @@ from __future__ import annotations
 import html
 from datetime import datetime
 
+from prescale_cli.journeys.load import LABELS
+
 _CSS = """
 :root{
   --canvas:#010102;--s1:#0f1011;--s2:#141516;--hair:#23252a;
@@ -275,7 +277,7 @@ def _journeys_html(result: dict) -> str:
     rows = []
     for j in journeys:
         if j["status"] != "ok":
-            label = "stale" if j["status"] == "stale" else "couldn't run"
+            label = LABELS.get(j["status"], j["status"])
             rows.append(f"<tr><td>{_esc(j['name'])}</td><td class=\"n\">{label}</td>"
                         f"<td class=\"t\">—</td>"
                         f"<td class=\"t\">{_esc(j.get('reason') or '')}</td></tr>")
@@ -334,7 +336,7 @@ def _expect_html(exp: dict | None) -> str:
     if combined:
         items.append(f"<li>all together: holds ~{combined['survives_users']}</li>")
     for name in exp.get("untested") or []:
-        items.append(f"<li>{_esc(name)}: not load-tested (stale or unreachable)</li>")
+        items.append(f"<li>{_esc(name)}: not load-tested (stale, failing or unreachable)</li>")
     if not exp.get("journeys"):
         items.append(f"<li>survives ~{exp['survives_users']}</li>")
     return (f'<div class="cause"><div class="lbl">Expected ~{exp["users"]} users: {answer}'

@@ -94,7 +94,7 @@ def test_journeys_block_names_the_step_and_skips_stale_journeys():
     assert block[1] == {"name": "browse", "type": "browse", "weight": 60.0,
                         "status": "stale",
                         "reason": "step 1 (step 1): returned 404, expected a status "
-                                  "below 400: moved"}
+                                  "below 400"}
     assert first_to_break([ok, stale]) is ok
     json.dumps(block)  # it goes into the saved Result
 

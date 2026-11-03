@@ -96,12 +96,16 @@ def verify(url: str, directory: Path, only: tuple[str, ...], allow_writes: tuple
 
     broken = [r for r in results if not r.ok]
     if broken:
-        stale = [r.journey.name for r in broken if r.stale]
+        stale = [r.journey.name for r in broken if r.outcome == "stale"]
         if stale:
             console.print(f"\n[yellow]{len(stale)} stale:[/yellow] {', '.join(stale)}. The app "
                           "no longer answers the way these journeys expect. If the change was "
                           "on purpose, update the journey files; if not, it's a bug.")
-        unreached = [r.journey.name for r in broken if not r.stale]
+        errors = [r.journey.name for r in broken if r.outcome == "error"]
+        if errors:
+            console.print(f"\n[red]{len(errors)} failing with a 5xx:[/red] {', '.join(errors)}. "
+                          "With no load, that's a bug in the app, not a stale journey.")
+        unreached = [r.journey.name for r in broken if r.outcome == "unreachable"]
         if unreached:
             console.print(f"\n[red]{len(unreached)} couldn't run:[/red] {', '.join(unreached)}.")
         raise SystemExit(1)
@@ -151,8 +155,8 @@ async def _check_all(found: list[Journey], base: str, *, timeout: float,
 
 def _print_check(result: JourneyCheck) -> None:
     journey = result.journey
-    mark = "[green]✓[/green]" if result.ok else ("[yellow]stale[/yellow]" if result.stale
-                                                 else "[red]✗[/red]")
+    mark = {"ok": "[green]✓[/green]", "stale": "[yellow]stale[/yellow]"}.get(
+        result.outcome, "[red]✗[/red]")
     console.print(f"\n{mark} [bold]{escape(journey.name)}[/bold] [dim]({journey.type}, "
                   f"{len(journey.steps)} steps)[/dim]")
     for i, step in enumerate(journey.steps, 1):
@@ -166,6 +170,6 @@ def _print_check(result: JourneyCheck) -> None:
         else:
             console.print(f"   {i}. {name}  [dim]{label}[/dim]  "
                           f"[red]{escape(done.problem or '')}[/red]", highlight=False)
-            if done.status is not None and done.status >= 500:
-                console.print("      [dim]A 5xx with no load is usually a bug in the app, "
-                              "not a stale journey.[/dim]")
+            if done.snippet:
+                # Local terminal only, secrets masked; never in CI output or uploads.
+                console.print(f"      [dim]{escape(done.snippet)}[/dim]", highlight=False)

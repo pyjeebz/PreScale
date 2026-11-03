@@ -78,6 +78,25 @@ jobs:
           fail-on-regression: true
 ```
 
+## Journeys
+
+If the checkout has journey files (`prescale/journeys/*.yaml`, see the main README), the action replays them at load instead of testing URLs: each journey alone, then all together. The PR comment shows each journey's verdict, any interference, and journeys that no longer replay against the build. Give journeys their secrets through the step's `env:` (for `{{env.NAME}}`):
+
+```yaml
+      - uses: pyjeebz/prescale/action@v1
+        with:
+          token: ${{ secrets.PRESCALE_TOKEN }}
+          target: myapp.com
+          app: npm run build && npm start
+          stale: fail
+        env:
+          SHOP_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
+```
+
+A journey that **no longer replays** (the app answers differently, e.g. a 404) is listed on the PR; `stale: fail` also fails the check. A journey that gets **no answer, or a 5xx with a single user**, always fails the check: that's the app broken or down, not a stale file. Response bodies never appear in the PR comment.
+
+Deploy workflows (`on: deployment_status`) that also check out the code replay journeys too. Journeys that change data then need the preview's host in `allow-writes`; preview hosts change per deploy, so prefer replica mode (`app:`) for journeys that write.
+
 ## How it works
 
 1. A pull request is pushed (replica mode) or a deploy finishes (`deployment_status`).
@@ -122,5 +141,7 @@ uploaded is the run's Result file, which you can inspect with
 | `app` | — | Replica mode: build-and-start command, tested at `url` (default `http://localhost:3000`) |
 | `app-timeout` | `600` | Seconds to wait for the app to answer |
 | `working-directory` | `.` | Where to run `app` (monorepos) |
+| `stale` | `warn` | Journey runs: a journey that no longer replays is always listed on the PR; `fail` also fails the check |
+| `allow-writes` | — | Journey runs: hosts (one per line) where journeys that change data may run; not needed with `app` |
 | `app-url` | `https://prescale.dev/dashboard` | Dashboard URL |
 | `prescale-version` | latest | CLI version |

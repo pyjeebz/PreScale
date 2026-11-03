@@ -27,6 +27,17 @@ from prescale_cli.journeys.replay import (
 )
 from prescale_cli.loadtest import RunReport, StageResult, run_loadtest
 
+# How each non-ok outcome reads in reports.
+LABELS = {"stale": "stale", "error": "5xx with one user", "unreachable": "couldn't run"}
+
+
+class NoJourneyReplaysError(Exception):
+    """Every journey was stale or unreachable, so nothing could be load-tested."""
+
+    def __init__(self, runs: list[JourneyRun]) -> None:
+        super().__init__("no journey replays against this app")
+        self.runs = runs
+
 
 @dataclass
 class JourneyRun:
@@ -39,7 +50,7 @@ class JourneyRun:
     def status(self) -> str:
         if self.report is not None:
             return "ok"
-        return "stale" if self.check.stale else "unreachable"
+        return self.check.outcome
 
 
 async def ramp(journey: Journey | list[Journey], base_url: str, *, levels: list[int],
