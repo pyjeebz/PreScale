@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import httpx
+import jsonschema
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -208,10 +209,28 @@ def test_journeys_that_only_break_together_are_diagnosed():
     assert inv is not None
     assert inv["culprit_journey"] == block["culprit_journey"]
     assert inv["culprit_step"]["name"] == "place order"
-    assert inv["evidence"][0].startswith(f"{block['culprit_journey']} held up on its own "
-                                         "(it held 5 users alone) but broke when the journeys "
-                                         "ran together")
     assert inv["interference"] == block["interference"]
+    name = block["culprit_journey"]
+    if block["interference"]:  # said once, with its own numbers
+        assert any(f"{name} broke at" in e and "of its own users" in e for e in inv["evidence"])
+        assert not any("held up on its own" in e for e in inv["evidence"])
+    else:
+        assert inv["evidence"][0].startswith(f"{name} held up on its own (it held 5 users "
+                                             "alone) but broke when the journeys ran together")
+    # the onset level there counts every journey's users
+    assert any(e.endswith("users in total") for e in inv["evidence"])
+    # fewer than 20 baseline samples: a median, and it says so
+    assert any(e.startswith("culprit median ") for e in inv["evidence"])
+
+
+def test_investigate_fail_under_gates_on_a_break_that_only_happens_together(capsys):
+    from prescale_cli.commands.investigate import _show
+    result = {"id": "x", "verdict": {"survives_users": 100, "onset_users": None},
+              "combined": {"survives_users": 60, "onset_users": 75}}
+    with pytest.raises(SystemExit) as exit_:
+        _show(result, as_json=True, live_mode=False, upload=False, fail_under=80)
+    assert exit_.value.code == 1
+    _show(result, as_json=True, live_mode=False, upload=False, fail_under=50)
 
 
 def test_interference_on_the_culprit_journey_is_named_and_others_noted():
@@ -295,13 +314,8 @@ def test_investigate_json_end_to_end_on_the_example_shop(fragile_shop, tmp_path,
                                    "--store", str(tmp_path), "--fail-under", "200"])
     assert res.exit_code == 1  # --fail-under: it breaks well below 200
     result = json.loads(res.stdout)  # stdout is the Result alone
-    try:  # not a dev dependency; validated where it's installed
-        import jsonschema
-    except ImportError:
-        jsonschema = None
-    if jsonschema is not None:
-        jsonschema.validate(result, json.loads(
-            (ROOT / "cli/src/prescale_cli/schema/result.schema.json").read_text()))
+    jsonschema.validate(result, json.loads(
+        (ROOT / "cli/src/prescale_cli/schema/result.schema.json").read_text()))
     inv = result["investigation"]
     assert inv["culprit_journey"] == "checkout"
     assert inv["culprit_step"]["name"] == "place order"

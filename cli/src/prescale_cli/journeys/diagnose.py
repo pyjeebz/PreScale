@@ -103,6 +103,7 @@ async def gather_step_probes(journey: Journey, report: RunReport | None, base_ur
         error_kinds=dict(stat.error_kinds) if stat else {},
         status_counts=dict(stat.status_counts) if stat else {},
         reference="the journey's other steps",
+        users_label="users in total" if prefix else "users",
     )
 
     # The other steps (other routes) that ran at the onset level: steps after a
@@ -145,6 +146,7 @@ async def gather_step_probes(journey: Journey, report: RunReport | None, base_ur
             await asyncio.sleep(len(walk.steps) / max_rps)
     baseline = _baseline(samples)
     p.baseline_p95_ms = baseline * 1000 if baseline is not None else None
+    p.baseline_stat = "p95" if len(samples) >= P95_SAMPLES else "median"
     if seen_headers is not None:
         lower = {k.lower(): v for k, v in seen_headers.items()}
         p.server = lower.get("server")
@@ -171,7 +173,8 @@ def diagnose_step(found: StepProbes, *, interference: dict | None = None,
     stack = {k: v for k, v in {"server": p.server, "cdn": p.cdn}.items() if v}
     name = found.journey.name
     evidence = list(diag.evidence)
-    if found.together:
+    starved = interference if interference and interference.get("journey") == name else None
+    if found.together and not starved:
         alone = f" (it held {held_alone} users alone)" if held_alone is not None else ""
         evidence.insert(0, f"{name} held up on its own{alone} but broke when the journeys "
                            f"ran together: {p.onset_users} users in total")
@@ -181,7 +184,6 @@ def diagnose_step(found: StepProbes, *, interference: dict | None = None,
     if found.samples < MIN_SAMPLES:
         evidence.append(f"no 1-user baseline: only {found.samples} of {found.walks} replays "
                         "reached this step after the ramp")
-    starved = interference if interference and interference.get("journey") == name else None
     if starved:
         evidence.append(f"with {', '.join(starved['with'])} running too, {name} broke at "
                         f"{starved['users_at_break']} of its own users; alone it held "

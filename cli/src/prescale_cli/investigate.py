@@ -54,6 +54,11 @@ class Probes:
     # What static_ok compares against: static assets for URL routes; for a journey
     # step, the journey's other steps (they held while this one broke, or not).
     reference: str = "static assets"
+    # The 1-user figure ("p95", or "median" when there are too few samples for a
+    # p95) and what the onset level counts ("users", or "users in total" when
+    # several journeys ran together).
+    baseline_stat: str = "p95"
+    users_label: str = "users"
 
 
 @dataclass
@@ -70,14 +75,19 @@ def _capitalize(text: str) -> str:
 
 def _evidence(p: Probes) -> list[str]:
     ev: list[str] = []
+    users = f"{p.onset_users} {p.users_label}"
     if p.baseline_p95_ms is not None and p.loaded_p95_ms is not None:
-        ev.append(f"culprit p95 {p.baseline_p95_ms:.0f}ms at 1 user vs "
-                  f"{p.loaded_p95_ms:.0f}ms at {p.onset_users} users")
+        if p.baseline_stat == "p95":
+            ev.append(f"culprit p95 {p.baseline_p95_ms:.0f}ms at 1 user vs "
+                      f"{p.loaded_p95_ms:.0f}ms at {users}")
+        else:
+            ev.append(f"culprit {p.baseline_stat} {p.baseline_p95_ms:.0f}ms at 1 user vs "
+                      f"p95 {p.loaded_p95_ms:.0f}ms at {users}")
     if p.static_route is not None and p.static_ok is not None:
         held = "held" if p.static_ok else "also degraded"
         what = (f"static {p.static_route}" if p.reference == "static assets"
                 else f"{p.reference} ({p.static_route})")
-        ev.append(f"{what} {held} at {p.onset_users} users")
+        ev.append(f"{what} {held} at {users}")
     if p.error_kinds:
         worst = sorted(p.error_kinds.items(), key=lambda kv: -kv[1])
         ev.append("errors under load: " + ", ".join(f"{k} ({v})" for k, v in worst))

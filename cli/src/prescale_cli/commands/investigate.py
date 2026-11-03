@@ -232,6 +232,13 @@ def _show(result: dict, *, as_json: bool, live_mode: bool, upload: bool,
         upload_after_run(result, as_json=as_json)
 
     survives = result["verdict"]["survives_users"]
+    together = result.get("combined") or {}
+    if together.get("onset_users") is not None and together["survives_users"] < survives:
+        # The journeys broke sooner together than any did alone: that's the number to gate on.
+        survives = together["survives_users"]
+        if not as_json:
+            console.print(f"[dim]Together, the journeys survive ~{survives} users in total; "
+                          "--fail-under uses that.[/dim]")
     if fail_under is not None and survives < fail_under:
         Console(stderr=True).print(
             f"[red]✗ fail-under:[/red] survives ~{survives} < {fail_under}")
