@@ -273,7 +273,8 @@ def test_rendered_path_cannot_change_host():
         return httpx.Response(200)
 
     j = _one_step(path="/{{next}}")
-    result = asyncio.run(check(j, "http://shop.test", env={}, transport=httpx.MockTransport(handler)))
+    result = asyncio.run(check(j, "http://shop.test", env={},
+                               transport=httpx.MockTransport(handler)))
     assert seen == ["http://shop.test/start"]  # nothing sent off the app
     assert not result.ok and "single /" in result.failed.problem
 

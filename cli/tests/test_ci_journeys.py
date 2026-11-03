@@ -12,7 +12,8 @@ from prescale_cli.journeys.replay import JourneyCheck, StepCheck
 from prescale_cli.main import cli
 
 CHECKOUT = {"version": 1, "name": "checkout", "type": "checkout",
-            "steps": [{"name": "place order", "request": {"method": "POST", "path": "/api/orders"}}]}
+            "steps": [{"name": "place order",
+                       "request": {"method": "POST", "path": "/api/orders"}}]}
 BROWSE = {"version": 1, "name": "browse", "steps": [{"name": "home", "request": {"path": "/"}}]}
 
 
