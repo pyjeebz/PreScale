@@ -6,11 +6,18 @@ import json
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
 from prescale_cli.bars import text_bar
-from prescale_cli.compare import compare_results, resolve, to_markdown
+from prescale_cli.compare import (
+    compare_results,
+    journey_change,
+    journey_users,
+    resolve,
+    to_markdown,
+)
 from prescale_cli.result import AmbiguousResultError, ResultNotFoundError
 
 console = Console()
@@ -97,3 +104,18 @@ def _render(cmp: dict) -> None:
     note = "" if (cmp["confident"] or not cmp["regressed"]) else \
         "  (confidence bands overlap — could be noise)"
     console.print(Panel(cmp["summary"] + note, border_style=color))
+    if cmp.get("journeys"):
+        jt = Table(show_header=True, header_style="bold magenta", title="Per journey")
+        for col, justify in (("Journey", "left"), ("Old", "right"), ("New", "right"),
+                             ("Change", "right"), ("Breaks at", "left")):
+            jt.add_column(col, justify=justify)
+        for j in cmp["journeys"]:
+            if j["status"] != "ok":
+                jt.add_row(escape(j["name"]), "", "", f"[dim]{escape(j['status'])}[/dim]", "")
+                continue
+            tone = "red" if j["regressed"] else ("green" if j.get("improved") else "")
+            change = journey_change(j)
+            jt.add_row(escape(j["name"]), journey_users(j, "old"), journey_users(j, "new"),
+                       f"[{tone}]{change}[/{tone}]" if tone else change,
+                       escape(j.get("breaks_at") or "—"))
+        console.print(jt)
