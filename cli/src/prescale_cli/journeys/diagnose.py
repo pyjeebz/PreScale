@@ -31,8 +31,7 @@ from prescale_cli.investigate import Probes, classify, remediate
 from prescale_cli.journeys.load import JourneyRun
 from prescale_cli.journeys.model import Journey
 from prescale_cli.journeys.replay import SEP, check
-from prescale_cli.loadtest import _LAG_THRESHOLD_MS as LAG_THRESHOLD_MS
-from prescale_cli.loadtest import RouteStat, RunReport, edge_blocker
+from prescale_cli.loadtest import LAG_THRESHOLD_MS, RouteStat, RunReport, edge_blocker
 
 # The 1-user baseline: replay the journey for about this long, at least
 # MIN_WALKS and at most MAX_WALKS times, after a short pause so the app can
