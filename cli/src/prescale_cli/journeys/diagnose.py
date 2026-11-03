@@ -43,6 +43,9 @@ MIN_WALKS, MAX_WALKS = 5, 50
 MIN_SAMPLES = 5
 # Below this many samples a p95 is just the slowest one, so use the median.
 P95_SAMPLES = 20
+# The step's completions per second count as stopped rising when, from the
+# level before the onset to the onset, they grew by less than this.
+PLATEAU_GROWTH = 1.15
 
 
 @dataclass
@@ -61,6 +64,24 @@ class StepProbes:
 def _held(stat: RouteStat | None, *, latency_wall: float, error_threshold: float) -> bool:
     return (stat is not None and stat.total > 0 and stat.error_rate < error_threshold
             and (not stat.latencies or stat.pct(0.95) < latency_wall))
+
+
+def _completions(stage, label: str) -> float:
+    stat = stage.routes.get(label)
+    return len(stat.latencies) / stage.duration if stat and stage.duration > 0 else 0.0
+
+
+def _peak_completions(report: RunReport, label: str) -> float | None:
+    """LABEL's successful completions per second at the onset level, if they
+    had stopped rising there while users kept rising; else None."""
+    stages = sorted(report.stages, key=lambda s: s.users)
+    at = next((i for i, s in enumerate(stages) if s.users == report.onset_users), None)
+    if at is None or at == 0:
+        return None
+    rate, before = _completions(stages[at], label), _completions(stages[at - 1], label)
+    if rate <= 0 or before <= 0 or stages[at].users <= stages[at - 1].users:
+        return None
+    return max(rate, before) if rate <= before * PLATEAU_GROWTH else None
 
 
 def _baseline(samples: list[float]) -> float | None:
@@ -146,6 +167,13 @@ async def gather_step_probes(journey: Journey, report: RunReport | None, base_ur
             await asyncio.sleep(len(walk.steps) / max_rps)
     baseline = _baseline(samples)
     p.baseline_p95_ms = baseline * 1000 if baseline is not None else None
+    # How many it serves at once: completions/s at the wall x the time each takes.
+    # Not under --max-rps: the cap, not the app, would be what stopped it rising.
+    peak = None if max_rps else _peak_completions(report, prefix + label)
+    if peak is not None and len(samples) >= MIN_SAMPLES:
+        service = statistics.median(samples)
+        p.peak_completions, p.service_ms = peak, service * 1000
+        p.in_flight = peak * service
     p.baseline_stat = "p95" if len(samples) >= P95_SAMPLES else "median"
     if seen_headers is not None:
         lower = {k.lower(): v for k, v in seen_headers.items()}

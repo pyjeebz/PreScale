@@ -9,7 +9,9 @@ it to watch it find — and diagnose — a real bottleneck:
     prescale investigate http://localhost:8400 --path /search --path /product --path /checkout
 
 It also has a small JSON API for journeys (log in, add to cart, place an order;
-the order draws from the same pool), with journey files in examples/journeys/:
+the order draws from the same pool), and a flash sale: buying a product locks that
+product's stock row, so when everyone buys the mug they queue one at a time. The
+journey files are in examples/journeys/:
 
     SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys
 """
@@ -33,6 +35,10 @@ PRODUCTS = [{"id": 1, "name": "mug"}, {"id": 2, "name": "tee"}, {"id": 3, "name"
 _tokens: set[str] = set()
 _carts: dict[int, str] = {}       # cart id -> owner token
 _cart_ids = itertools.count(1)
+# Each product's stock is one row, locked while a purchase checks and updates it:
+# in a flash sale everyone buys the same product, so they queue on one lock.
+_stock = {p["id"]: 10**9 for p in PRODUCTS}
+_stock_locks: dict[int, asyncio.Lock] = {}
 
 
 def _resp(code, body=b"ok", ctype="text/plain"):
@@ -143,11 +149,20 @@ async def _api(method, path, headers, body, pool):
             return _json(201, {"order": f"o-{cart}"})
         finally:
             pool.release()
+    if method == "POST" and path.startswith("/api/products/") and path.endswith("/buy"):
+        product = path.split("/")[3]
+        if not product.isdigit() or int(product) not in _stock:
+            return _json(404, {"error": "no such product"})
+        async with _stock_locks[int(product)]:               # SELECT ... FOR UPDATE
+            await asyncio.sleep(random.uniform(0.035, 0.045))  # check stock, charge, write
+            _stock[int(product)] -= 1
+        return _json(201, {"bought": int(product)})
     return _json(404, {"error": "not found"})
 
 
 async def main(port):
     pool = asyncio.Semaphore(25)                              # 25 DB connections
+    _stock_locks.update({pid: asyncio.Lock() for pid in _stock})
     server = await asyncio.start_server(
         lambda r, w: _handle(r, w, pool), "127.0.0.1", port)
     print(f"fragile-shop listening on http://127.0.0.1:{port}  (Ctrl-C to stop)")

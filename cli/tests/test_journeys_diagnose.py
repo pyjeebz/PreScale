@@ -373,3 +373,89 @@ def test_investigate_urls_and_path_skip_journeys(tmp_path, monkeypatch):
                                        "--dir", _dir(tmp_path, SHOP), *flags])
         assert res.exit_code == 0, res.output
         assert seen["url"] == "http://localhost:1"
+
+
+# --- how many it serves at once ----------------------------------------------
+
+BUY = {"version": 1, "name": "flash-sale", "type": "checkout", "steps": [
+    {"name": "log in", "request": {"method": "POST", "path": "/api/login"},
+     "expect": {"status": 200}},
+    {"name": "buy the mug", "request": {"method": "POST", "path": "/api/products/1/buy"},
+     "expect": {"status": 201}},
+]}
+
+
+def _locked_shop(at_once: int, hold: float = 0.02):
+    """Buying lets AT_ONCE purchases through at a time (1: one row's lock)."""
+    gate = asyncio.Semaphore(at_once)
+
+    async def handler(request):
+        if request.url.path.endswith("/buy"):
+            async with gate:
+                await asyncio.sleep(hold)
+            return httpx.Response(201)
+        return httpx.Response(200)
+
+    return httpx.MockTransport(handler)
+
+
+def _locked_run(at_once: int, hold: float = 0.02):
+    transport = _locked_shop(at_once, hold)
+    journey = parse(BUY)
+    stages, _ = asyncio.run(ramp(journey, BASE, levels=[1, 2, 5, 10, 20, 40], stage_seconds=0.3,
+                                 warmup=False, env={}, transport=transport))
+    report = analyze(stages, latency_wall=0.2, error_threshold=0.02)
+    run = JourneyRun(journey, asyncio.run(check(journey, BASE, env={}, transport=transport)),
+                     report)
+    probes = asyncio.run(gather_step_probes(journey, report, BASE, latency_wall=0.2,
+                                            error_threshold=0.02, env={}, transport=transport,
+                                            **FAST))
+    return run, probes, transport
+
+
+def test_one_at_a_time_is_named_serialized_with_the_number():
+    _, found, _ = _locked_run(at_once=1)
+    p = found.probes
+    assert p.in_flight is not None and 0.6 <= p.in_flight <= 1.4
+    inv = diagnose_step(found)
+    assert (inv["bottleneck_class"], inv["confidence"]) == ("serialized", "high")
+    assert any("1 request served at once" in e for e in inv["evidence"])
+    assert any("atomic UPDATE" in r for r in inv["remediation"])
+
+
+def test_a_limit_of_several_is_counted_but_not_called_serialized():
+    _, found, _ = _locked_run(at_once=5, hold=0.06)
+    assert found.probes.in_flight is not None and found.probes.in_flight >= 3
+    assert diagnose_step(found)["bottleneck_class"] != "serialized"
+
+
+def test_a_pool_with_errors_shows_how_many_it_served():
+    probes = Probes(culprit_route="POST /api/orders", onset_users=60, static_ok=True,
+                    static_route="log in", status_counts={500: 40}, in_flight=24.6,
+                    peak_completions=246, service_ms=100,
+                    reference="the journey's other steps")
+    diag = classify(probes)
+    assert diag.bottleneck_class == "connection_pool"
+    assert any("~246 requests/s" in e and "~25 requests served at once" in e
+               for e in diag.evidence)
+
+
+def test_max_rps_never_reads_as_one_at_a_time():
+    run, _, transport = _locked_run(at_once=1)
+    capped = asyncio.run(gather_step_probes(run.journey, run.report, BASE, latency_wall=0.2,
+                                            error_threshold=0.02, env={}, transport=transport,
+                                            max_rps=1000, **FAST))
+    assert capped.probes.in_flight is None
+
+
+def test_investigate_names_the_flash_sale_on_the_example_shop(fragile_shop, tmp_path,
+                                                              monkeypatch):
+    monkeypatch.setenv("SHOP_PASSWORD", "demo")
+    res = CliRunner().invoke(cli, ["investigate", fragile_shop, "--json", "--journey",
+                                   "flash-sale", "-u", "100", "-s", "0.5",
+                                   "--dir", str(ROOT / "examples" / "journeys"),
+                                   "--store", str(tmp_path)])
+    assert res.exit_code == 0, res.output
+    inv = json.loads(res.stdout)["investigation"]
+    assert inv["culprit_step"]["name"] == "buy the mug"
+    assert inv["bottleneck_class"] == "serialized"

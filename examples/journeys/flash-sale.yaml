@@ -1,0 +1,18 @@
+version: 1
+name: flash-sale
+type: checkout
+# Everyone buys the same product at once, like a drop or a flash sale.
+steps:
+  - name: log in
+    request:
+      method: POST
+      path: /api/login
+      json: {email: "{{unique.email}}", password: "{{env.SHOP_PASSWORD}}"}
+    expect: {status: 200}
+    extract: {token: body.token}
+  - name: buy the mug
+    request:
+      method: POST
+      path: /api/products/1/buy
+      headers: {Authorization: "Bearer {{token}}"}
+    expect: {status: 201}
