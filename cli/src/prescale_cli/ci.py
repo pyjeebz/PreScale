@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 
 from prescale_cli.bars import bar_rows, route_rows
+from prescale_cli.fixprompt import redact_query
 from prescale_cli.journeys.load import LABELS
 from prescale_cli.throughput import VISITOR_NOTE, capacity_rps, visitors_for
 
@@ -261,6 +262,33 @@ def render_stale_only(runs, *, target: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _fenced(text: str) -> list[str]:
+    """TEXT as a fenced block that nothing inside can close early or @mention from."""
+    safe = text.replace("```", "'''").replace("@", "@\u200b")
+    return ["```text", *safe.splitlines(), "```"]
+
+
+def _diagnosis(result: dict, inv: dict, *, together: bool = False) -> list[str]:
+    """Why it broke, the fixes, and the fix prompt (folded), all escaped."""
+    lines = []
+    step = inv.get("culprit_step")
+    if step:
+        lead = "Breaks together" if together else "Diagnosed step"
+        lines.append(f"**{lead}:** {_cell(inv.get('culprit_journey') or '')}, step "
+                     f"{step['index']} {_cell(step['name'])} {_code(step['route'])}")
+    lines.append(f"**Why:** {_code(inv['bottleneck_class'])} ({_cell(inv['confidence'])} "
+                 f"confidence) · {_cell(inv['summary'])}")
+    if step and inv.get("evidence"):
+        lines += ["", "**Evidence:**"] + [f"- {_cell(e)}" for e in inv["evidence"]]
+    if inv.get("remediation"):
+        lines += ["", "**Fix:**"] + [f"- {_cell(fix)}" for fix in inv["remediation"]]
+    prompt = result.get("fix_prompt")
+    if prompt:
+        lines += ["", "<details><summary>Fix prompt for your coding agent</summary>", "",
+                  *_fenced(prompt), "", "</details>"]
+    return lines
+
+
 def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) -> str:
     """The PR comment: the change vs baseline, what breaks first, why, the fix."""
     verdict = result["verdict"]
@@ -337,7 +365,10 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
     investigation = result.get("investigation")
     lines.append("")
     if verdict.get("onset_users") is None:
-        lines.append(f"**Held:** {_onset(verdict)} without crossing a failure threshold.")
+        lines.append(f"**Held:** {_onset(verdict)} without crossing a failure threshold"
+                     + (" (each journey on its own)." if investigation else "."))
+        if investigation:  # the journeys broke only when ramped together
+            lines += _diagnosis(result, investigation, together=True)
     else:
         culprit = verdict.get("culprit_route")
         journey = verdict.get("culprit_journey")
@@ -345,10 +376,7 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
         lines.append(f"**Breaks first:** {where} · {_onset(verdict)}" if culprit
                      else f"**Breaks first:** {_onset(verdict)}")
         if investigation:
-            lines.append(f"**Why:** `{investigation['bottleneck_class']}` "
-                         f"({investigation['confidence']} confidence) · {investigation['summary']}")
-            if investigation.get("remediation"):
-                lines += ["", "**Fix:**"] + [f"- {fix}" for fix in investigation["remediation"]]
+            lines += _diagnosis(result, investigation)
         # The routes at the stage that broke, as bars toward the latency wall (│).
         stages = result.get("stages", [])
         stage = next((s for s in stages if s.get("users") == verdict["onset_users"]), None)
@@ -375,4 +403,5 @@ def render_comment(result: dict, upload: dict, *, target: str, sha: str | None) 
     if target_info.get("verified") is False:
         notes.append(f"{target} isn't verified yet, so runs can't be signed off.")
     lines += ["", f"<sub>PreScale{' · ' + ' '.join(notes) if notes else ''}</sub>"]
-    return "\n".join(lines) + "\n"
+    # Routes can carry tokens in their query (a preview's bypass, ?token=): never on a PR.
+    return redact_query("\n".join(lines)) + "\n"

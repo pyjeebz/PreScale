@@ -70,6 +70,14 @@ Try this
   </Step>
 </Steps>
 
+## Fix prompt
+
+After the diagnosis, `investigate` prints a **fix prompt**: plain text to paste into Claude Code, Cursor or any coding agent. It says where it broke, at how many users, the likely cause, the evidence and the fixes, and asks the agent for the smallest change that fixes the cause and to re-run `prescale investigate` to confirm. It's built from the run itself, with no model, and never includes response bodies, secrets or credentials from the URL. It's also in `--json` and saved runs as `fix_prompt`, in the HTML report (`prescale show <id> --html`), and in the PR comment from the GitHub Action.
+
+```bash
+prescale investigate http://localhost:3000 --json | jq -r .fix_prompt
+```
+
 ## Journeys
 
 When your repo has journeys in `prescale/journeys/`, `investigate` ramps them the way `prescale run` does, then diagnoses **the journey step that breaks first**. The step is probed with the journey's own state: its 1-user latency comes from replaying the journey from the start (log in, add to cart, then place the order), so a step that needs a token or a cart id is measured the way a real user reaches it. The journey's other steps play the part static assets play for URLs: if they held while this step failed, the limit is something this step uses, such as a database pool.

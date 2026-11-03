@@ -172,6 +172,7 @@ async def investigate_summary(url: str, *, allow: set[str],
         host_permission=permission_from_env())
     summary = summarize_result(result)
     summary["investigation"] = result.get("investigation")
+    summary["fix_prompt"] = result.get("fix_prompt")
     return summary
 
 

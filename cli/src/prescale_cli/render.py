@@ -281,6 +281,16 @@ def render_investigation(result: dict) -> None:
     console.print(Panel("\n".join(lines), title="🔬 Diagnosis", border_style=color))
 
 
+def render_fix_prompt(result: dict) -> None:
+    """Print the fix prompt as plain text (no box), so it copies cleanly."""
+    prompt = result.get("fix_prompt")
+    if not prompt:
+        return
+    console.print("\n[bold]📋 Fix prompt[/bold] [dim](paste into Claude Code, Cursor or "
+                  "your coding agent; also in --json as fix_prompt)[/dim]\n")
+    console.print(escape(prompt), soft_wrap=True, highlight=False)
+
+
 def _band(verdict: dict) -> str:
     conf = verdict.get("confidence") or {}
     lo, hi = conf.get("survives_low"), conf.get("survives_high")

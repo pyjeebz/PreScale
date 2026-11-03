@@ -21,6 +21,7 @@ from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
+from prescale_cli.fixprompt import fix_prompt
 from prescale_cli.journeys.diagnose import diagnose_run
 from prescale_cli.journeys.load import (
     LABELS,
@@ -474,6 +475,7 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
             headers=headers, max_rps=config["max_rps"]))
         if investigation is not None:
             result["investigation"] = investigation
+            result["fix_prompt"] = fix_prompt(result)
     return worst.report, result, live_mode
 
 

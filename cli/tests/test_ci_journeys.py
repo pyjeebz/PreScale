@@ -120,6 +120,7 @@ def _wire(monkeypatch, *, result=None, raises=None, upload=None):
     def fake_run_journeys(journeys, url, config, **kwargs):
         seen["journeys"] = [j.name for j in journeys]
         seen["url"], seen["replica"] = url, kwargs["replica"]
+        seen["diagnose"] = kwargs.get("diagnose")
         if raises:
             raise raises
         return None, result, False
@@ -246,3 +247,66 @@ def test_refusals_are_annotated(monkeypatch, tmp_path):
                                    "--dir", _dir(tmp_path)])
     assert res.exit_code == 2
     assert "::error::PreScale refused to replay the journeys" in res.output
+
+
+# --- the diagnosis in the comment ---------------------------------------------------
+
+INVESTIGATION = {
+    "culprit_route": "POST /api/orders", "culprit_journey": "checkout",
+    "culprit_step": {"index": 1, "name": "place order", "route": "POST /api/orders"},
+    "bottleneck_class": "connection_pool", "confidence": "high",
+    "summary": "5xx under load while the journey's other steps held — the app/backend is the "
+               "wall (often a DB or upstream pool).",
+    "evidence": ["culprit median 100ms at 1 user vs p95 900ms at 30 users",
+                 "errors under load: 5xx (25)"],
+    "remediation": ["Increase the DB/upstream connection-pool size."],
+    "stack": {}, "interference": None,
+}
+
+
+def _diagnosed(**inv):
+    from prescale_cli.fixprompt import fix_prompt
+    result = _journey_result()
+    result["investigation"] = {**INVESTIGATION, **inv}
+    result["fix_prompt"] = fix_prompt(result)
+    return result
+
+
+def test_ci_journey_runs_are_diagnosed_and_the_comment_says_why(monkeypatch, tmp_path):
+    seen = _wire(monkeypatch, result=_diagnosed(), upload=_upload(mode="journeys"))
+    res = _ci(tmp_path)
+    assert res.exit_code == 0, res.output
+    assert seen["diagnose"] is True
+    body = seen["comment"]
+    assert "**Diagnosed step:** checkout, step 1 place order `POST /api/orders`" in body
+    assert "**Why:** `connection_pool` (high confidence)" in body
+    assert "- errors under load: 5xx (25)" in body
+    assert "- Increase the DB/upstream connection-pool size." in body
+    assert "<details><summary>Fix prompt for your coding agent</summary>" in body
+    assert 'Where: journey "checkout", step 1 "place order" (POST /api/orders)' in body
+
+
+def test_a_break_only_together_is_shown_under_held():
+    result = _diagnosed()
+    result["verdict"].update(onset_users=None, survives_users=100, culprit_route=None,
+                             culprit_journey=None)
+    result["combined"].update(onset_users=30, survives_users=20)
+    body = ci_mod.render_comment(result, _upload(mode="journeys"), target="myapp.com",
+                                 sha=None)
+    assert "(each journey on its own)." in body
+    assert "**Breaks together:** checkout, step 1 place order" in body
+
+
+def test_diagnosis_text_cant_mention_render_html_or_close_the_fence():
+    result = _diagnosed(
+        culprit_step={"index": 1, "name": "@team <b>x</b> `y`", "route": "POST /a`b"},
+        evidence=["``` closes? @someone <img src=x>"])
+    body = ci_mod.render_comment(result, _upload(mode="journeys"), target="myapp.com",
+                                 sha=None)
+    assert "@team" not in body and "@someone" not in body
+    before, prompt = body.split("Fix prompt for your coding agent</summary>", 1)
+    assert "<b>x</b>" not in before and "<img" not in before
+    fence = prompt.split("```text", 1)[1].split("</details>")[0]
+    # HTML in a fenced block shows as text; ``` inside was neutralised, so only
+    # the closing fence remains
+    assert fence.count("```") == 1

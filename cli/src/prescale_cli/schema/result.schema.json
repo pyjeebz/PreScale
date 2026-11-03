@@ -136,6 +136,10 @@
         "untested": { "type": "array", "items": { "type": "string" }, "description": "Journeys that weren't load-tested; their share of N is unknown." }
       }
     },
+    "fix_prompt": {
+      "type": ["string", "null"],
+      "description": "Present with `investigation`: a plain-text prompt for a coding agent (where it broke, the diagnosis, evidence and fixes). Built from the Result itself; never includes response bodies or secrets."
+    },
     "investigation": {
       "type": "object",
       "description": "Present when `prescale investigate` diagnosed a failure.",

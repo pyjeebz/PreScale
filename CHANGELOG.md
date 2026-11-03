@@ -39,6 +39,16 @@
   pinned older `prescale-version` keeps working). Until the dashboard compares journey runs only
   with journey baselines, a journey run's PR comment shows no change instead of a possibly
   misleading one, and never fails on it.
+- **A fix prompt for your coding agent.** Every diagnosis now comes with `fix_prompt`: plain
+  text that says where it broke, at how many users, the likely cause, the evidence and the
+  fixes, and asks the agent for the smallest fix and to re-run PreScale to confirm. It's built
+  from the run itself, with no model, and never includes response bodies, secrets or
+  credentials from the URL. `investigate` prints it, `--json` and saved runs carry it, the
+  HTML report (`show --html`) has a Diagnosis section with a Copy button, MCP's `investigate`
+  returns it, and the PR comment folds it under the diagnosis.
+- **Journey runs in CI are diagnosed.** `prescale ci` and the GitHub Action now probe the
+  journey step that broke first (as URL runs already were), so the PR comment says why it broke
+  and how to fix it, not just where.
 - **`investigate` diagnoses the journey step that breaks first.** With journeys in
   `prescale/journeys/`, `prescale investigate` ramps them like `run`, then probes the step that
   broke first with the journey's own state (its 1-user latency comes from replaying the journey

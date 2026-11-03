@@ -80,7 +80,7 @@ jobs:
 
 ## Journeys
 
-If the checkout has journey files (`prescale/journeys/*.yaml`, see the main README), the action replays them at load instead of testing URLs: each journey alone, then all together. The PR comment shows each journey's verdict, any interference, and journeys that no longer replay against the build. Give journeys their secrets through the step's `env:` (for `{{env.NAME}}`):
+If the checkout has journey files (`prescale/journeys/*.yaml`, see the main README), the action replays them at load instead of testing URLs: each journey alone, then all together. The PR comment shows each journey's verdict, any interference, and journeys that no longer replay against the build. When a journey breaks, the step that broke first is diagnosed (the bottleneck, the evidence, the fix), with a fix prompt to paste into your coding agent folded underneath. Diagnosing replays that journey at one user for a few more seconds (5 to 50 walks, within `max-rps`), so a journey that changes data makes a few more writes: run those only against staging or a replica. Give journeys their secrets through the step's `env:` (for `{{env.NAME}}`):
 
 ```yaml
       - uses: pyjeebz/prescale/action@v1
