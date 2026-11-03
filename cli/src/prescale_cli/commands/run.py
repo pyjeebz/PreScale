@@ -21,7 +21,7 @@ from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
-from prescale_cli.journeys.diagnose import diagnose_step, gather_step_probes
+from prescale_cli.journeys.diagnose import diagnose_run
 from prescale_cli.journeys.load import (
     LABELS,
     JourneyRun,
@@ -443,6 +443,7 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
     result["journeys"] = journeys_block(runs)
 
     ramped = [r for r in runs if r.report is not None]
+    together = None
     if combined and len(ramped) > 1:
         if not as_json:
             mix = ", ".join(f"{escape(r.journey.name)} {r.journey.weight:g}" for r in ramped)
@@ -463,16 +464,16 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
         if together_warning and together_warning not in (result["warning"] or ""):
             result["warning"] = " ".join(filter(None, [result["warning"], together_warning]))
 
-    if diagnose and worst.report.onset_users is not None:
+    broke_together = together is not None and together.onset_users is not None
+    if diagnose and (worst.report.onset_users is not None or broke_together):
         if not as_json:
-            console.print(f"\n[dim]Diagnosing {escape(worst.journey.name)} › "
-                          f"{escape(worst.report.culprit_route or '')}…[/dim]", highlight=False)
-        probes = asyncio.run(gather_step_probes(
-            worst, url, latency_wall=latency_wall, error_threshold=error_threshold,
-            timeout=timeout, headers=headers))
-        if probes is not None:
-            interference = (result.get("combined") or {}).get("interference")
-            result["investigation"] = diagnose_step(worst, probes, interference=interference)
+            console.print("\n[dim]Diagnosing the step that broke first…[/dim]")
+        investigation = asyncio.run(diagnose_run(
+            worst, runs, url, together=together, combined=result.get("combined"),
+            latency_wall=latency_wall, error_threshold=error_threshold, timeout=timeout,
+            headers=headers, max_rps=config["max_rps"]))
+        if investigation is not None:
+            result["investigation"] = investigation
     return worst.report, result, live_mode
 
 

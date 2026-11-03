@@ -105,7 +105,8 @@ def investigate(url: str | None, paths: tuple[str, ...], max_users: int,
                           "[bold]prescale investigate <url>[/bold].[/dim]")
             raise SystemExit(0)
         url = load_result(last, store=store)["target"]["url"]
-        console.print(f"[dim]Re-investigating latest run: {url}[/dim]")
+        (Console(stderr=True) if as_json else console).print(
+            f"[dim]Re-investigating latest run: {url}[/dim]")
 
     prof = lookup(profile_name) if profile_name else None
     if profile_name and prof is None:
@@ -219,7 +220,12 @@ def _show(result: dict, *, as_json: bool, live_mode: bool, upload: bool,
                 icon = _AUDIT_ICONS.get(finding["status"], "•")
                 console.print(f"{icon} [bold]{finding['name']}[/bold]  {finding['detail']}")
         if result.get("investigation") is None:
-            console.print("\n[green]✓[/green] Held up — nothing to diagnose.")
+            if (result.get("combined") or {}).get("onset_users") is not None \
+                    or result["verdict"]["onset_users"] is not None:
+                console.print("\n[yellow]⚠[/yellow] It broke, but PreScale couldn't probe the "
+                              "step that broke (see above).")
+            else:
+                console.print("\n[green]✓[/green] Held up — nothing to diagnose.")
         console.print(f"[dim]saved as {result['id']}[/dim]")
 
     if upload:

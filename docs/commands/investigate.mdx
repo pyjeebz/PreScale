@@ -84,7 +84,7 @@ Evidence
   • errors under load: 5xx (25)
 ```
 
-If the journeys ramped together starved the culprit journey (it broke with fewer of its own users than it held alone), the evidence says so too. `--urls` investigates URLs instead.
+If the journeys ramped together starved the culprit journey (it broke with fewer of its own users than it held alone), the evidence says so too. If every journey held on its own but they broke ramped together, `investigate` diagnoses the step that broke in the combined run: that's journeys competing for something they share. A step that answers an unexpected 4xx under load (a 409, a 401) is classified as [`unexpected_answer`](/reference/bottleneck-types), not as a pool or a queue. The 1-user baseline replays the journey for about 2 seconds after a 1-second pause, within `--max-rps`; if too few replays reach the step, the evidence says there's no baseline. `--urls` investigates URLs instead.
 
 ## Options
 

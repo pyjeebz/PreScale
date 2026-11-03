@@ -131,6 +131,14 @@ def classify(p: Probes) -> Diagnosis:
         return Diagnosis("connection_pool", "medium",
                          "Requests timed out while infra held — a backend pool or "
                          "downstream dependency is blocking.", ev)
+    if dominant and (dominant.startswith("unexpected 4") or dominant == "missing extract"):
+        # Journey steps only: it works for one user, but under load it answered
+        # something the journey doesn't expect.
+        return Diagnosis("unexpected_answer", "medium",
+                         f"Under load the step answered something it doesn't for one user "
+                         f"({dominant}) — often users conflicting over shared data (a 409, a "
+                         "lock, a unique constraint) or sessions and tokens that don't hold "
+                         "up under load (401/403).", ev)
     if has_other_5xx:
         if p.static_ok is True:
             return Diagnosis("connection_pool", "high",
@@ -194,6 +202,13 @@ _REMEDIATION = {
     "slow_endpoint": [
         "Profile the route — it's slow even at 1 user (likely a slow query or N+1).",
         "Add an index, a cache, or pagination; move heavy work off the request path.",
+    ],
+    "unexpected_answer": [
+        "Check the app's logs for this step under load: a 409 or a unique-constraint error "
+        "points at rows several users change at once (lock them, or retry); a 401/403 at a "
+        "session store or token cache that doesn't keep up.",
+        "Make sure each virtual user's data is its own: a journey where every user changes "
+        "the same account or item can conflict by design.",
     ],
     "unknown": [
         "Re-run with --repeat 3 for a tighter read, and inspect the per-route breakdown.",
