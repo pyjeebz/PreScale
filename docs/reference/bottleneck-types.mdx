@@ -149,7 +149,7 @@ The classifier is fully local and deterministic — no LLM, no network calls. It
 
     **How it's detected**
 
-    PreScale counts how many requests the step serves at once, with Little's law: the most it completed per second at the level where it broke, times how long one takes with a single user. It only counts once the step's completions stopped rising while users kept rising (and never under `--max-rps`, where the cap would be what stopped them). About one at a time is `serialized`; `high` confidence when the journey's other steps held. For any other class the count is in the evidence too ("~25 requests served at once"), which is often the size of the pool or worker count you're hitting.
+    PreScale counts how many requests the step serves at once, with Little's law: the most it completed per second at the level where it broke, times how long one takes with a single user. It only counts when the step's own requests queued (under load they took at least 3× their 1-user time), its completions held steady from the level before the break to the break (neither rising nor collapsing), and PreScale's own machine kept up. It's skipped under `--max-rps`, where the cap would be what stopped them. A cheap step that just completes at the pace of a busier step before it never queues, so it's never called `serialized`. About one at a time is `serialized`; `high` confidence when the journey's other steps held. For any other class the count is in the evidence too ("~25 requests served at once"), which is often the size of the pool or worker count you're hitting.
 
     **How to fix it**
 

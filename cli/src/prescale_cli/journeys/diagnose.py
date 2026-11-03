@@ -31,6 +31,7 @@ from prescale_cli.investigate import Probes, classify, remediate
 from prescale_cli.journeys.load import JourneyRun
 from prescale_cli.journeys.model import Journey
 from prescale_cli.journeys.replay import SEP, check
+from prescale_cli.loadtest import _LAG_THRESHOLD_MS as LAG_THRESHOLD_MS
 from prescale_cli.loadtest import RouteStat, RunReport, edge_blocker
 
 # The 1-user baseline: replay the journey for about this long, at least
@@ -44,8 +45,13 @@ MIN_SAMPLES = 5
 # Below this many samples a p95 is just the slowest one, so use the median.
 P95_SAMPLES = 20
 # The step's completions per second count as stopped rising when, from the
-# level before the onset to the onset, they grew by less than this.
-PLATEAU_GROWTH = 1.15
+# level before the onset to the onset, they stayed within this band (a drop
+# below it is a collapse, not a ceiling).
+PLATEAU_BAND = (0.85, 1.15)
+# ...and only if requests queued at this step: under load they took at least
+# this many times their 1-user time. A cheap step that just completes at the
+# pace of a busier step before it never queues, so it isn't counted.
+QUEUE_FACTOR = 3.0
 
 
 @dataclass
@@ -73,15 +79,20 @@ def _completions(stage, label: str) -> float:
 
 def _peak_completions(report: RunReport, label: str) -> float | None:
     """LABEL's successful completions per second at the onset level, if they
-    had stopped rising there while users kept rising; else None."""
+    had stopped rising there (neither rising nor collapsing) while users kept
+    rising, and PreScale's own machine kept up; else None."""
     stages = sorted(report.stages, key=lambda s: s.users)
     at = next((i for i, s in enumerate(stages) if s.users == report.onset_users), None)
     if at is None or at == 0:
         return None
-    rate, before = _completions(stages[at], label), _completions(stages[at - 1], label)
-    if rate <= 0 or before <= 0 or stages[at].users <= stages[at - 1].users:
+    onset, prev = stages[at], stages[at - 1]
+    if max(onset.loop_lag_ms, prev.loop_lag_ms) >= LAG_THRESHOLD_MS:
+        return None  # the load generator was the limit, not the app
+    rate, before = _completions(onset, label), _completions(prev, label)
+    if rate <= 0 or before <= 0 or onset.users <= prev.users:
         return None
-    return max(rate, before) if rate <= before * PLATEAU_GROWTH else None
+    low, high = PLATEAU_BAND
+    return rate if low * before <= rate <= high * before else None
 
 
 def _baseline(samples: list[float]) -> float | None:
@@ -170,10 +181,11 @@ async def gather_step_probes(journey: Journey, report: RunReport | None, base_ur
     # How many it serves at once: completions/s at the wall x the time each takes.
     # Not under --max-rps: the cap, not the app, would be what stopped it rising.
     peak = None if max_rps else _peak_completions(report, prefix + label)
-    if peak is not None and len(samples) >= MIN_SAMPLES:
+    if peak is not None and len(samples) >= MIN_SAMPLES and stat and stat.latencies:
         service = statistics.median(samples)
-        p.peak_completions, p.service_ms = peak, service * 1000
-        p.in_flight = peak * service
+        if statistics.fmean(stat.latencies) >= QUEUE_FACTOR * service:
+            p.peak_completions, p.service_ms = peak, service * 1000
+            p.in_flight = peak * service
     p.baseline_stat = "p95" if len(samples) >= P95_SAMPLES else "median"
     if seen_headers is not None:
         lower = {k.lower(): v for k, v in seen_headers.items()}

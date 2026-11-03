@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -419,7 +420,8 @@ def test_one_at_a_time_is_named_serialized_with_the_number():
     assert p.in_flight is not None and 0.6 <= p.in_flight <= 1.4
     inv = diagnose_step(found)
     assert (inv["bottleneck_class"], inv["confidence"]) == ("serialized", "high")
-    assert any("1 request served at once" in e for e in inv["evidence"])
+    assert any(re.search(r"~(0\.[6-9]|1\.[0-4]) requests? served at once", e)
+               for e in inv["evidence"])
     assert any("atomic UPDATE" in r for r in inv["remediation"])
 
 
@@ -452,10 +454,64 @@ def test_investigate_names_the_flash_sale_on_the_example_shop(fragile_shop, tmp_
                                                               monkeypatch):
     monkeypatch.setenv("SHOP_PASSWORD", "demo")
     res = CliRunner().invoke(cli, ["investigate", fragile_shop, "--json", "--journey",
-                                   "flash-sale", "-u", "100", "-s", "0.5",
+                                   "flash-sale", "-u", "100", "-s", "1",
                                    "--dir", str(ROOT / "examples" / "journeys"),
                                    "--store", str(tmp_path)])
     assert res.exit_code == 0, res.output
     inv = json.loads(res.stdout)["investigation"]
     assert inv["culprit_step"]["name"] == "buy the mug"
     assert inv["bottleneck_class"] == "serialized"
+
+
+def test_a_cheap_step_paced_by_a_busier_one_is_not_one_at_a_time():
+    """Step 1 is capped (4 at a time); step 2 is cheap, never queues, and fails a
+    little once the app is busy. Step 2 completes at step 1's pace, which alone
+    would read as ~0.3 at once: it must not be called serialized."""
+    spec = {"version": 1, "name": "j", "type": "browse", "steps": [
+        {"name": "search", "request": {"path": "/search"}},
+        {"name": "add", "request": {"method": "POST", "path": "/cart"},
+         "expect": {"status": 201}}]}
+    state = {"waiting": 0, "n": 0}
+    gate = asyncio.Semaphore(4)
+
+    async def handler(request):
+        if request.url.path == "/search":
+            state["waiting"] += 1
+            async with gate:
+                state["waiting"] -= 1
+                await asyncio.sleep(0.03)
+            return httpx.Response(200)
+        await asyncio.sleep(0.002)
+        state["n"] += 1
+        if state["waiting"] > 8 and state["n"] % 10 == 0:
+            return httpx.Response(500)
+        return httpx.Response(201)
+
+    transport = httpx.MockTransport(handler)
+    run = _ramped(spec, transport, levels=(1, 2, 5, 10, 20, 30, 50))
+    if run.report.onset_users is None:
+        pytest.skip("the mock didn't break on this machine")
+    found = _probes(run, transport)
+    assert found.probes.in_flight is None
+    assert diagnose_step(found)["bottleneck_class"] != "serialized"
+
+
+def _stages(rates, users=(5, 10), lag=(0.0, 0.0), latency=1.0):
+    from prescale_cli.loadtest import RouteStat, StageResult
+    return [StageResult(users=u, duration=1.0, loop_lag_ms=g,
+                        routes={"POST /buy": RouteStat(total=r, latencies=[latency] * r)})
+            for u, r, g in zip(users, rates, lag)]
+
+
+def test_a_collapse_is_not_a_ceiling_and_a_busy_generator_isnt_either():
+    from prescale_cli.journeys.diagnose import _peak_completions
+    from prescale_cli.loadtest import RunReport
+
+    def peak(**kw):
+        report = RunReport(stages=_stages(**kw), survives_users=5, max_tested=10,
+                           onset_users=10)
+        return _peak_completions(report, "POST /buy")
+    assert peak(rates=(24, 25)) == 25                # held steady: a ceiling
+    assert peak(rates=(24, 40)) is None              # still rising
+    assert peak(rates=(24, 6)) is None               # collapsed
+    assert peak(rates=(24, 25), lag=(0.0, 250.0)) is None   # PreScale's machine was the limit

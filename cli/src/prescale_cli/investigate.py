@@ -100,9 +100,10 @@ def _evidence(p: Probes) -> list[str]:
         worst = sorted(p.error_kinds.items(), key=lambda kv: -kv[1])
         ev.append("errors under load: " + ", ".join(f"{k} ({v})" for k, v in worst))
     if p.in_flight is not None:
+        n = f"{p.in_flight:.1f}" if p.in_flight < 2 else f"{p.in_flight:.0f}"
         ev.append(f"it completed at most ~{p.peak_completions:.0f} requests/s while users kept "
-                  f"rising; at {p.service_ms:.0f}ms each that's ~{p.in_flight:.0f} "
-                  f"{'request' if round(p.in_flight) == 1 else 'requests'} served at once")
+                  f"rising; at {p.service_ms:.0f}ms each that's ~{n} "
+                  f"{'request' if n in ('1', '1.0') else 'requests'} served at once")
     if p.throughput_plateaued:
         ev.append("throughput plateaued while users kept rising")
     if p.edge_blocker:
@@ -141,7 +142,9 @@ def classify(p: Probes) -> Diagnosis:
         return Diagnosis("overload_shedding", "high",
                          "503s under load — a proxy or load balancer is shedding load.", ev)
     if p.in_flight is not None and p.in_flight < _SERIAL_MAX:
-        return Diagnosis("serialized", "high" if p.static_ok else "medium",
+        # Errors that aren't waiting (5xx, 4xx) suggest something else is wrong too.
+        waiting = dominant in (None, "timeout")
+        return Diagnosis("serialized", "high" if p.static_ok and waiting else "medium",
                          "One request at a time: this step's throughput stopped at what a "
                          "single request in progress allows, so the rest wait in line — a "
                          "lock on one shared row (one product's stock, one counter), a "
