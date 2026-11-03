@@ -141,6 +141,21 @@ The classifier is fully local and deterministic — no LLM, no network calls. It
     * Inspect the per-route breakdown in `verdict.stages[].routes` to see which route degrades fastest.
     * Check application logs and database/connection metrics around the `onset_users` level — the signal you need may not be visible from the outside.
   </Accordion>
+
+  <Accordion title="unexpected_answer — a journey step answers differently under load">
+    **What it means**
+
+    Journeys only. The step works for one user, but under load it answers something the journey doesn't expect: a 4xx such as 409, 401 or 403, or a response missing a value a later step needs. Usually users are conflicting over shared data (a row several users change at once, a lock, a unique constraint), or sessions and tokens stop holding up under load.
+
+    **How it's detected**
+
+    The step's most common failure under load is an unexpected 4xx or a missing extract. Confidence is `medium`: PreScale sees the answer, not the reason behind it.
+
+    **How to fix it**
+
+    * Check the app's logs for this step under load. A 409 or a unique-constraint error points at rows several users change at once: lock them, or retry. A 401 or 403 points at a session store or token cache that doesn't keep up.
+    * Make sure each virtual user's data is its own. A journey where every user changes the same account or item can conflict by design.
+  </Accordion>
 </AccordionGroup>
 
 ***

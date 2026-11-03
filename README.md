@@ -167,6 +167,8 @@ Try this
   → Add a pooler (e.g. pgbouncer) and check the pool checkout timeout.
 ```
 
+With journeys in `prescale/journeys/`, `investigate` diagnoses the journey step that breaks first instead, reaching it the way a user does (logged in, cart filled): `culprit checkout, step 3 place order`. The journey's other steps play the part of the static assets. `--urls` investigates URLs.
+
 ### `journeys` — your users' real paths
 
 A journey is a path a user takes through your app (log in, add to cart, place an order), saved as the requests it makes. Journeys live in your repo as `prescale/journeys/<name>.yaml`:

@@ -258,15 +258,21 @@ def render_investigation(result: dict) -> None:
     if not inv:
         return
     color = {"high": "red", "medium": "yellow", "low": "blue"}.get(inv["confidence"], "yellow")
+    step = inv.get("culprit_step")
+    if step:
+        where = (f"{escape(inv['culprit_journey'])}, step {step['index']} "
+                 f"[bold]{escape(step['name'])}[/bold] [dim]({escape(step['route'])})[/dim]")
+    else:
+        where = escape(inv["culprit_route"])
     lines = [
-        f"[bold]Likely cause:[/bold] {inv['summary']}",
+        f"[bold]Likely cause:[/bold] {escape(inv['summary'])}",
         f"Bottleneck  [bold]{inv['bottleneck_class']}[/bold] "
-        f"([{color}]{inv['confidence']} confidence[/{color}])  ·  culprit {inv['culprit_route']}",
+        f"([{color}]{inv['confidence']} confidence[/{color}])  ·  culprit {where}",
     ]
     if inv.get("evidence"):
         lines.append("")
         lines.append("[bold]Evidence[/bold]")
-        lines += [f"  • {e}" for e in inv["evidence"]]
+        lines += [f"  • {escape(e)}" for e in inv["evidence"]]
     if inv.get("remediation"):
         lines.append("")
         lines.append("[bold]Try this[/bold]")

@@ -39,6 +39,16 @@
   pinned older `prescale-version` keeps working). Until the dashboard compares journey runs only
   with journey baselines, a journey run's PR comment shows no change instead of a possibly
   misleading one, and never fails on it.
+- **`investigate` diagnoses the journey step that breaks first.** With journeys in
+  `prescale/journeys/`, `prescale investigate` ramps them like `run`, then probes the step that
+  broke first with the journey's own state (its 1-user latency comes from replaying the journey
+  from the start), compares it with the journey's other steps, and names the bottleneck and the
+  fix: `culprit checkout, step 3 place order · connection_pool (high confidence)`. If the
+  journeys ramped together starved that journey, the evidence says so; if every journey held alone
+  but they broke together, the step that broke together is diagnosed. A step that answers an
+  unexpected 4xx under load gets a new class, `unexpected_answer` (users conflicting over shared
+  data, or sessions failing under load). The `investigation` field gains `culprit_journey`,
+  `culprit_step` and `interference`. `--urls` investigates URLs as before.
 - **`--expect N`** on `run` says whether you'd hold N users at peak. In a journey run, N is split
   across journeys by weight: each must hold its share alone, and all together must hold N.
 

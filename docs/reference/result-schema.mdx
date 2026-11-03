@@ -300,6 +300,18 @@ The `investigation` object is added to the result when you run `prescale investi
   Ordered list of concrete fix recommendations, enriched with hints based on detected stack (e.g. gunicorn, nginx, pgbouncer).
 </ResponseField>
 
+<ResponseField name="investigation.culprit_journey" type="string | null">
+  Journey runs only: the journey whose step broke first.
+</ResponseField>
+
+<ResponseField name="investigation.culprit_step" type="object | null">
+  Journey runs only: the step that broke first, as `index` (1-based), `name` and `route`.
+</ResponseField>
+
+<ResponseField name="investigation.interference" type="object | null">
+  Journey runs only: set when the journeys ramped together starved the culprit journey. Same shape as `combined.interference`.
+</ResponseField>
+
 <ResponseField name="investigation.stack" type="object">
   Key-value map of detected infrastructure signals — typically `server` (e.g. `"gunicorn/21.2.0"`) and `cdn` (e.g. `"Cloudflare"`). Empty if nothing was detected.
 </ResponseField>

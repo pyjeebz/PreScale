@@ -51,6 +51,14 @@ class Probes:
     # Share of the culprit's successful responses a CDN served from cache, and which CDN.
     cache_share: float | None = None
     cache_source: str | None = None
+    # What static_ok compares against: static assets for URL routes; for a journey
+    # step, the journey's other steps (they held while this one broke, or not).
+    reference: str = "static assets"
+    # The 1-user figure ("p95", or "median" when there are too few samples for a
+    # p95) and what the onset level counts ("users", or "users in total" when
+    # several journeys ran together).
+    baseline_stat: str = "p95"
+    users_label: str = "users"
 
 
 @dataclass
@@ -67,12 +75,19 @@ def _capitalize(text: str) -> str:
 
 def _evidence(p: Probes) -> list[str]:
     ev: list[str] = []
+    users = f"{p.onset_users} {p.users_label}"
     if p.baseline_p95_ms is not None and p.loaded_p95_ms is not None:
-        ev.append(f"culprit p95 {p.baseline_p95_ms:.0f}ms at 1 user vs "
-                  f"{p.loaded_p95_ms:.0f}ms at {p.onset_users} users")
+        if p.baseline_stat == "p95":
+            ev.append(f"culprit p95 {p.baseline_p95_ms:.0f}ms at 1 user vs "
+                      f"{p.loaded_p95_ms:.0f}ms at {users}")
+        else:
+            ev.append(f"culprit {p.baseline_stat} {p.baseline_p95_ms:.0f}ms at 1 user vs "
+                      f"p95 {p.loaded_p95_ms:.0f}ms at {users}")
     if p.static_route is not None and p.static_ok is not None:
         held = "held" if p.static_ok else "also degraded"
-        ev.append(f"static {p.static_route} {held} at {p.onset_users} users")
+        what = (f"static {p.static_route}" if p.reference == "static assets"
+                else f"{p.reference} ({p.static_route})")
+        ev.append(f"{what} {held} at {users}")
     if p.error_kinds:
         worst = sorted(p.error_kinds.items(), key=lambda kv: -kv[1])
         ev.append("errors under load: " + ", ".join(f"{k} ({v})" for k, v in worst))
@@ -121,15 +136,23 @@ def classify(p: Probes) -> Diagnosis:
     if dominant == "timeout":
         if p.static_ok is False:
             return Diagnosis("connection_ceiling", "medium",
-                             "Timeouts with static assets degrading too — saturated at "
+                             f"Timeouts with {p.reference} degrading too — saturated at "
                              "the connection level.", ev)
         return Diagnosis("connection_pool", "medium",
                          "Requests timed out while infra held — a backend pool or "
                          "downstream dependency is blocking.", ev)
+    if dominant and (dominant.startswith("unexpected 4") or dominant == "missing extract"):
+        # Journey steps only: it works for one user, but under load it answered
+        # something the journey doesn't expect.
+        return Diagnosis("unexpected_answer", "medium",
+                         f"Under load the step answered something it doesn't for one user "
+                         f"({dominant}) — often users conflicting over shared data (a 409, a "
+                         "lock, a unique constraint) or sessions and tokens that don't hold "
+                         "up under load (401/403).", ev)
     if has_other_5xx:
         if p.static_ok is True:
             return Diagnosis("connection_pool", "high",
-                             "5xx under load while static assets held — the app/backend "
+                             f"5xx under load while {p.reference} held — the app/backend "
                              "is the wall (often a DB or upstream pool).", ev)
         return Diagnosis("connection_pool", "medium",
                          "5xx under load — an unhandled overload in the app "
@@ -189,6 +212,13 @@ _REMEDIATION = {
     "slow_endpoint": [
         "Profile the route — it's slow even at 1 user (likely a slow query or N+1).",
         "Add an index, a cache, or pagination; move heavy work off the request path.",
+    ],
+    "unexpected_answer": [
+        "Check the app's logs for this step under load: a 409 or a unique-constraint error "
+        "points at rows several users change at once (lock them, or retry); a 401/403 at a "
+        "session store or token cache that doesn't keep up.",
+        "Make sure each virtual user's data is its own: a journey where every user changes "
+        "the same account or item can conflict by design.",
     ],
     "unknown": [
         "Re-run with --repeat 3 for a tighter read, and inspect the per-route breakdown.",
@@ -322,14 +352,18 @@ async def investigate(url, *, max_users=200, paths=(), stage_seconds=5.0,
         result["profile"] = scenario_block(profile, report.survives_users)
 
     if audit:
-        # Load-free hygiene checks, so Launch Guard has the whole picture in one run.
-        try:
-            findings = await run_audit(url, extra_headers=headers)
-            result["audit"] = [{"name": f.name, "status": f.status, "detail": f.detail,
-                                "fix": f.fix} for f in findings]
-        except AuditError as exc:
-            result["audit"] = [{"name": "Audit", "status": "info",
-                                "detail": f"Couldn't run the audit: {exc}", "fix": None}]
+        result["audit"] = await audit_block(url, headers=headers)
 
     write_result(result, store=store)
     return result
+
+
+async def audit_block(url: str, *, headers=None) -> list[dict]:
+    """The Result's `audit` field: load-free HTTP hygiene checks."""
+    try:
+        findings = await run_audit(url, extra_headers=headers)
+        return [{"name": f.name, "status": f.status, "detail": f.detail, "fix": f.fix}
+                for f in findings]
+    except AuditError as exc:
+        return [{"name": "Audit", "status": "info",
+                 "detail": f"Couldn't run the audit: {exc}", "fix": None}]

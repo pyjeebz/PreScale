@@ -21,6 +21,7 @@ from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
 from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
+from prescale_cli.journeys.diagnose import diagnose_run
 from prescale_cli.journeys.load import (
     LABELS,
     JourneyRun,
@@ -386,12 +387,15 @@ def _journeys_to_run(directory: Path, only: tuple[str, ...], *, urls_only: bool,
 
 def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wall: float,
                   error_threshold: float, timeout: float, headers: dict[str, str],
-                  replica: bool, as_json: bool, combined: bool = True) -> tuple:
+                  replica: bool, as_json: bool, combined: bool = True,
+                  diagnose: bool = False) -> tuple:
     """The isolation pass: check each journey once, then ramp each one that
     replays on its own; then, with two or more, the combined pass. Returns
     (report, result, live_mode) for the first journey to break, with every
-    journey's verdict in result["journeys"]. Raises NoJourneyReplaysError if no
-    journey replays, and LoadError if a ramp can't run. Shared by `run` and `ci`."""
+    journey's verdict in result["journeys"]. With DIAGNOSE (`investigate`), the
+    step that broke first is probed and result["investigation"] says why. Raises
+    NoJourneyReplaysError if no journey replays, and LoadError if a ramp can't
+    run. Shared by `run`, `investigate` and `ci`."""
     if not as_json:
         console.print(f"\n[bold]PreScale[/bold] — replaying {len(journeys)} "
                       f"journey{'s' if len(journeys) != 1 else ''} against [cyan]{url}[/cyan]")
@@ -439,6 +443,7 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
     result["journeys"] = journeys_block(runs)
 
     ramped = [r for r in runs if r.report is not None]
+    together = None
     if combined and len(ramped) > 1:
         if not as_json:
             mix = ", ".join(f"{escape(r.journey.name)} {r.journey.weight:g}" for r in ramped)
@@ -458,6 +463,17 @@ def run_journeys(journeys: list[Journey], url: str, config: dict, *, latency_wal
         result["combined"] = combined_block(together, runs)
         if together_warning and together_warning not in (result["warning"] or ""):
             result["warning"] = " ".join(filter(None, [result["warning"], together_warning]))
+
+    broke_together = together is not None and together.onset_users is not None
+    if diagnose and (worst.report.onset_users is not None or broke_together):
+        if not as_json:
+            console.print("\n[dim]Diagnosing the step that broke first…[/dim]")
+        investigation = asyncio.run(diagnose_run(
+            worst, runs, url, together=together, combined=result.get("combined"),
+            latency_wall=latency_wall, error_threshold=error_threshold, timeout=timeout,
+            headers=headers, max_rps=config["max_rps"]))
+        if investigation is not None:
+            result["investigation"] = investigation
     return worst.report, result, live_mode
 
 
