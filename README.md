@@ -233,7 +233,7 @@ In CI, `prescale ci` (and the GitHub Action) replays the checkout's journeys ins
 - Journeys that change data (POST, PUT, PATCH, DELETE) run against local hosts, or a host you name with `--allow-writes staging.myapp.com` (on `verify` and `run`). Types `side_effect` (emails, SMS, invites) and `destructive` are never replayed.
 - Each run of a journey has its own cookies and extracted values, so one user's login never leaks to another.
 
-Try it on the example shop: `python examples/fragile-shop.py 8400`, then `SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys`.
+Try it on the example shop: `python examples/fragile-shop.py 8400`, then `SHOP_PASSWORD=demo prescale journeys verify http://localhost:8400 --dir examples/journeys`. Its `flash-sale` journey has everyone buy the same product, which locks one stock row: `prescale investigate http://localhost:8400 --dir examples/journeys --journey flash-sale` names it `serialized`, one request at a time.
 
 ### `audit` — hygiene, no load
 

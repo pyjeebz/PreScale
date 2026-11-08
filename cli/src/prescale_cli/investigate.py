@@ -32,6 +32,7 @@ _CACHED_SHARE = 0.9
 _SLOW_BASELINE_MS = 800.0   # >= 0.8s at 1 VU => intrinsically slow
 _LATENCY_WALL_S = 2.0
 _ERROR_THRESHOLD = 0.02
+_SERIAL_MAX = 1.5           # served at once below this => one at a time
 
 
 @dataclass
@@ -60,6 +61,12 @@ class Probes:
     # several journeys ran together).
     baseline_stat: str = "p95"
     users_label: str = "users"
+    # How many requests the culprit serves at once (Little's law: its most
+    # completions per second x its 1-user time), set only when its throughput
+    # stopped rising while users kept rising. ~1 means one at a time.
+    in_flight: float | None = None
+    peak_completions: float | None = None   # per second, at the onset level
+    service_ms: float | None = None         # median at 1 user
 
 
 @dataclass
@@ -92,6 +99,11 @@ def _evidence(p: Probes) -> list[str]:
     if p.error_kinds:
         worst = sorted(p.error_kinds.items(), key=lambda kv: -kv[1])
         ev.append("errors under load: " + ", ".join(f"{k} ({v})" for k, v in worst))
+    if p.in_flight is not None:
+        n = f"{p.in_flight:.1f}" if p.in_flight < 2 else f"{p.in_flight:.0f}"
+        ev.append(f"it completed at most ~{p.peak_completions:.0f} requests/s while users kept "
+                  f"rising; at {p.service_ms:.0f}ms each that's ~{n} "
+                  f"{'request' if n in ('1', '1.0') else 'requests'} served at once")
     if p.throughput_plateaued:
         ev.append("throughput plateaued while users kept rising")
     if p.edge_blocker:
@@ -129,6 +141,14 @@ def classify(p: Probes) -> Diagnosis:
     if has_503:
         return Diagnosis("overload_shedding", "high",
                          "503s under load — a proxy or load balancer is shedding load.", ev)
+    if p.in_flight is not None and p.in_flight < _SERIAL_MAX:
+        # Errors that aren't waiting (5xx, 4xx) suggest something else is wrong too.
+        waiting = dominant in (None, "timeout")
+        return Diagnosis("serialized", "high" if p.static_ok and waiting else "medium",
+                         "One request at a time: this step's throughput stopped at what a "
+                         "single request in progress allows, so the rest wait in line — a "
+                         "lock on one shared row (one product's stock, one counter), a "
+                         "global lock, or a single worker.", ev)
     if dominant in ("connection refused", "network"):
         conf = "high" if p.static_ok is False else "medium"
         return Diagnosis("connection_ceiling", conf,
@@ -213,6 +233,14 @@ _REMEDIATION = {
     "slow_endpoint": [
         "Profile the route — it's slow even at 1 user (likely a slow query or N+1).",
         "Add an index, a cache, or pagination; move heavy work off the request path.",
+    ],
+    "serialized": [
+        "Find what this step locks: a SELECT ... FOR UPDATE or a transaction on one row "
+        "(a product's stock, a counter, a balance), a mutex, or a single worker or queue "
+        "consumer.",
+        "Hold it for less: do slow work (payments, emails, rendering) outside the lock.",
+        "Lock less: an atomic UPDATE (e.g. SET stock = stock - 1 WHERE stock > 0) instead of "
+        "read-then-write, or split the hot row (stock in shards, counters per worker).",
     ],
     "unexpected_answer": [
         "Check the app's logs for this step under load: a 409 or a unique-constraint error "

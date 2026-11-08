@@ -142,6 +142,22 @@ The classifier is fully local and deterministic — no LLM, no network calls. It
     * Check application logs and database/connection metrics around the `onset_users` level — the signal you need may not be visible from the outside.
   </Accordion>
 
+  <Accordion title="serialized — one request at a time">
+    **What it means**
+
+    Journeys only. The step serves one request at a time; everyone else waits in line. Typically a lock on one shared row (one product's stock in a flash sale, a counter, an account balance), a global lock or mutex, or a single worker or queue consumer.
+
+    **How it's detected**
+
+    PreScale counts how many requests the step serves at once, with Little's law: the most it completed per second at the level where it broke, times how long one takes with a single user. It only counts when the step's own requests queued (under load they took at least 3× their 1-user time), its completions held steady from the level before the break to the break (neither rising nor collapsing), and PreScale's own machine kept up. It's skipped under `--max-rps`, where the cap would be what stopped them. A cheap step that just completes at the pace of a busier step before it never queues, so it's never called `serialized`. About one at a time is `serialized`; `high` confidence when the journey's other steps held. For any other class the count is in the evidence too ("~25 requests served at once"), which is often the size of the pool or worker count you're hitting.
+
+    **How to fix it**
+
+    * Find what the step locks: a `SELECT ... FOR UPDATE` or a transaction on one row, a mutex, or a single worker.
+    * Hold it for less: do slow work (payments, emails, rendering) outside the lock.
+    * Lock less: an atomic `UPDATE ... SET stock = stock - 1 WHERE stock > 0` instead of read-then-write, or split the hot row (stock in shards, counters per worker).
+  </Accordion>
+
   <Accordion title="unexpected_answer — a journey step answers differently under load">
     **What it means**
 
