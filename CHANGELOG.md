@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-11-08
 
 ### Added
 - **Journeys: your users' real paths, saved in your repo.** A journey file
@@ -13,7 +13,8 @@
     API key in a journey file is refused.
   - Journeys that change data only run against local hosts or hosts you allow with
     `--allow-writes`; journeys that send messages or delete data are never replayed.
-  - The example shop has a JSON API and two example journeys in `examples/journeys/`.
+  - The example shop has a JSON API and three example journeys in `examples/journeys/`
+    (browse, checkout behind a 25-connection pool, and a flash sale on one product).
 - **`prescale run` replays journeys at load.** When `prescale/journeys/` has journeys, virtual
   users walk whole journeys (with each step's think time and their own cookies) instead of hitting
   single URLs. Each journey is ramped on its own; the report names the journey and the step that
@@ -36,9 +37,9 @@
   app, not a stale file). Response bodies never reach the PR comment or uploads; locally,
   `journeys verify` shows them with every secret the journeys read masked.
   New Action inputs: `stale` and `allow-writes` (the action only passes them when set, so a
-  pinned older `prescale-version` keeps working). Until the dashboard compares journey runs only
-  with journey baselines, a journey run's PR comment shows no change instead of a possibly
-  misleading one, and never fails on it.
+  pinned older `prescale-version` keeps working). A journey run is only ever compared with a
+  journey baseline (and a URL run with a URL baseline); if the dashboard can't say it compared
+  like with like, the PR comment shows no change instead of a possibly misleading one.
 - **How many at once, and one-at-a-time bottlenecks.** For the journey step that breaks first,
   `investigate` now counts how many requests it serves at once (its most completions per second
   times its 1-user time, once those completions stop rising while users keep rising) and says so:
@@ -68,6 +69,11 @@
   `culprit_step` and `interference`. `--urls` investigates URLs as before.
 - **`--expect N`** on `run` says whether you'd hold N users at peak. In a journey run, N is split
   across journeys by weight: each must hold its share alone, and all together must hold N.
+
+### Changed
+- **With journey files, `run`, `investigate` and `ci` test journeys.** If `prescale/journeys/`
+  exists in the directory you run from, these commands replay its journeys instead of URLs. Add
+  `--urls` to test URLs as before. Without that directory nothing changes.
 
 ### Fixed
 - **`prescale mcp` works on a fresh install again.** `pip install 'prescale[mcp]'` picked up the new
