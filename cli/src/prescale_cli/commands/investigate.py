@@ -15,7 +15,12 @@ from prescale_cli.cloud import CloudError, require_credentials
 from prescale_cli.commands.audit import _ICONS as _AUDIT_ICONS
 from prescale_cli.commands.hostcheck import confirm_host, host_permission_option
 from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
-from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
+from prescale_cli.commands.replicaopts import (
+    app_option,
+    app_timeout_option,
+    db_options,
+    start_replica,
+)
 from prescale_cli.commands.run import _journeys_to_run, run_journeys
 from prescale_cli.commands.upload import header_option, upload_after_run, upload_option
 from prescale_cli.investigate import _ERROR_THRESHOLD, _LATENCY_WALL_S, audit_block
@@ -65,6 +70,7 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 @dir_option
 @app_option
 @app_timeout_option
+@db_options
 @host_permission_option
 @header_option
 @upload_option

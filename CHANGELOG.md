@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **A throwaway copy of your database for replica mode (Neon).** `--db neon --db-parent
+  staging` on `run`, `investigate` and `ci` copies that Neon branch, starts the app (`--app`)
+  with `DATABASE_URL` pointing at the copy, and deletes the copy when the test ends, even on
+  errors or Ctrl-C. Journeys that write change the copy, never the parent, and the load runs on
+  the copy's own compute. Needs `NEON_API_KEY` and `NEON_PROJECT_ID`. The parent must be named,
+  and the connection string is never printed, saved or uploaded; saved runs record
+  `config.database` (provider, parent, database name). `--db-name`, `--db-env` and
+  `--db-pooled` cover multi-database branches, other variable names and Neon's pooler.
+
 ## 1.2.0 — 2026-11-08
 
 ### Added

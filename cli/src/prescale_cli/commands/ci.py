@@ -29,7 +29,12 @@ from prescale_cli.ci import (
 )
 from prescale_cli.cloud import CloudError, parse_headers, require_credentials, upload_result
 from prescale_cli.commands.journeys import dir_option, refuse_missing_env, refuse_unallowed_writes
-from prescale_cli.commands.replicaopts import app_option, app_timeout_option, start_replica
+from prescale_cli.commands.replicaopts import (
+    app_option,
+    app_timeout_option,
+    db_options,
+    start_replica,
+)
 from prescale_cli.commands.run import run_journeys
 from prescale_cli.hosts import PERMISSION_ENV
 from prescale_cli.investigate import investigate as run_investigate
@@ -85,6 +90,7 @@ def _annotate(level: str, message: str) -> None:
 @dir_option
 @app_option
 @app_timeout_option
+@db_options
 @click.option("--store", "store", type=click.Path(file_okay=False), default=None,
               help="Directory for saved runs (default: ./.prescale).")
 def ci(url: str | None, target: str, paths: tuple[str, ...], header_values: tuple[str, ...],

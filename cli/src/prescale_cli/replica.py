@@ -52,7 +52,7 @@ def require_local(url: str) -> None:
 
 @contextmanager
 def replica(command: str, url: str, *, timeout: float = DEFAULT_TIMEOUT, cwd: str | None = None,
-            on_wait=None):
+            on_wait=None, env: dict[str, str] | None = None):
     """Start `command`, wait for `url` to answer, yield, then stop the app and
     everything it started (also on errors and Ctrl-C)."""
     require_local(url)
@@ -60,7 +60,7 @@ def replica(command: str, url: str, *, timeout: float = DEFAULT_TIMEOUT, cwd: st
         raise ReplicaError(f"Something is already running at {url}. Stop it, or point the "
                            "app at another port, so PreScale tests the build it starts.")
     log = tempfile.NamedTemporaryFile(prefix="prescale-app-", suffix=".log", delete=False)
-    process = _start(command, cwd, log)
+    process = _start(command, cwd, log, env)
     try:
         _wait_until_ready(process, url, timeout, log.name, on_wait)
         yield Replica(pid=process.pid, log_path=log.name)
@@ -69,14 +69,15 @@ def replica(command: str, url: str, *, timeout: float = DEFAULT_TIMEOUT, cwd: st
         log.close()
 
 
-def _start(command: str, cwd: str | None, log) -> subprocess.Popen:
+def _start(command: str, cwd: str | None, log, env: dict[str, str] | None = None
+           ) -> subprocess.Popen:
     # A new process group, so stopping it also stops what npm or a shell started.
     group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if sys.platform == "win32"
              else {"start_new_session": True})
     try:
         return subprocess.Popen(command, shell=True, cwd=cwd, stdout=log,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                env=os.environ.copy(), **group)
+                                env={**os.environ, **(env or {})}, **group)
     except OSError as exc:
         raise ReplicaError(f"Couldn't start the app: {exc}") from exc
 

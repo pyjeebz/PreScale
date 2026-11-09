@@ -41,6 +41,35 @@ The URL must be local. If something is already answering there, PreScale stops i
 testing it, so you always test the build it started. If the app crashes or never comes up,
 you get its exit code and the end of its log.
 
+## A throwaway copy of your database
+
+With `--db neon`, the app doesn't use your staging database at all. PreScale copies a Neon
+branch you name, points the app at the copy, and deletes the copy when the test ends.
+
+```bash
+export NEON_API_KEY=...        # a Neon API key
+export NEON_PROJECT_ID=...     # the project to copy from
+prescale run http://localhost:3000 --app "npm run build && npm start" \
+  --db neon --db-parent staging
+```
+
+- **Safe writes.** Journeys that write (sign-ups, carts, orders) change the copy, never
+  `staging`.
+- **Real data, real query plans.** Neon branches are copy-on-write, so the copy has all of
+  the parent's data within seconds, whatever its size.
+- **Its own compute.** The load runs on the copy's compute, not the parent's. That compute may
+  be sized differently from production's, and results say so.
+- **Always cleaned up.** The copy is deleted however the run ends. If Neon refuses, PreScale
+  names the branch (`prescale-...`) so you can delete it.
+- **You choose the parent.** `--db-parent` is required: the default branch is often
+  production, so PreScale never picks it for you.
+- **The connection string stays secret.** It goes into the app's environment only (as
+  `DATABASE_URL`, or the variable you name with `--db-env`), never into the terminal, the
+  saved run or an upload.
+
+Options: `--db-name` picks the database when the branch has more than one, and `--db-pooled`
+gives the app Neon's pooled URL.
+
 ## In CI, on every pull request
 
 In CI, replica mode needs no deploy at all: the [GitHub Action](/guides/github-action)

@@ -75,6 +75,14 @@ def build_result(report: RunReport, *, url: str, targets: list[str],
     if replica:
         config = {**config, "replica": True}
         warning = f"{warning} {REPLICA_NOTE}" if warning else REPLICA_NOTE
+        from prescale_cli.commands.replicaopts import database_info
+        database = database_info()
+        if database:
+            config = {**config, "database": database}
+            note = (f"Its database was a throwaway Neon copy of {database['parent']} on its "
+                    "own compute, which may be sized differently from production's.")
+            warning = f"{warning} {note}"
+
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "run",
