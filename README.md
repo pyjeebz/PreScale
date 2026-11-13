@@ -288,6 +288,12 @@ prescale investigate http://localhost:3000 --app "npm run build && npm start"
 
 PreScale runs the command in your project, waits until the URL answers (`--app-timeout`, default 600s, since builds take a while), runs the test, then stops the app and everything it started, even on errors or Ctrl-C. The app uses your environment, so point `DATABASE_URL` and API keys at a dev or staging database. Results say they were measured on a local replica (no serverless cold starts), and the command itself is never saved or uploaded.
 
+**A throwaway copy of your database** (Neon). Add `--db neon --db-parent staging` and PreScale copies that Neon branch (copy-on-write: seconds, whatever its size), starts your app with `DATABASE_URL` pointing at the copy, and deletes the copy when the test ends, even on errors or Ctrl-C. Journeys that write change the copy, never staging, and the load runs on the copy's own compute. It needs `NEON_API_KEY` and `NEON_PROJECT_ID`. You always name the branch to copy (the default branch is often production), and the copy's connection string is never printed, saved or uploaded.
+
+```bash
+prescale run http://localhost:3000 --app "npm run build && npm start" --db neon --db-parent staging
+```
+
 In CI it needs no deploy at all: build the pull request in the job and test it there.
 
 ```yaml

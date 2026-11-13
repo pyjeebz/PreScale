@@ -30,6 +30,10 @@ NOTE = ("Measured on a local replica: your app's own build on this machine, not 
 
 _POLL_S = 0.5
 _STOP_GRACE_S = 10.0
+_QUICK_STOP_S = 2.0
+# Set when the run is being cancelled (--db's signal guard): stop the app fast, so
+# its database copy can still be deleted before the job is killed.
+QUICK_STOP = False
 _LOG_LINES = 15
 
 
@@ -52,31 +56,41 @@ def require_local(url: str) -> None:
 
 @contextmanager
 def replica(command: str, url: str, *, timeout: float = DEFAULT_TIMEOUT, cwd: str | None = None,
-            on_wait=None):
+            on_wait=None, env: dict[str, str] | None = None, secrets: set[str] | None = None):
     """Start `command`, wait for `url` to answer, yield, then stop the app and
-    everything it started (also on errors and Ctrl-C)."""
+    everything it started (also on errors and Ctrl-C). ENV is added to the app's
+    environment. SECRETS (e.g. a database copy's URL and password) are masked in
+    anything shown from the app's log, and the log is deleted when the app stops,
+    since apps often print their database URL."""
     require_local(url)
     if _answers(url):
         raise ReplicaError(f"Something is already running at {url}. Stop it, or point the "
                            "app at another port, so PreScale tests the build it starts.")
     log = tempfile.NamedTemporaryFile(prefix="prescale-app-", suffix=".log", delete=False)
-    process = _start(command, cwd, log)
+    hidden = {v for v in (secrets or set()) if v}
+    process = _start(command, cwd, log, env)
     try:
-        _wait_until_ready(process, url, timeout, log.name, on_wait)
+        _wait_until_ready(process, url, timeout, log.name, on_wait, hidden)
         yield Replica(pid=process.pid, log_path=log.name)
     finally:
         _stop(process)
         log.close()
+        if hidden:
+            try:
+                os.unlink(log.name)
+            except OSError:
+                pass
 
 
-def _start(command: str, cwd: str | None, log) -> subprocess.Popen:
+def _start(command: str, cwd: str | None, log, env: dict[str, str] | None = None
+           ) -> subprocess.Popen:
     # A new process group, so stopping it also stops what npm or a shell started.
     group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if sys.platform == "win32"
              else {"start_new_session": True})
     try:
         return subprocess.Popen(command, shell=True, cwd=cwd, stdout=log,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                env=os.environ.copy(), **group)
+                                env={**os.environ, **(env or {})}, **group)
     except OSError as exc:
         raise ReplicaError(f"Couldn't start the app: {exc}") from exc
 
@@ -90,22 +104,23 @@ def _answers(url: str) -> bool:
 
 
 def _wait_until_ready(process: subprocess.Popen, url: str, timeout: float, log_path: str,
-                      on_wait) -> None:
+                      on_wait, hidden: set[str] = frozenset()) -> None:
+    where = "" if hidden else f" ({log_path})"  # deleted afterwards when it may hold secrets
     deadline = time.monotonic() + timeout
     started = time.monotonic()
     while time.monotonic() < deadline:
         code = process.poll()
         if code is not None:
             raise ReplicaError(f"The app exited (code {code}) before {url} answered. "
-                               f"The end of its log ({log_path}):\n{_tail(log_path)}")
+                               f"The end of its log{where}:\n{_tail(log_path, hidden)}")
         if _answers(url):
             return
         if on_wait:
             on_wait(time.monotonic() - started)
         time.sleep(_POLL_S)
     raise ReplicaError(f"The app didn't answer at {url} within {timeout:g}s. Raise "
-                       f"--app-timeout if the build takes longer. The end of its log "
-                       f"({log_path}):\n{_tail(log_path)}")
+                       f"--app-timeout if the build takes longer. The end of its log"
+                       f"{where}:\n{_tail(log_path, hidden)}")
 
 
 def _stop(process: subprocess.Popen) -> None:
@@ -120,7 +135,8 @@ def _stop(process: subprocess.Popen) -> None:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         return
-    deadline = time.monotonic() + _STOP_GRACE_S
+    grace = _QUICK_STOP_S if QUICK_STOP else _STOP_GRACE_S
+    deadline = time.monotonic() + grace
     while time.monotonic() < deadline and _group_alive(process.pid):
         process.poll()  # reap the leader so it doesn't linger as a zombie
         time.sleep(0.1)
@@ -130,7 +146,7 @@ def _stop(process: subprocess.Popen) -> None:
         except ProcessLookupError:
             pass
     try:
-        process.wait(timeout=_STOP_GRACE_S)
+        process.wait(timeout=grace)
     except subprocess.TimeoutExpired:
         pass
 
@@ -145,10 +161,17 @@ def _group_alive(pgid: int) -> bool:
     return True
 
 
-def _tail(path: str) -> str:
+def mask(text: str, hidden: set[str]) -> str:
+    """TEXT with every secret in HIDDEN replaced by ***, longest first."""
+    for value in sorted(hidden, key=len, reverse=True):
+        text = text.replace(value, "***")
+    return text
+
+
+def _tail(path: str, hidden: set[str] = frozenset()) -> str:
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             lines = fh.read().splitlines()
     except OSError:
         return "(no log)"
-    return "\n".join(lines[-_LOG_LINES:]) or "(the app printed nothing)"
+    return mask("\n".join(lines[-_LOG_LINES:]), hidden) or "(the app printed nothing)"

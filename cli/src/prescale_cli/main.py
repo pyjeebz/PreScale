@@ -7,6 +7,7 @@ from prescale_cli.commands import (
     audit,
     ci,
     compare,
+    db,
     history,
     investigate,
     journeys,
@@ -59,6 +60,7 @@ cli.add_command(login.login)
 cli.add_command(login.logout)
 cli.add_command(upload.upload)
 cli.add_command(ci.ci)
+cli.add_command(db.db)
 
 
 def main() -> None:

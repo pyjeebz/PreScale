@@ -46,6 +46,15 @@
           "type": "boolean",
           "description": "True when PreScale started the app's own build locally (--app) and tested that, not a deployed host."
         },
+        "database": {
+          "type": "object",
+          "description": "With --db: the throwaway database copy the app ran against. Never includes a connection string.",
+          "properties": {
+            "provider": { "type": "string", "enum": ["neon"] },
+            "parent": { "type": "string", "description": "The branch that was copied." },
+            "database": { "type": "string" }
+          }
+        },
         "mode": {
           "type": "string",
           "enum": ["journeys"],
