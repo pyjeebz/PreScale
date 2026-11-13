@@ -16,6 +16,7 @@ upload or a log).
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import time
 from contextlib import contextmanager
@@ -30,6 +31,9 @@ READY_TIMEOUT = 120.0
 DELETE_TIMEOUT = 30.0
 _POLL_S = 1.0
 NAME_PREFIX = "prescale-"
+# Exactly the names neon_branch generates, so cleanup never matches a user's
+# own branch that happens to start with "prescale-".
+OUR_NAME = re.compile(r"^prescale-\d{8}-\d{6}-[0-9a-f]{6}$")
 # Neon says 423 (another operation holds the resource) and 503 are safe to retry.
 _RETRYABLE = (423, 503)
 _RETRY_SCALE = 1.0  # tests set 0 to skip the backoff waits
@@ -208,8 +212,10 @@ def neon_branch(parent: str, *, api_key: str, project: str, database: str | None
                 try:
                     created = next((b for b in _branches(client, project, search=name)
                                     if b.get("name") == name), None)
-                except DBBranchError:
-                    created = {"id": name, "name": name}  # can't tell: say which to check
+                except DBBranchError as exc:
+                    # Can't tell whether it exists: say which branch to check.
+                    if on_delete_failed:
+                        on_delete_failed(name, exc)
             if created is not None:
                 try:
                     _delete(client, project, created["id"])
@@ -218,6 +224,11 @@ def neon_branch(parent: str, *, api_key: str, project: str, database: str | None
                         on_delete_failed(created.get("name") or created["id"], exc)
         finally:
             client.close()
+
+
+def _ours(branch: dict) -> bool:
+    return (bool(OUR_NAME.match(branch.get("name") or "")) and not branch.get("default")
+            and not branch.get("protected") and not branch.get("primary"))
 
 
 def stale_copies(*, api_key: str, project: str, older_than_hours: float,
@@ -231,7 +242,7 @@ def stale_copies(*, api_key: str, project: str, older_than_hours: float,
         found = _branches(client, project, search=NAME_PREFIX)
     stale = []
     for b in found:
-        if not (b.get("name") or "").startswith(NAME_PREFIX):
+        if not _ours(b):
             continue
         try:
             created = datetime.fromisoformat(str(b.get("created_at")).replace("Z", "+00:00"))
@@ -249,7 +260,7 @@ def delete_copies(branches: list[dict], *, api_key: str, project: str,
     with httpx.Client(base_url=NEON_API, timeout=30.0, transport=transport,
                       headers={"Authorization": f"Bearer {api_key}"}) as client:
         for b in branches:
-            if not (b.get("name") or "").startswith(NAME_PREFIX):
+            if not _ours(b):
                 continue  # never anything PreScale didn't make
             try:
                 _delete(client, project, b["id"])

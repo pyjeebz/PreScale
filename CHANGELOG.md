@@ -11,8 +11,9 @@
   and the connection string is never printed, saved or uploaded; saved runs record
   `config.database` (provider, parent, database name). `--db-name`, `--db-env` (repeatable) and
   `--db-pooled` cover multi-database branches, other variable names and Neon's pooler.
-  - Every well-known database variable that's set (`DIRECT_URL`, `POSTGRES_URL*`,
-    `DATABASE_URL_UNPOOLED`, `PG*`) is pointed at the copy too.
+  - Every well-known database variable (`DIRECT_URL`, `POSTGRES_URL*`, `DATABASE_URL_UNPOOLED`,
+    `PG*`) is set to the copy, even when unset, so a `.env` file can't point the app elsewhere;
+    other variables holding a Postgres URL get a warning.
   - If the app fails to start, its log is shown with the copy's URL and password masked, then
     deleted. A cancelled CI job (SIGTERM) still deletes the copy.
 - **`prescale db cleanup`** deletes PreScale's own leftover Neon copies (`prescale-...`) older

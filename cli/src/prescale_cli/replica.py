@@ -30,6 +30,10 @@ NOTE = ("Measured on a local replica: your app's own build on this machine, not 
 
 _POLL_S = 0.5
 _STOP_GRACE_S = 10.0
+_QUICK_STOP_S = 2.0
+# Set when the run is being cancelled (--db's signal guard): stop the app fast, so
+# its database copy can still be deleted before the job is killed.
+QUICK_STOP = False
 _LOG_LINES = 15
 
 
@@ -131,7 +135,8 @@ def _stop(process: subprocess.Popen) -> None:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         return
-    deadline = time.monotonic() + _STOP_GRACE_S
+    grace = _QUICK_STOP_S if QUICK_STOP else _STOP_GRACE_S
+    deadline = time.monotonic() + grace
     while time.monotonic() < deadline and _group_alive(process.pid):
         process.poll()  # reap the leader so it doesn't linger as a zombie
         time.sleep(0.1)
@@ -141,7 +146,7 @@ def _stop(process: subprocess.Popen) -> None:
         except ProcessLookupError:
             pass
     try:
-        process.wait(timeout=_STOP_GRACE_S)
+        process.wait(timeout=grace)
     except subprocess.TimeoutExpired:
         pass
 

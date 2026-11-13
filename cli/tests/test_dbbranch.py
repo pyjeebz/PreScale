@@ -260,6 +260,17 @@ def test_every_known_database_variable_points_at_the_copy():
     assert env["PGHOST"] == "ep-copy-123.us-east-2.aws.neon.tech"
     assert env["PGPASSWORD"] == "s3cr3t-pw" and env["PGDATABASE"] == "shop"
     assert "HOME" not in env
+    # set even when unset here: an app's .env file can't win (dotenv never overrides)
+    empty = copy_environment(branch, ["DATABASE_URL"], {})
+    assert empty["POSTGRES_URL"] == URI and empty["DIRECT_URL"] == URI
+    assert empty["PGHOST"] == "ep-copy-123.us-east-2.aws.neon.tech"
+
+
+def test_other_postgres_urls_are_named():
+    from prescale_cli.commands.replicaopts import other_databases
+    assert other_databases({"DATABASE_URL": URI}, {
+        "DATABASE_URL": "postgres://staging", "ANALYTICS_DB": "postgresql://warehouse/x",
+        "HOME": "/root"}) == ["ANALYTICS_DB"]
 
 
 def test_cleanup_finds_only_old_prescale_copies_and_deletes_them(monkeypatch):
@@ -270,16 +281,23 @@ def test_cleanup_finds_only_old_prescale_copies_and_deletes_them(monkeypatch):
          "created_at": "2026-11-01T00:00:00Z"},
         {"id": "br-new", "name": "prescale-20261113-000000-bbbbbb",
          "created_at": "2026-11-13T09:00:00Z"},
-        {"id": "br-x", "name": "prescale-lookalike-but-old-and-not-ours",
+        {"id": "br-x", "name": "prescale-demo",          # a user's own branch
+         "created_at": "2026-10-01T00:00:00Z"},
+        {"id": "br-p", "name": "prescale-20261001-000000-cccccc", "protected": True,
          "created_at": "2026-10-01T00:00:00Z"},
     ]
     now = datetime(2026, 11, 13, 10, 0, tzinfo=timezone.utc)
     stale = dbbranch.stale_copies(api_key="key-123", project="p1", older_than_hours=6,
                                   transport=fake.transport(), now=now)
-    assert {b["id"] for b in stale} == {"br-old", "br-x"}  # the prefix is ours
+    assert {b["id"] for b in stale} == {"br-old"}  # only names PreScale generates
     assert dbbranch.delete_copies(stale, api_key="key-123", project="p1",
                                   transport=fake.transport()) == []
-    assert sorted(fake.deleted) == ["br-old", "br-x"]
+    assert fake.deleted == ["br-old"]
+    # and delete_copies itself refuses branches PreScale didn't make, even if handed them
+    not_ours = [b for b in fake.branches if b["id"] in ("br-main", "br-staging", "br-x", "br-p")]
+    assert dbbranch.delete_copies(not_ours, api_key="key-123", project="p1",
+                                  transport=fake.transport()) == []
+    assert fake.deleted == ["br-old"]
     assert "br-staging" not in fake.deleted and "br-main" not in fake.deleted
 
 
@@ -302,3 +320,42 @@ def test_an_app_that_prints_its_url_and_dies_never_shows_the_secret(monkeypatch,
     assert fake.deleted == ["br-copy"]
     leftover = list(Path(tempfile.gettempdir()).glob("prescale-app-*.log"))
     assert not any("s3cr3t" in p.read_text(errors="replace") for p in leftover)
+
+
+def test_when_a_failed_create_cant_be_checked_the_user_is_told():
+    fake = FakeNeon(post_fails_after_create=True)
+    calls = {"n": 0}
+
+    def flaky(request):
+        if request.method == "GET" and "search=prescale-" in str(request.url):
+            calls["n"] += 1
+            return httpx.Response(500, json={"message": "down"})
+        return fake.handler(request)
+    told = []
+    with pytest.raises(DBBranchError), neon_branch(
+            "staging", api_key="key-123", project="p1", transport=httpx.MockTransport(flaky),
+            on_delete_failed=lambda name, exc: told.append(name)):
+        pass
+    assert calls["n"] == 1 and told and told[0].startswith("prescale-")
+
+
+def test_the_first_signal_ends_the_run_and_later_ones_cant_interrupt_cleanup():
+    import signal
+
+    import click
+
+    from prescale_cli import replica as replica_mod
+    from prescale_cli.commands.replicaopts import _guard_signals
+    before = signal.getsignal(signal.SIGTERM)
+    with click.Context(click.Command("x")) as ctx:
+        _guard_signals(ctx)
+        handler = signal.getsignal(signal.SIGTERM)
+        assert handler not in (before, signal.SIG_DFL)
+        with pytest.raises(SystemExit) as exit_:
+            handler(signal.SIGTERM, None)
+        assert exit_.value.code == 128 + signal.SIGTERM
+        assert replica_mod.QUICK_STOP is True                  # the app gets a short stop
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+        assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN  # a 2nd Ctrl-C too
+    assert signal.getsignal(signal.SIGTERM) == before            # restored afterwards
+    assert replica_mod.QUICK_STOP is False

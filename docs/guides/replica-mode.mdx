@@ -68,14 +68,16 @@ prescale run http://localhost:3000 --app "npm run build && npm start" \
   saved run or an upload.
 
 - **Every database variable points at the copy.** Besides `DATABASE_URL` (or the variables you
-  name with `--db-env`, repeatable), any of `DIRECT_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`,
-  `POSTGRES_URL_NON_POOLING`, `DATABASE_URL_UNPOOLED` and the `PG*` variables that's set is
-  pointed at the copy too, so no part of the app reaches the real database by another name.
-  PreScale lists the ones it replaced.
+  name with `--db-env`, repeatable), PreScale always sets `DIRECT_URL`, `POSTGRES_URL`,
+  `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `DATABASE_URL_UNPOOLED` and the `PG*`
+  variables to the copy, even if they aren't set. Apps often load these from a `.env` file,
+  and dotenv never overrides a variable that's already set, so the copy wins over the file.
+  Any other variable holding a Postgres URL gets a warning: add it with `--db-env`.
 - **Secrets stay out of logs.** If the app fails to start, the end of its log is shown with the
   copy's URL and password replaced by `***`, and the log file is deleted.
-- **Cancelled CI jobs clean up too.** A SIGTERM (a cancelled GitHub Actions job) stops the app
-  and deletes the copy on the way out.
+- **Cancelled CI jobs clean up too.** The first Ctrl-C or SIGTERM (a cancelled GitHub Actions
+  job) stops the app quickly and deletes the copy; further signals are ignored so they can't
+  interrupt the delete.
 
 Options: `--db-name` picks the database when the branch has more than one, and `--db-pooled`
 gives the app Neon's pooled URL.
@@ -84,7 +86,7 @@ gives the app Neon's pooled URL.
 
 A run that's killed outright (a machine that dies, `kill -9`) can't delete its copy, and Neon
 plans limit how many branches a project has. `prescale db cleanup` lists PreScale's own copies
-(`prescale-...`) older than six hours (`--older-than HOURS`) and deletes them after you confirm
+(named `prescale-<date>-<time>-<id>`, never a default or protected branch) older than six hours (`--older-than HOURS`) and deletes them after you confirm
 (`--yes` to skip). It never touches a branch PreScale didn't make.
 
 ## In CI, on every pull request

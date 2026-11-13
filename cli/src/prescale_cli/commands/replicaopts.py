@@ -72,14 +72,46 @@ def db_options(fn):
             click.get_current_context().meta[DB_META] = {
                 "provider": db, "parent": db_parent, "name": db_name, "env": list(db_env),
                 "pooled": db_pooled}
-            # A cancelled CI job sends SIGTERM: turn it into a normal exit, so the
-            # app is stopped and the copy deleted on the way out.
-            try:
-                signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
-            except (ValueError, OSError):  # not the main thread, or no SIGTERM here
-                pass
+            _guard_signals(click.get_current_context())
         return fn(*args, **kwargs)
     return wrapper
+
+
+def _guard_signals(ctx: click.Context) -> None:
+    """A cancelled CI job sends SIGINT, then SIGTERM seconds later, then kills.
+    The first signal ends the run normally (so the app stops and the copy is
+    deleted), the app gets a short stop, and later signals are ignored so they
+    can't interrupt the delete. The old handlers come back afterwards."""
+    from prescale_cli import replica as replica_mod
+
+    def first(signum, _frame):
+        for sig in _SIGNALS:
+            try:
+                signal.signal(sig, signal.SIG_IGN)
+            except (ValueError, OSError):
+                pass
+        replica_mod.QUICK_STOP = True
+        if signum == signal.SIGINT:
+            raise KeyboardInterrupt
+        sys.exit(128 + signum)
+
+    try:
+        previous = {sig: signal.signal(sig, first) for sig in _SIGNALS}
+    except (ValueError, OSError):  # not the main thread, or no such signal here
+        return
+
+    def restore():
+        replica_mod.QUICK_STOP = False
+        for sig, handler in previous.items():
+            try:
+                signal.signal(sig, handler)
+            except (ValueError, OSError, TypeError):
+                pass
+    ctx.call_on_close(restore)
+
+
+_SIGNALS = tuple(s for s in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None))
+                 if s is not None)
 
 
 def _start_database(console: Console, quiet: bool) -> dict[str, str]:
@@ -118,25 +150,35 @@ def _start_database(console: Console, quiet: bool) -> dict[str, str]:
         console.print(f"[green]✓[/green] a throwaway copy of {branch.parent} is ready "
                       f"([dim]{branch.name}[/dim]); it's deleted when the test ends")
         console.print(f"  [dim]pointed at the copy: {', '.join(sorted(env))}[/dim]")
+    others = other_databases(env, os.environ)
+    if others:
+        Console(stderr=True).print(
+            f"[yellow]⚠ {', '.join(others)} also hold a Postgres URL and still point where "
+            "they did. If the app reads them, add them with --db-env.[/yellow]")
     return env
 
 
 def copy_environment(branch, named: list[str], current) -> dict[str, str]:
     """The app's database variables, all pointing at the copy: the ones named
-    with --db-env, and every well-known one that's set (so the app can't reach
-    the real database through DIRECT_URL, POSTGRES_URL or PGHOST)."""
+    with --db-env, and every well-known one, set or not. Always set, because
+    apps often load these from a .env file, and dotenv never overrides a
+    variable that's already set: so the copy wins over the file."""
     env = {name: branch.uri for name in named}
     for name in _URL_VARS:
-        if name in current and name not in env:
-            env[name] = branch.direct_uri if name in _DIRECT_URL_VARS else branch.uri
-    if any(name in current for name in _PG_VARS):
-        parts = urlsplit(branch.direct_uri)
-        env.update({"PGHOST": parts.hostname or "", "PGUSER": parts.username or "",
-                    "PGPASSWORD": parts.password or "", "PGDATABASE": parts.path.lstrip("/"),
-                    "PGPORT": str(parts.port or 5432), "PGSSLMODE": "require"})
-        if "PGHOST_UNPOOLED" in current:
-            env["PGHOST_UNPOOLED"] = parts.hostname or ""
+        env.setdefault(name, branch.direct_uri if name in _DIRECT_URL_VARS else branch.uri)
+    parts = urlsplit(branch.direct_uri)
+    env.update({"PGHOST": parts.hostname or "", "PGHOST_UNPOOLED": parts.hostname or "",
+                "PGUSER": parts.username or "", "PGPASSWORD": parts.password or "",
+                "PGDATABASE": parts.path.lstrip("/"), "PGPORT": str(parts.port or 5432),
+                "PGSSLMODE": "require"})
     return env
+
+
+def other_databases(env: dict[str, str], current) -> list[str]:
+    """Names of variables (not pointed at the copy) that hold a Postgres URL: the
+    app might still reach a real database through them."""
+    return sorted(name for name, value in current.items()
+                  if name not in env and str(value).startswith(("postgres://", "postgresql://")))
 
 
 def database_info() -> dict | None:
