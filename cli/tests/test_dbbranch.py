@@ -359,3 +359,30 @@ def test_the_first_signal_ends_the_run_and_later_ones_cant_interrupt_cleanup():
         assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN  # a 2nd Ctrl-C too
     assert signal.getsignal(signal.SIGTERM) == before            # restored afterwards
     assert replica_mod.QUICK_STOP is False
+
+
+def test_postgres_urls_in_env_files_and_driver_schemes_are_named(tmp_path):
+    from prescale_cli.commands.replicaopts import other_databases
+    (tmp_path / ".env").write_text("ANALYTICS_DB_URL=postgresql+asyncpg://warehouse/x\n"
+                                   "export REPORTS=\"postgres://r/y\"\nPORT=3000\n")
+    (tmp_path / ".env.local").write_text("DATABASE_URL=postgres://staging\n")
+    assert other_databases({"DATABASE_URL": URI}, {"SIDE": "postgres+psycopg://side"},
+                           cwd=str(tmp_path)) == ["ANALYTICS_DB_URL", "REPORTS", "SIDE"]
+
+
+def test_a_cancel_during_normal_cleanup_cant_interrupt_the_delete():
+    import signal
+
+    import click
+
+    from prescale_cli.commands.replicaopts import _guard_signals, ignore_signals
+    before = signal.getsignal(signal.SIGTERM)
+    with click.Context(click.Command("x")) as ctx:
+        _guard_signals(ctx)
+        seen = []
+        # registered in the real order: the copy (deleted last), then the app, then
+        # ignore_signals (start_replica, after the app) - so it runs first on close
+        ctx.call_on_close(lambda: seen.append(signal.getsignal(signal.SIGTERM)))  # delete
+        ctx.call_on_close(ignore_signals)
+    assert seen == [signal.SIG_IGN]                    # the delete ran with signals ignored
+    assert signal.getsignal(signal.SIGTERM) == before  # and they're restored afterwards

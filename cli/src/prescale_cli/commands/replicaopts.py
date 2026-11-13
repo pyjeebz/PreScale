@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import functools
 import os
+import re
 import signal
 import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import click
@@ -85,12 +87,10 @@ def _guard_signals(ctx: click.Context) -> None:
     from prescale_cli import replica as replica_mod
 
     def first(signum, _frame):
-        for sig in _SIGNALS:
-            try:
-                signal.signal(sig, signal.SIG_IGN)
-            except (ValueError, OSError):
-                pass
+        ignore_signals()
         replica_mod.QUICK_STOP = True
+        Console(stderr=True).print("[dim]Cancelled: stopping the app and deleting the "
+                                   "database copy…[/dim]")
         if signum == signal.SIGINT:
             raise KeyboardInterrupt
         sys.exit(128 + signum)
@@ -108,6 +108,15 @@ def _guard_signals(ctx: click.Context) -> None:
             except (ValueError, OSError, TypeError):
                 pass
     ctx.call_on_close(restore)
+
+
+def ignore_signals() -> None:
+    """From here on, signals can't interrupt deleting the copy."""
+    for sig in _SIGNALS:
+        try:
+            signal.signal(sig, signal.SIG_IGN)
+        except (ValueError, OSError):
+            pass
 
 
 _SIGNALS = tuple(s for s in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None))
@@ -174,11 +183,25 @@ def copy_environment(branch, named: list[str], current) -> dict[str, str]:
     return env
 
 
-def other_databases(env: dict[str, str], current) -> list[str]:
-    """Names of variables (not pointed at the copy) that hold a Postgres URL: the
-    app might still reach a real database through them."""
-    return sorted(name for name, value in current.items()
-                  if name not in env and str(value).startswith(("postgres://", "postgresql://")))
+_POSTGRES_URL = re.compile(r"^\s*['\"]?postgres(ql)?(\+[a-z0-9]+)?://", re.IGNORECASE)
+_ENV_LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+
+def other_databases(env: dict[str, str], current, cwd: str = ".") -> list[str]:
+    """Names (never values) of variables not pointed at the copy that hold a
+    Postgres URL, in this environment or in the app's .env files: the app might
+    still reach a real database through them."""
+    found = {name for name, value in current.items() if _POSTGRES_URL.match(str(value))}
+    for path in sorted(Path(cwd).glob(".env*")):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            m = _ENV_LINE.match(line)
+            if m and _POSTGRES_URL.match(m.group(2)):
+                found.add(m.group(1))
+    return sorted(found - set(env))
 
 
 def database_info() -> dict | None:
@@ -216,5 +239,9 @@ def start_replica(app: str, url: str, *, timeout: float, console: Console, quiet
     except ReplicaError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from None
+    if hidden:
+        # Callbacks run last-in-first-out: this one runs as cleanup starts, so a
+        # cancel that arrives while the copy is being deleted can't interrupt it.
+        ctx.call_on_close(ignore_signals)
     if not quiet:
         console.print(f"[green]✓[/green] your app is up at {url}")
