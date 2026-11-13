@@ -9,6 +9,10 @@ or Ctrl-C. The copy is made first and deleted last, after the app has stopped.
 from __future__ import annotations
 
 import functools
+import os
+import signal
+import sys
+from urllib.parse import urlsplit
 
 import click
 from rich.console import Console
@@ -19,6 +23,13 @@ from prescale_cli.replica import DEFAULT_TIMEOUT, ReplicaError, replica, require
 
 # Where the --db choices and the copy's (non-secret) description live for the command.
 DB_META = "prescale.db"
+
+# Database variables apps commonly read (Prisma, Vercel's Neon integration, libpq).
+# Any of these that's set is pointed at the copy too, so no part of the app can
+# reach the real database by another name.
+_DIRECT_URL_VARS = ("DIRECT_URL", "DATABASE_URL_UNPOOLED", "POSTGRES_URL_NON_POOLING")
+_URL_VARS = ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL") + _DIRECT_URL_VARS
+_PG_VARS = ("PGHOST", "PGHOST_UNPOOLED", "PGUSER", "PGPASSWORD", "PGDATABASE", "PGPORT")
 
 app_option = click.option(
     "--app", "app", default=None, metavar="COMMAND",
@@ -42,9 +53,11 @@ def db_options(fn):
                        "default branch is often production, so PreScale never picks it.")
     @click.option("--db-name", "db_name", default=None, metavar="NAME",
                   help="The database in the branch, if it has more than one.")
-    @click.option("--db-env", "db_env", default="DATABASE_URL", show_default=True,
-                  metavar="VAR", help="The environment variable the app reads its database "
-                                      "URL from.")
+    @click.option("--db-env", "db_env", multiple=True, default=("DATABASE_URL",),
+                  show_default=True, metavar="VAR",
+                  help="An environment variable the app reads its database URL from "
+                       "(repeatable). DIRECT_URL, POSTGRES_URL*, DATABASE_URL_UNPOOLED and "
+                       "PG* are pointed at the copy too whenever they're set.")
     @click.option("--db-pooled", "db_pooled", is_flag=True,
                   help="Give the app Neon's pooled connection URL (through its pooler).")
     @functools.wraps(fn)
@@ -57,8 +70,14 @@ def db_options(fn):
                 raise click.UsageError("--db neon needs --db-parent BRANCH, the branch to "
                                        "copy (e.g. staging).")
             click.get_current_context().meta[DB_META] = {
-                "provider": db, "parent": db_parent, "name": db_name, "env": db_env,
+                "provider": db, "parent": db_parent, "name": db_name, "env": list(db_env),
                 "pooled": db_pooled}
+            # A cancelled CI job sends SIGTERM: turn it into a normal exit, so the
+            # app is stopped and the copy deleted on the way out.
+            try:
+                signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+            except (ValueError, OSError):  # not the main thread, or no SIGTERM here
+                pass
         return fn(*args, **kwargs)
     return wrapper
 
@@ -69,10 +88,11 @@ def _start_database(console: Console, quiet: bool) -> dict[str, str]:
     want = ctx.meta.get(DB_META)
     if not want:
         return {}
+    err = Console(stderr=True) if quiet else console  # keep --json stdout clean
     try:
         api_key, project = neon_settings()
     except DBBranchError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        err.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from None
 
     def left_behind(name, exc):
@@ -88,14 +108,35 @@ def _start_database(console: Console, quiet: bool) -> dict[str, str]:
             with console.status(f"Copying the Neon branch {want['parent']}…"):
                 branch = ctx.with_resource(copy)
     except DBBranchError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        err.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from None
     # What the Result may say about it: never the URL.
     want["copy"] = {"provider": "neon", "parent": branch.parent, "database": branch.database}
+    want["secrets"] = branch.secrets()
+    env = copy_environment(branch, want["env"], os.environ)
     if not quiet:
         console.print(f"[green]✓[/green] a throwaway copy of {branch.parent} is ready "
                       f"([dim]{branch.name}[/dim]); it's deleted when the test ends")
-    return {want["env"]: branch.uri}
+        console.print(f"  [dim]pointed at the copy: {', '.join(sorted(env))}[/dim]")
+    return env
+
+
+def copy_environment(branch, named: list[str], current) -> dict[str, str]:
+    """The app's database variables, all pointing at the copy: the ones named
+    with --db-env, and every well-known one that's set (so the app can't reach
+    the real database through DIRECT_URL, POSTGRES_URL or PGHOST)."""
+    env = {name: branch.uri for name in named}
+    for name in _URL_VARS:
+        if name in current and name not in env:
+            env[name] = branch.direct_uri if name in _DIRECT_URL_VARS else branch.uri
+    if any(name in current for name in _PG_VARS):
+        parts = urlsplit(branch.direct_uri)
+        env.update({"PGHOST": parts.hostname or "", "PGUSER": parts.username or "",
+                    "PGPASSWORD": parts.password or "", "PGDATABASE": parts.path.lstrip("/"),
+                    "PGPORT": str(parts.port or 5432), "PGSSLMODE": "require"})
+        if "PGHOST_UNPOOLED" in current:
+            env["PGHOST_UNPOOLED"] = parts.hostname or ""
+    return env
 
 
 def database_info() -> dict | None:
@@ -114,6 +155,7 @@ def start_replica(app: str, url: str, *, timeout: float, console: Console, quiet
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from None
     env = _start_database(console, quiet)
+    hidden = (click.get_current_context().meta.get(DB_META) or {}).get("secrets")
     if not quiet:
         console.print(Panel(
             f"Starting your app with [bold]{app}[/bold] and waiting for {url}.\n" +
@@ -125,10 +167,10 @@ def start_replica(app: str, url: str, *, timeout: float, console: Console, quiet
     ctx = click.get_current_context()
     try:
         if quiet:
-            ctx.with_resource(replica(app, url, timeout=timeout, env=env))
+            ctx.with_resource(replica(app, url, timeout=timeout, env=env, secrets=hidden))
         else:
             with console.status("Building and starting your app…"):
-                ctx.with_resource(replica(app, url, timeout=timeout, env=env))
+                ctx.with_resource(replica(app, url, timeout=timeout, env=env, secrets=hidden))
     except ReplicaError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise SystemExit(1) from None

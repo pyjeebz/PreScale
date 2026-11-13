@@ -52,21 +52,30 @@ def require_local(url: str) -> None:
 
 @contextmanager
 def replica(command: str, url: str, *, timeout: float = DEFAULT_TIMEOUT, cwd: str | None = None,
-            on_wait=None, env: dict[str, str] | None = None):
+            on_wait=None, env: dict[str, str] | None = None, secrets: set[str] | None = None):
     """Start `command`, wait for `url` to answer, yield, then stop the app and
-    everything it started (also on errors and Ctrl-C)."""
+    everything it started (also on errors and Ctrl-C). ENV is added to the app's
+    environment. SECRETS (e.g. a database copy's URL and password) are masked in
+    anything shown from the app's log, and the log is deleted when the app stops,
+    since apps often print their database URL."""
     require_local(url)
     if _answers(url):
         raise ReplicaError(f"Something is already running at {url}. Stop it, or point the "
                            "app at another port, so PreScale tests the build it starts.")
     log = tempfile.NamedTemporaryFile(prefix="prescale-app-", suffix=".log", delete=False)
+    hidden = {v for v in (secrets or set()) if v}
     process = _start(command, cwd, log, env)
     try:
-        _wait_until_ready(process, url, timeout, log.name, on_wait)
+        _wait_until_ready(process, url, timeout, log.name, on_wait, hidden)
         yield Replica(pid=process.pid, log_path=log.name)
     finally:
         _stop(process)
         log.close()
+        if hidden:
+            try:
+                os.unlink(log.name)
+            except OSError:
+                pass
 
 
 def _start(command: str, cwd: str | None, log, env: dict[str, str] | None = None
@@ -91,22 +100,23 @@ def _answers(url: str) -> bool:
 
 
 def _wait_until_ready(process: subprocess.Popen, url: str, timeout: float, log_path: str,
-                      on_wait) -> None:
+                      on_wait, hidden: set[str] = frozenset()) -> None:
+    where = "" if hidden else f" ({log_path})"  # deleted afterwards when it may hold secrets
     deadline = time.monotonic() + timeout
     started = time.monotonic()
     while time.monotonic() < deadline:
         code = process.poll()
         if code is not None:
             raise ReplicaError(f"The app exited (code {code}) before {url} answered. "
-                               f"The end of its log ({log_path}):\n{_tail(log_path)}")
+                               f"The end of its log{where}:\n{_tail(log_path, hidden)}")
         if _answers(url):
             return
         if on_wait:
             on_wait(time.monotonic() - started)
         time.sleep(_POLL_S)
     raise ReplicaError(f"The app didn't answer at {url} within {timeout:g}s. Raise "
-                       f"--app-timeout if the build takes longer. The end of its log "
-                       f"({log_path}):\n{_tail(log_path)}")
+                       f"--app-timeout if the build takes longer. The end of its log"
+                       f"{where}:\n{_tail(log_path, hidden)}")
 
 
 def _stop(process: subprocess.Popen) -> None:
@@ -146,10 +156,17 @@ def _group_alive(pgid: int) -> bool:
     return True
 
 
-def _tail(path: str) -> str:
+def mask(text: str, hidden: set[str]) -> str:
+    """TEXT with every secret in HIDDEN replaced by ***, longest first."""
+    for value in sorted(hidden, key=len, reverse=True):
+        text = text.replace(value, "***")
+    return text
+
+
+def _tail(path: str, hidden: set[str] = frozenset()) -> str:
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             lines = fh.read().splitlines()
     except OSError:
         return "(no log)"
-    return "\n".join(lines[-_LOG_LINES:]) or "(the app printed nothing)"
+    return mask("\n".join(lines[-_LOG_LINES:]), hidden) or "(the app printed nothing)"

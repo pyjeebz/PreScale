@@ -3,6 +3,8 @@
 import functools
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 import httpx
 import pytest
@@ -13,29 +15,47 @@ from prescale_cli.dbbranch import DBBranchError, neon_branch, neon_settings
 from prescale_cli.main import cli
 
 URI = "postgresql://owner:s3cr3t-pw@ep-copy-123.us-east-2.aws.neon.tech/shop?sslmode=require"
+POOLED = ("postgresql://owner:s3cr3t-pw@ep-copy-123-pooler.us-east-2.aws.neon.tech/shop"
+          "?sslmode=require")
 
 
 class FakeNeon:
     """Enough of Neon's API: branches, operations, databases, connection URI."""
 
     def __init__(self, *, databases=("shop",), op_status=("running", "finished"),
-                 branches=("main", "staging")):
+                 branches=("main", "staging"), page_size=100, delete_locked=0,
+                 post_fails_after_create=False):
         self.calls: list[tuple[str, str]] = []
         self.created: dict | None = None
         self.deleted: list[str] = []
         self.databases = databases
         self.op_status = list(op_status)
-        self.branches = [{"id": f"br-{n}", "name": n} for n in branches]
+        self.branches = [{"id": f"br-{n}", "name": n, "created_at": "2026-11-01T00:00:00Z"}
+                         for n in branches]
+        self.page_size = page_size
+        self.delete_locked = delete_locked
+        self.post_fails_after_create = post_fails_after_create
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path.removeprefix("/api/v2"), request.method
         self.calls.append((method, path))
         assert request.headers["authorization"] == "Bearer key-123"
         if method == "GET" and path == "/projects/p1/branches":
-            return httpx.Response(200, json={"branches": self.branches})
+            search = request.url.params.get("search", "")
+            found = [b for b in self.branches if search in b["name"] or search in b["id"]]
+            start = int(request.url.params.get("cursor", "0"))
+            page = found[start:start + self.page_size]
+            more = start + self.page_size < len(found)
+            return httpx.Response(200, json={
+                "branches": page,
+                "pagination": {"next": str(start + self.page_size)} if more else {}})
         if method == "POST" and path == "/projects/p1/branches":
             body = json.loads(request.content)
             self.created = body
+            self.branches.append({"id": "br-copy", "name": body["branch"]["name"],
+                                  "created_at": "2026-11-13T00:00:00Z"})
+            if self.post_fails_after_create:
+                return httpx.Response(500, json={"message": "oops"})
             return httpx.Response(201, json={
                 "branch": {"id": "br-copy", "name": body["branch"]["name"]},
                 "operations": [{"id": "op1", "status": "running"}]})
@@ -48,10 +68,16 @@ class FakeNeon:
         if method == "GET" and path == "/projects/p1/connection_uri":
             assert request.url.params["branch_id"] == "br-copy"
             assert request.url.params["role_name"] == "owner"
+            pooled = request.url.params["pooled"] == "true"
             self.uri_params = dict(request.url.params)
-            return httpx.Response(200, json={"uri": URI})
-        if method == "DELETE" and path == "/projects/p1/branches/br-copy":
-            self.deleted.append("br-copy")
+            return httpx.Response(200, json={"uri": POOLED if pooled else URI})
+        if method == "DELETE" and path.startswith("/projects/p1/branches/"):
+            if self.delete_locked:
+                self.delete_locked -= 1
+                return httpx.Response(423, json={"message": "locked"})
+            branch = path.rsplit("/", 1)[1]
+            self.deleted.append(branch)
+            self.branches = [b for b in self.branches if b["id"] != branch]
             return httpx.Response(200, json={})
         return httpx.Response(404, json={"message": "nope"})
 
@@ -62,6 +88,7 @@ class FakeNeon:
 @pytest.fixture(autouse=True)
 def fast(monkeypatch):
     monkeypatch.setattr(dbbranch, "_POLL_S", 0)
+    monkeypatch.setattr(dbbranch, "_RETRY_SCALE", 0)
 
 
 def _branch(fake, parent="staging", **kw):
@@ -79,7 +106,8 @@ def test_copies_the_named_branch_waits_until_ready_and_deletes_it():
     assert body["branch"]["name"].startswith("prescale-")
     assert body["endpoints"] == [{"type": "read_write"}]
     assert fake.calls.count(("GET", "/projects/p1/operations/op1")) == 2  # polled until finished
-    assert fake.uri_params["pooled"] == "false"
+    assert branch.uri == URI and branch.direct_uri == URI and branch.pooled_uri == POOLED
+    assert {URI, POOLED, "s3cr3t-pw"} <= branch.secrets()
     assert fake.deleted == ["br-copy"]
     assert URI not in repr(branch) and "s3cr3t" not in repr(branch)
 
@@ -112,8 +140,7 @@ def test_several_databases_need_a_name_and_pooled_is_passed():
         pass
     fake = FakeNeon(databases=("shop", "analytics"))
     with _branch(fake, database="analytics", pooled=True) as branch:
-        assert branch.database == "analytics"
-    assert fake.uri_params["pooled"] == "true"
+        assert branch.database == "analytics" and branch.uri == POOLED
 
 
 def test_a_refused_key_is_named():
@@ -152,6 +179,9 @@ def test_missing_neon_settings_stop_before_the_app_starts(monkeypatch, tmp_path)
 APP = """
 import http.server, os, sys
 open(sys.argv[2], "w").write(os.environ.get("DATABASE_URL", ""))
+print("connecting to", os.environ.get("DATABASE_URL"), flush=True)
+if len(sys.argv) > 3:
+    sys.exit(3)  # a startup failure that printed the URL
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers()
@@ -189,3 +219,86 @@ def test_run_gives_the_app_the_copy_and_never_shows_its_url(monkeypatch, tmp_pat
     saved = "".join(p.read_text() for p in store.rglob("*.json"))
     for text in (res.output, saved):
         assert "s3cr3t" not in text and "ep-copy-123" not in text
+
+
+def test_skipped_operations_count_as_done():
+    fake = FakeNeon(op_status=("skipped",))
+    with _branch(fake) as branch:
+        assert branch.uri == URI
+
+
+def test_the_parent_is_found_past_the_first_page():
+    fake = FakeNeon(branches=[f"preview-{i}" for i in range(30)] + ["staging"], page_size=10)
+    with _branch(fake) as branch:
+        assert branch.parent == "staging"
+    assert fake.created["branch"]["parent_id"] == "br-staging"
+
+
+def test_a_create_that_failed_after_neon_made_the_branch_still_cleans_up():
+    fake = FakeNeon(post_fails_after_create=True)
+    with pytest.raises(DBBranchError, match="500"), _branch(fake):
+        pass
+    assert fake.deleted == ["br-copy"]
+
+
+def test_a_locked_delete_is_retried():
+    fake = FakeNeon(delete_locked=2)
+    with _branch(fake):
+        pass
+    assert fake.deleted == ["br-copy"]
+
+
+def test_every_known_database_variable_points_at_the_copy():
+    from prescale_cli.commands.replicaopts import copy_environment
+    fake = FakeNeon()
+    with _branch(fake) as branch:
+        env = copy_environment(branch, ["DATABASE_URL", "APP_DB"], {
+            "DIRECT_URL": "postgres://staging", "POSTGRES_PRISMA_URL": "postgres://staging",
+            "PGHOST": "staging.example.com", "PGPASSWORD": "real", "HOME": "/root"})
+    assert env["DATABASE_URL"] == env["APP_DB"] == env["POSTGRES_PRISMA_URL"] == URI
+    assert env["DIRECT_URL"] == URI
+    assert env["PGHOST"] == "ep-copy-123.us-east-2.aws.neon.tech"
+    assert env["PGPASSWORD"] == "s3cr3t-pw" and env["PGDATABASE"] == "shop"
+    assert "HOME" not in env
+
+
+def test_cleanup_finds_only_old_prescale_copies_and_deletes_them(monkeypatch):
+    from datetime import datetime, timezone
+    fake = FakeNeon(branches=("main", "staging"))
+    fake.branches += [
+        {"id": "br-old", "name": "prescale-20261101-000000-aaaaaa",
+         "created_at": "2026-11-01T00:00:00Z"},
+        {"id": "br-new", "name": "prescale-20261113-000000-bbbbbb",
+         "created_at": "2026-11-13T09:00:00Z"},
+        {"id": "br-x", "name": "prescale-lookalike-but-old-and-not-ours",
+         "created_at": "2026-10-01T00:00:00Z"},
+    ]
+    now = datetime(2026, 11, 13, 10, 0, tzinfo=timezone.utc)
+    stale = dbbranch.stale_copies(api_key="key-123", project="p1", older_than_hours=6,
+                                  transport=fake.transport(), now=now)
+    assert {b["id"] for b in stale} == {"br-old", "br-x"}  # the prefix is ours
+    assert dbbranch.delete_copies(stale, api_key="key-123", project="p1",
+                                  transport=fake.transport()) == []
+    assert sorted(fake.deleted) == ["br-old", "br-x"]
+    assert "br-staging" not in fake.deleted and "br-main" not in fake.deleted
+
+
+def test_an_app_that_prints_its_url_and_dies_never_shows_the_secret(monkeypatch, tmp_path):
+    fake = FakeNeon()
+    from prescale_cli.commands import replicaopts
+    monkeypatch.setattr(replicaopts, "neon_branch",
+                        functools.partial(neon_branch, transport=fake.transport()))
+    monkeypatch.setenv("NEON_API_KEY", "key-123")
+    monkeypatch.setenv("NEON_PROJECT_ID", "p1")
+    (tmp_path / "app.py").write_text(APP)
+    res = CliRunner().invoke(cli, [
+        "run", "http://127.0.0.1:9", "--urls",
+        "--app", f"{sys.executable} {tmp_path / 'app.py'} 9 {tmp_path / 'seen'} die",
+        "--db", "neon", "--db-parent", "staging"])
+    assert res.exit_code == 1
+    flat = "".join(res.output.split())   # Rich wraps long lines
+    assert "connectingto***" in flat     # the log tail is shown, masked
+    assert "s3cr3t" not in flat and "ep-copy-123" not in flat
+    assert fake.deleted == ["br-copy"]
+    leftover = list(Path(tempfile.gettempdir()).glob("prescale-app-*.log"))
+    assert not any("s3cr3t" in p.read_text(errors="replace") for p in leftover)

@@ -9,8 +9,14 @@
   errors or Ctrl-C. Journeys that write change the copy, never the parent, and the load runs on
   the copy's own compute. Needs `NEON_API_KEY` and `NEON_PROJECT_ID`. The parent must be named,
   and the connection string is never printed, saved or uploaded; saved runs record
-  `config.database` (provider, parent, database name). `--db-name`, `--db-env` and
+  `config.database` (provider, parent, database name). `--db-name`, `--db-env` (repeatable) and
   `--db-pooled` cover multi-database branches, other variable names and Neon's pooler.
+  - Every well-known database variable that's set (`DIRECT_URL`, `POSTGRES_URL*`,
+    `DATABASE_URL_UNPOOLED`, `PG*`) is pointed at the copy too.
+  - If the app fails to start, its log is shown with the copy's URL and password masked, then
+    deleted. A cancelled CI job (SIGTERM) still deletes the copy.
+- **`prescale db cleanup`** deletes PreScale's own leftover Neon copies (`prescale-...`) older
+  than six hours (`--older-than`), after you confirm.
 
 ## 1.2.0 — 2026-11-08
 
